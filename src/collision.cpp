@@ -280,16 +280,7 @@ HMM_Vec3 CollisionWorld::slide_move(HMM_Vec3 start, float radius,
                    velocity.X, velocity.Y, velocity.Z);
         }
 
-        // Recalculate remaining displacement from clipped velocity.
-        // Estimate fraction of dt consumed by how far we moved before collision.
-        HMM_Vec3 total_disp = HMM_MulV3F(vel_before, dt);
-        float total_len = HMM_LenV3(total_disp);
-        HMM_Vec3 moved = HMM_SubV3(pos, start);
-        float moved_len = HMM_LenV3(moved);
-        float frac_left = (total_len > 0.001f) ? (1.0f - moved_len / total_len) : 0.0f;
-        if (frac_left < 0.0f) frac_left = 0.0f;
-        if (frac_left > 1.0f) frac_left = 1.0f;
-        remaining = HMM_MulV3F(velocity, dt * frac_left);
+        remaining = HMM_MulV3F(push_dir, 0.0f);  // stop remaining movement this iteration
 
         // Check if we're being pushed into a corner (velocity opposing all planes)
         bool stuck = false;
