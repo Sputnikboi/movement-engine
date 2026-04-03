@@ -131,6 +131,10 @@ bool Renderer::init(SDL_Window* window, const Mesh& level_mesh) {
     return true;
 }
 
+void Renderer::wait_idle() {
+    vkDeviceWaitIdle(device_);
+}
+
 void Renderer::shutdown() {
     vkDeviceWaitIdle(device_);
 

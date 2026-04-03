@@ -21,6 +21,7 @@ public:
     bool init(SDL_Window* window, const Mesh& level_mesh);
     void shutdown();
     void draw_frame(const SceneData& scene);
+    void wait_idle();
     void on_resize() { resize_requested_ = true; }
 
     // ImGui access — call between imgui NewFrame/Render in main loop

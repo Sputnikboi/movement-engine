@@ -347,6 +347,9 @@ int main(int argc, char* argv[]) {
     config.pull(camera, player);
     config.save();
 
+    // GPU must be idle before tearing down ImGui's Vulkan resources
+    renderer.wait_idle();
+
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
