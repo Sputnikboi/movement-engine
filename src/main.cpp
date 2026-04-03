@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
                             camera.position = player.eye_position();
                         } else {
                             // Drop player where the camera is
-                            player.position = HMM_SubV3(camera.position, HMM_V3(0.0f, player.eye_offset, 0.0f));
+                            player.position = HMM_SubV3(camera.position, HMM_V3(0.0f, player.current_eye_offset(), 0.0f));
                             player.velocity = HMM_V3(0, 0, 0);
                         }
                     }
@@ -364,8 +364,9 @@ int main(int argc, char* argv[]) {
             if (kb.held(Action::MoveBack,    keys)) input.forward -= 1.0f;
             if (kb.held(Action::MoveRight,   keys)) input.right   += 1.0f;
             if (kb.held(Action::MoveLeft,    keys)) input.right   -= 1.0f;
-            input.jump_held = jump_held || scroll_jump_pulse;
-            input.yaw       = camera.yaw;
+            input.jump_held   = jump_held || scroll_jump_pulse;
+            input.crouch_held = kb.held(Action::Crouch, keys);
+            input.yaw         = camera.yaw;
 
             accumulator += dt;
             while (accumulator >= TICK_RATE) {
@@ -401,7 +402,17 @@ int main(int argc, char* argv[]) {
                                    player.velocity.Z * player.velocity.Z);
             ImGui::Text("Speed: %.1f u/s", speed_xz);
             ImGui::Text("Pos: %.1f %.1f %.1f", player.position.X, player.position.Y, player.position.Z);
-            ImGui::Text("%s", player.grounded ? "GROUND" : "AIR");
+            const char* state = "AIR";
+            if (player.grounded) {
+                if (player.sliding)       state = player.power_sliding ? "POWER SLIDE" : "SLIDE";
+                else if (player.crouched) state = "CROUCH";
+                else                      state = "GROUND";
+            }
+            ImGui::Text("%s", state);
+            if (player.lurch_timer > 0.0f) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1,0.7f,0.2f,1), "LURCH");
+            }
             if (noclip) ImGui::Text("NOCLIP");
             ImGui::Separator();
             ImGui::TextDisabled("ESC: settings  H: hide HUD");
@@ -560,6 +571,24 @@ int main(int argc, char* argv[]) {
 
                 ImGui::Spacing();
                 ImGui::Checkbox("Auto-hop (hold jump to bhop)", &player.auto_hop);
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Text("Slide");
+                ImGui::SliderFloat("Slide Friction",      &player.slide_friction,         0.0f, 5.0f, "%.2f");
+                ImGui::SliderFloat("Slide Boost",         &player.slide_boost,            0.0f, 10.0f);
+                ImGui::SliderFloat("Slide Min Speed",     &player.slide_min_speed,        0.0f, 15.0f);
+                ImGui::SliderFloat("Slide Stop Speed",    &player.slide_stop_speed,       0.0f, 10.0f);
+                ImGui::SliderFloat("Slide Boost Cooldown",&player.slide_boost_cooldown,   0.0f, 5.0f);
+                ImGui::SliderFloat("Slide Jump Boost",    &player.slide_jump_boost,       0.0f, 10.0f);
+                ImGui::SliderFloat("Crouch Speed",        &player.crouch_speed,           1.0f, 10.0f);
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Text("Lurch");
+                ImGui::SliderFloat("Lurch Window",    &player.lurch_window,   0.0f, 2.0f, "%.2f");
+                ImGui::SliderFloat("Lurch Strength",  &player.lurch_strength, 0.0f, 1.0f, "%.2f");
+
                 ImGui::Spacing();
                 if (ImGui::Button("Reset to Source defaults")) {
                     player.gravity        = 20.0f;
@@ -569,6 +598,15 @@ int main(int argc, char* argv[]) {
                     player.air_accel      = 70.0f;
                     player.friction       = 6.0f;
                     player.jump_speed     = 7.2f;
+                    player.slide_friction = 0.8f;
+                    player.slide_boost    = 3.0f;
+                    player.slide_min_speed = 6.0f;
+                    player.slide_stop_speed = 3.0f;
+                    player.slide_boost_cooldown = 2.0f;
+                    player.slide_jump_boost = 4.0f;
+                    player.crouch_speed   = 4.0f;
+                    player.lurch_window   = 0.5f;
+                    player.lurch_strength = 0.5f;
                 }
             }
 

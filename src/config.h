@@ -16,14 +16,23 @@ struct Config {
     float fov = 90.0f;
 
     // Movement (exposed for tuning)
-    float gravity        = 20.0f;
-    float max_speed      = 8.0f;
-    float air_wish_speed = 0.76f;
-    float ground_accel   = 10.0f;
-    float air_accel      = 70.0f;
-    float friction       = 6.0f;
-    float jump_speed     = 7.2f;
-    bool  auto_hop       = false;
+    float gravity              = 20.0f;
+    float max_speed            = 8.0f;
+    float air_wish_speed       = 0.76f;
+    float ground_accel         = 10.0f;
+    float air_accel            = 70.0f;
+    float friction             = 6.0f;
+    float jump_speed           = 7.2f;
+    bool  auto_hop             = false;
+    float crouch_speed         = 4.0f;
+    float slide_friction       = 0.8f;
+    float slide_boost          = 3.0f;
+    float slide_min_speed      = 6.0f;
+    float slide_stop_speed     = 3.0f;
+    float slide_boost_cooldown = 2.0f;
+    float slide_jump_boost     = 4.0f;
+    float lurch_window         = 0.5f;
+    float lurch_strength       = 0.5f;
 
     // Keybinds
     Keybinds keybinds;

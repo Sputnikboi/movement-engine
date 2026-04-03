@@ -5,37 +5,37 @@
 
 // ============================================================
 //  Quake-style Accelerate
-//  This single function creates ALL of the movement feel:
-//  - Ground strafing
-//  - Air strafing / bunny hop speed gain
-//  - Surf acceleration
-//
-//  It works by only accelerating up to wish_speed in the
-//  wish_direction. If you're already moving fast but NOT in
-//  the wish direction, you can still accelerate — which is
-//  exactly how air strafing gains speed.
 // ============================================================
 
 void Player::accelerate(HMM_Vec3 wish_dir, float wish_speed, float accel, float dt) {
-    // Current speed in the wish direction
     float current_speed = HMM_DotV3(velocity, wish_dir);
-
-    // How much speed we need to add to reach wish_speed in this direction
     float add_speed = wish_speed - current_speed;
-    if (add_speed <= 0.0f)
-        return;  // already at or above wish speed in this direction
+    if (add_speed <= 0.0f) return;
 
-    // How much we CAN accelerate this tick
     float accel_speed = accel * wish_speed * dt;
-
-    // Don't overshoot
     if (accel_speed > add_speed)
         accel_speed = add_speed;
 
-    // Apply acceleration
     velocity.X += accel_speed * wish_dir.X;
     velocity.Y += accel_speed * wish_dir.Y;
     velocity.Z += accel_speed * wish_dir.Z;
+}
+
+// ============================================================
+//  Build wish direction from input + yaw
+// ============================================================
+
+HMM_Vec3 Player::build_wish_dir(const InputState& input) const {
+    float forward_x =  cosf(input.yaw);
+    float forward_z =  sinf(input.yaw);
+    float right_x   =  forward_z;
+    float right_z   = -forward_x;
+
+    return HMM_V3(
+        forward_x * input.forward + right_x * input.right,
+        0.0f,
+        forward_z * input.forward + right_z * input.right
+    );
 }
 
 // ============================================================
@@ -43,7 +43,6 @@ void Player::accelerate(HMM_Vec3 wish_dir, float wish_speed, float accel, float 
 // ============================================================
 
 void Player::check_ground(const CollisionWorld& world) {
-    // Cast from slightly above feet downward
     HMM_Vec3 ray_origin = HMM_AddV3(position, HMM_V3(0.0f, 0.1f, 0.0f));
     HMM_Vec3 ray_dir    = HMM_V3(0.0f, -1.0f, 0.0f);
     float    ray_dist   = 0.1f + ground_check_dist;
@@ -51,193 +50,306 @@ void Player::check_ground(const CollisionWorld& world) {
     HitResult hit = world.raycast(ray_origin, ray_dir, ray_dist);
 
     if (g_collision_log) {
-        printf("check_ground: pos=(%.2f,%.2f,%.2f) ray_from=(%.2f,%.2f,%.2f) dist=%.3f hit=%d",
-               position.X, position.Y, position.Z,
-               ray_origin.X, ray_origin.Y, ray_origin.Z,
-               ray_dist, hit.hit);
-        if (hit.hit) {
-            printf(" t=%.4f point=(%.2f,%.2f,%.2f) normal=(%.2f,%.2f,%.2f)",
-                   hit.t, hit.point.X, hit.point.Y, hit.point.Z,
-                   hit.normal.X, hit.normal.Y, hit.normal.Z);
-        }
+        printf("check_ground: pos=(%.2f,%.2f,%.2f) hit=%d", position.X, position.Y, position.Z, hit.hit);
+        if (hit.hit) printf(" normal=(%.2f,%.2f,%.2f)", hit.normal.X, hit.normal.Y, hit.normal.Z);
         printf("\n");
     }
 
-    if (hit.hit && hit.normal.Y > 0.7f) {  // not too steep (< ~45 degrees)
+    if (hit.hit && hit.normal.Y > 0.7f) {
         grounded = true;
         ground_normal = hit.normal;
 
-        // Snap to ground surface
         float ground_y = hit.point.Y;
         if (position.Y < ground_y)
             position.Y = ground_y;
-        // Only snap down if we're close (don't pull player into ground while jumping)
         else if (position.Y - ground_y < ground_check_dist && velocity.Y <= 0.0f)
             position.Y = ground_y;
-
-        if (g_collision_log) {
-            printf("  -> GROUNDED, snapped pos.Y=%.4f (ground_y=%.4f)\n", position.Y, ground_y);
-        }
     } else {
         grounded = false;
         ground_normal = HMM_V3(0.0f, 1.0f, 0.0f);
-        if (g_collision_log) {
-            printf("  -> AIRBORNE%s\n", hit.hit ? " (too steep)" : " (no hit)");
-        }
     }
 }
 
 // ============================================================
-//  Friction: applied only on ground, decelerates the player
+//  Friction
 // ============================================================
 
-void Player::apply_friction(float dt) {
-    float speed = HMM_LenV3(velocity);
+void Player::apply_friction(float dt, float fric) {
+    float speed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
     if (speed < 0.001f) {
         velocity.X = 0.0f;
         velocity.Z = 0.0f;
         return;
     }
 
-    // Quake friction: stronger when below stop_speed
     float control = (speed < stop_speed) ? stop_speed : speed;
-    float drop = control * friction * dt;
+    float drop = control * fric * dt;
 
     float new_speed = speed - drop;
-    if (new_speed < 0.0f)
-        new_speed = 0.0f;
+    if (new_speed < 0.0f) new_speed = 0.0f;
 
     float scale = new_speed / speed;
     velocity.X *= scale;
     velocity.Z *= scale;
-    // Don't friction the Y component (gravity handles that)
 }
 
 // ============================================================
-//  Ground movement: friction + accelerate + jump
+//  Collision move (shared by ground and air)
 // ============================================================
 
-void Player::ground_move(float dt, const InputState& input, const CollisionWorld& world) {
-    // Determine if this is a valid jump input:
-    // - auto_hop: jump whenever held
-    // - normal: jump only on fresh press (not held last tick)
-    bool wants_jump = false;
-    if (auto_hop) {
-        wants_jump = input.jump_held;
+void Player::do_collide_and_move(float dt, const CollisionWorld& world) {
+    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
+    sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
+    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
+}
+
+// ============================================================
+//  Crouch handling
+// ============================================================
+
+void Player::handle_crouch(const InputState& input, const CollisionWorld& world) {
+    if (input.crouch_held) {
+        if (!crouched) {
+            crouched = true;
+            // If grounded and moving fast enough, initiate a slide
+            if (grounded) {
+                try_slide(input);
+            }
+        }
     } else {
-        wants_jump = input.jump_held && !jump_held_last;
+        if (crouched) {
+            // Check if there's room to stand up: raycast upward from head
+            HMM_Vec3 ray_origin = HMM_AddV3(position, HMM_V3(0.0f, height_crouch, 0.0f));
+            HMM_Vec3 ray_dir = HMM_V3(0.0f, 1.0f, 0.0f);
+            float check_dist = height_stand - height_crouch;
+
+            HitResult hit = world.raycast(ray_origin, ray_dir, check_dist);
+            if (!hit.hit) {
+                crouched = false;
+                sliding = false;
+                power_sliding = false;
+            }
+            // else: can't stand up, stay crouched
+        }
     }
+}
 
-    // If jumping this tick, skip friction entirely.
-    // This is the key to bhop speed preservation: on the landing tick,
-    // you go grounded -> jump immediately with zero friction applied.
-    if (wants_jump) {
-        velocity.Y = jump_speed;
-        grounded = false;
+// ============================================================
+//  Slide initiation
+// ============================================================
 
-        // Move as airborne this tick (no friction, no ground accel)
-        HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
-        sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
-        position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
+void Player::try_slide(const InputState& input) {
+    float speed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+
+    if (speed < slide_min_speed) {
+        sliding = false;
+        power_sliding = false;
         return;
     }
 
-    // No jump — apply friction (but skip on the landing tick to give
-    // a 1-tick window even without jumping, matching Source behavior)
-    if (!just_landed) {
-        apply_friction(dt);
-    }
+    sliding = true;
+    slide_timer = 0.0f;
 
-    // Build wish direction from input + camera yaw
-    float forward_x =  cosf(input.yaw);
-    float forward_z =  sinf(input.yaw);
-    float right_x   =  forward_z;   // perpendicular
-    float right_z   = -forward_x;
+    // Power slide: boost if cooldown is ready
+    if (slide_boost_timer <= 0.0f) {
+        power_sliding = true;
+        slide_boost_timer = slide_boost_cooldown;
 
-    HMM_Vec3 wish_dir = HMM_V3(
-        forward_x * input.forward + right_x * input.right,
-        0.0f,
-        forward_z * input.forward + right_z * input.right
-    );
-
-    float wish_speed = HMM_LenV3(wish_dir);
-    if (wish_speed > 0.001f) {
-        wish_dir = HMM_MulV3F(wish_dir, 1.0f / wish_speed);  // normalize
-        wish_speed *= max_speed;  // scale to actual speed
-        if (wish_speed > max_speed) wish_speed = max_speed;
+        // Boost in current movement direction
+        HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
+        float hspeed = HMM_LenV3(hvel);
+        if (hspeed > 0.1f) {
+            HMM_Vec3 dir = HMM_MulV3F(hvel, 1.0f / hspeed);
+            velocity.X += dir.X * slide_boost;
+            velocity.Z += dir.Z * slide_boost;
+        }
     } else {
-        wish_speed = 0.0f;
+        power_sliding = false;
     }
-
-    // Ground accelerate
-    accelerate(wish_dir, wish_speed, ground_accel, dt);
-
-    // Zero out downward velocity while grounded
-    if (velocity.Y < 0.0f)
-        velocity.Y = 0.0f;
-
-    // Move through world with collision
-    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
-    sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
-    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
 }
 
 // ============================================================
-//  Air movement: no friction, restricted wish speed (air strafe magic)
+//  Lurch: redirect momentum on input change after jumping
+//  (Titanfall-style — slerp velocity toward input direction)
+// ============================================================
+
+void Player::perform_lurch(const InputState& input) {
+    if (lurch_timer <= 0.0f) return;
+    if (input.forward == 0.0f && input.right == 0.0f) return;
+
+    // Only lurch on input CHANGE (not every tick)
+    bool input_changed = (input.forward != prev_forward || input.right != prev_right);
+    if (!input_changed) return;
+
+    HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
+    float hspeed = HMM_LenV3(hvel);
+    if (hspeed < 0.5f) return;
+
+    // Build lurch target direction from input
+    HMM_Vec3 lurch_dir = build_wish_dir(input);
+    float lurch_len = HMM_LenV3(lurch_dir);
+    if (lurch_len < 0.001f) return;
+    lurch_dir = HMM_MulV3F(lurch_dir, 1.0f / lurch_len);
+
+    // Current direction
+    HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
+
+    // Slerp between current direction and lurch direction
+    // (simplified: lerp + renormalize, close enough for small angles)
+    HMM_Vec3 new_dir = HMM_AddV3(
+        HMM_MulV3F(cur_dir, 1.0f - lurch_strength),
+        HMM_MulV3F(lurch_dir, lurch_strength)
+    );
+    float new_len = HMM_LenV3(new_dir);
+    if (new_len > 0.001f)
+        new_dir = HMM_MulV3F(new_dir, 1.0f / new_len);
+
+    // Apply: same speed, new direction
+    velocity.X = new_dir.X * hspeed;
+    velocity.Z = new_dir.Z * hspeed;
+
+    // Consume the lurch (one-shot per input change)
+    lurch_timer = 0.0f;
+}
+
+// ============================================================
+//  Ground movement
+// ============================================================
+
+void Player::ground_move(float dt, const InputState& input, const CollisionWorld& world) {
+    // Determine if this is a valid jump
+    bool wants_jump = false;
+    if (auto_hop)
+        wants_jump = input.jump_held;
+    else
+        wants_jump = input.jump_held && !jump_held_last;
+
+    // --- Slide-jump: jumping out of a power slide ---
+    if (wants_jump && sliding && power_sliding &&
+        slide_timer >= slide_min_time_for_jump)
+    {
+        float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+        if (hspeed >= slide_min_speed_for_jump) {
+            // Boost in current horizontal direction
+            HMM_Vec3 hdir = HMM_V3(velocity.X, 0.0f, velocity.Z);
+            hdir = HMM_MulV3F(hdir, 1.0f / hspeed);
+            velocity.X += hdir.X * slide_jump_boost;
+            velocity.Z += hdir.Z * slide_jump_boost;
+        }
+    }
+
+    // --- Jump ---
+    if (wants_jump) {
+        velocity.Y = jump_speed;
+        grounded = false;
+        sliding = false;
+
+        // Start lurch window
+        lurch_timer = lurch_window;
+
+        do_collide_and_move(dt, world);
+        return;
+    }
+
+    // --- Sliding ---
+    if (sliding) {
+        // Low friction, no acceleration (you're sliding on momentum)
+        if (!just_landed)
+            apply_friction(dt, slide_friction);
+
+        // Allow slight steering while sliding
+        HMM_Vec3 wish_dir_raw = build_wish_dir(input);
+        float wish_len = HMM_LenV3(wish_dir_raw);
+        if (wish_len > 0.001f) {
+            HMM_Vec3 wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
+            // Very limited acceleration while sliding (just for steering)
+            accelerate(wish_dir, crouch_speed * 0.5f, ground_accel * 0.3f, dt);
+        }
+
+        // Auto-cancel when too slow
+        float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+        if (hspeed < slide_stop_speed) {
+            sliding = false;
+            power_sliding = false;
+        }
+
+        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+        do_collide_and_move(dt, world);
+        return;
+    }
+
+    // --- Normal ground movement ---
+    if (!just_landed) {
+        apply_friction(dt, friction);
+    }
+
+    HMM_Vec3 wish_dir_raw = build_wish_dir(input);
+    float wish_len = HMM_LenV3(wish_dir_raw);
+    float wish_speed = 0.0f;
+
+    HMM_Vec3 wish_dir = {};
+    if (wish_len > 0.001f) {
+        wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
+        float speed_cap = crouched ? crouch_speed : max_speed;
+        wish_speed = wish_len * speed_cap;
+        if (wish_speed > speed_cap) wish_speed = speed_cap;
+    }
+
+    accelerate(wish_dir, wish_speed, ground_accel, dt);
+
+    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    do_collide_and_move(dt, world);
+}
+
+// ============================================================
+//  Air movement
 // ============================================================
 
 void Player::air_move(float dt, const InputState& input, const CollisionWorld& world) {
-    // No friction in air
+    // Perform lurch (Titanfall-style momentum redirect)
+    perform_lurch(input);
 
-    // Build wish direction (same as ground)
-    float forward_x =  cosf(input.yaw);
-    float forward_z =  sinf(input.yaw);
-    float right_x   =  forward_z;
-    float right_z   = -forward_x;
+    // Normal air acceleration
+    HMM_Vec3 wish_dir_raw = build_wish_dir(input);
+    float wish_len = HMM_LenV3(wish_dir_raw);
+    float wish_speed = 0.0f;
 
-    HMM_Vec3 wish_dir = HMM_V3(
-        forward_x * input.forward + right_x * input.right,
-        0.0f,
-        forward_z * input.forward + right_z * input.right
-    );
-
-    float wish_speed = HMM_LenV3(wish_dir);
-    if (wish_speed > 0.001f) {
-        wish_dir = HMM_MulV3F(wish_dir, 1.0f / wish_speed);  // normalize
-        wish_speed *= max_speed;
-
-        // THE KEY: cap air wish speed to a tiny value
-        // This is what makes air strafing work. Because wish_speed is small,
-        // you can almost always accelerate in your strafe direction, which
-        // lets you curve and gain speed by coordinating mouse + strafe keys.
+    HMM_Vec3 wish_dir = {};
+    if (wish_len > 0.001f) {
+        wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
+        wish_speed = wish_len * max_speed;
         if (wish_speed > air_wish_speed)
             wish_speed = air_wish_speed;
-    } else {
-        wish_speed = 0.0f;
     }
 
-    // Air accelerate (high factor * low wish speed = the Source feel)
     accelerate(wish_dir, wish_speed, air_accel, dt);
 
-    // Apply gravity
     velocity.Y -= gravity * dt;
 
-    // Move through world with collision
-    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
-    sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
-    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
+    do_collide_and_move(dt, world);
 }
 
 // ============================================================
-//  Main update — called at fixed timestep (e.g. 128Hz)
+//  Main update
 // ============================================================
 
 void Player::update(float dt, const InputState& input, const CollisionWorld& world) {
+    // Tick timers
+    if (slide_boost_timer > 0.0f) slide_boost_timer -= dt;
+    if (lurch_timer > 0.0f) lurch_timer -= dt;
+    if (sliding) slide_timer += dt;
+
     bool was_grounded = grounded;
     check_ground(world);
-
-    // Detect the exact tick we transitioned from air -> ground
     just_landed = (grounded && !was_grounded);
+
+    // Handle crouch state changes
+    handle_crouch(input, world);
+
+    // If we just landed while crouching and moving fast, start a slide
+    if (just_landed && crouched && !sliding) {
+        try_slide(input);
+    }
 
     if (grounded) {
         ground_move(dt, input, world);
@@ -245,10 +357,12 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
         air_move(dt, input, world);
     }
 
-    // Track jump held state for edge detection (must be after move)
+    // Track for edge detection
     jump_held_last = input.jump_held;
+    prev_forward = input.forward;
+    prev_right = input.right;
 
-    // Safety: clamp to level bounds (prevent falling into void)
+    // Void respawn
     if (position.Y < -50.0f) {
         position = HMM_V3(0.0f, 5.0f, 15.0f);
         velocity = HMM_V3(0.0f, 0.0f, 0.0f);
