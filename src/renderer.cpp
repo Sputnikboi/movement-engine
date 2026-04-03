@@ -135,6 +135,22 @@ void Renderer::wait_idle() {
     vkDeviceWaitIdle(device_);
 }
 
+void Renderer::reload_mesh(const Mesh& new_mesh) {
+    vkDeviceWaitIdle(device_);
+
+    // Destroy old buffers
+    vkDestroyBuffer(device_, vertex_buffer_, nullptr);
+    vkFreeMemory(device_, vertex_buffer_memory_, nullptr);
+    vkDestroyBuffer(device_, index_buffer_, nullptr);
+    vkFreeMemory(device_, index_buffer_memory_, nullptr);
+
+    // Create new ones
+    create_mesh_buffers(new_mesh);
+
+    fprintf(stdout, "Renderer reloaded mesh (%zu vertices, %u indices)\n",
+            new_mesh.vertices.size(), index_count_);
+}
+
 void Renderer::shutdown() {
     vkDeviceWaitIdle(device_);
 

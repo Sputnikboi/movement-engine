@@ -2,6 +2,9 @@
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
 #include <cmath>
+#include <string>
+#include <vector>
+#include <filesystem>
 
 #include "renderer.h"
 #include "camera.h"
@@ -15,6 +18,64 @@
 #include "vendor/imgui/imgui.h"
 #include "vendor/imgui/imgui_impl_sdl3.h"
 #include "vendor/imgui/imgui_impl_vulkan.h"
+
+namespace fs = std::filesystem;
+
+// Scan a directory for .glb/.gltf files
+static std::vector<std::string> scan_levels(const std::string& dir) {
+    std::vector<std::string> files;
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return files;
+    for (auto& entry : fs::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        auto ext = entry.path().extension().string();
+        // lowercase compare
+        for (auto& c : ext) c = static_cast<char>(tolower(c));
+        if (ext == ".glb" || ext == ".gltf") {
+            files.push_back(entry.path().string());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
+// Load a level and update all engine state
+static bool load_level(const std::string& path,
+                       Renderer& renderer, CollisionWorld& collision,
+                       Player& player, Camera& camera,
+                       bool& noclip, std::string& current_level_name)
+{
+    LevelData ld = load_level_gltf(path);
+    if (ld.mesh.vertices.empty()) {
+        fprintf(stderr, "Failed to load level: %s\n", path.c_str());
+        return false;
+    }
+
+    // Update renderer
+    renderer.reload_mesh(ld.mesh);
+
+    // Update collision
+    collision.triangles.clear();
+    collision.build_from_mesh(ld.mesh);
+
+    // Update player
+    player.position = ld.spawn_pos;
+    player.velocity = HMM_V3(0, 0, 0);
+    player.grounded = false;
+
+    if (ld.has_spawn) {
+        noclip = false;
+        camera.position = player.eye_position();
+    } else {
+        noclip = true;
+        camera.position = HMM_AddV3(ld.spawn_pos, HMM_V3(0, 5, 0));
+        printf("No spawn point — starting in noclip.\n");
+    }
+
+    // Extract filename for display
+    current_level_name = fs::path(path).filename().string();
+    return true;
+}
 
 int main(int argc, char* argv[]) {
 
@@ -123,6 +184,12 @@ int main(int argc, char* argv[]) {
     bool show_settings = false;
     bool show_hud = true;
     float fly_speed = 15.0f;
+
+    // Level browser state
+    std::string current_level_name = custom_level ? fs::path(argv[1]).filename().string() : "built-in test level";
+    std::vector<std::string> level_files;
+    bool levels_scanned = false;
+    char level_path_buf[512] = "";
 
     // --- Fixed timestep ---
     constexpr float TICK_RATE = 1.0f / 128.0f;
@@ -348,6 +415,69 @@ int main(int argc, char* argv[]) {
             ImGui::SetNextWindowPos(ImVec2(420, 60), ImGuiCond_FirstUseEver);
 
             ImGui::Begin("Settings", &show_settings);
+
+            // --- Level ---
+            if (ImGui::CollapsingHeader("Level", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Text("Current: %s", current_level_name.c_str());
+                ImGui::Spacing();
+
+                // Scan for levels on first open
+                if (!levels_scanned) {
+                    level_files = scan_levels("levels");
+                    // Also try relative to exe on Windows
+                    if (level_files.empty())
+                        level_files = scan_levels("../levels");
+                    if (level_files.empty())
+                        level_files = scan_levels("../../levels");
+                    levels_scanned = true;
+                }
+
+                if (ImGui::Button("Refresh Level List")) {
+                    level_files = scan_levels("levels");
+                    if (level_files.empty())
+                        level_files = scan_levels("../levels");
+                    if (level_files.empty())
+                        level_files = scan_levels("../../levels");
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Built-in Test Level")) {
+                    Mesh test = create_test_level();
+                    renderer.reload_mesh(test);
+                    collision.triangles.clear();
+                    collision.build_from_mesh(test);
+                    player.position = HMM_V3(0, 1, 15);
+                    player.velocity = HMM_V3(0, 0, 0);
+                    noclip = false;
+                    camera.position = player.eye_position();
+                    current_level_name = "built-in test level";
+                }
+
+                if (!level_files.empty()) {
+                    ImGui::Spacing();
+                    ImGui::BeginChild("##levellist", ImVec2(0, 150), ImGuiChildFlags_Borders);
+                    for (auto& path : level_files) {
+                        std::string name = fs::path(path).filename().string();
+                        if (ImGui::Selectable(name.c_str())) {
+                            load_level(path, renderer, collision, player, camera,
+                                       noclip, current_level_name);
+                        }
+                    }
+                    ImGui::EndChild();
+                } else {
+                    ImGui::TextDisabled("No .glb/.gltf files found in levels/");
+                }
+
+                ImGui::Spacing();
+                ImGui::Text("Or enter a path:");
+                ImGui::SetNextItemWidth(-80);
+                ImGui::InputText("##lvlpath", level_path_buf, sizeof(level_path_buf));
+                ImGui::SameLine();
+                if (ImGui::Button("Load") && level_path_buf[0]) {
+                    load_level(level_path_buf, renderer, collision, player, camera,
+                               noclip, current_level_name);
+                }
+            }
 
             // --- Mouse ---
             if (ImGui::CollapsingHeader("Mouse", ImGuiTreeNodeFlags_DefaultOpen)) {

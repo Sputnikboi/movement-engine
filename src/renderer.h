@@ -22,6 +22,7 @@ public:
     void shutdown();
     void draw_frame(const SceneData& scene);
     void wait_idle();
+    void reload_mesh(const Mesh& new_mesh);
     void on_resize() { resize_requested_ = true; }
 
     // ImGui access — call between imgui NewFrame/Render in main loop
