@@ -207,9 +207,7 @@ void Player::perform_lurch(const InputState& input) {
     // Apply: same speed, new direction
     velocity.X = new_dir.X * hspeed;
     velocity.Z = new_dir.Z * hspeed;
-
-    // Consume the lurch (one-shot per input change)
-    lurch_timer = 0.0f;
+    // Don't consume — lurch is available for every input change during the window
 }
 
 // ============================================================
@@ -273,7 +271,7 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
             power_sliding = false;
         }
 
-        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+        velocity.Y = 0.0f;
         do_collide_and_move(dt, world);
         return;
     }
@@ -297,7 +295,8 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    // Zero vertical velocity while grounded (prevents ramp launch at top)
+    velocity.Y = 0.0f;
     do_collide_and_move(dt, world);
 }
 
