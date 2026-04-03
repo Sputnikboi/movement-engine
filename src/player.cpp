@@ -177,22 +177,25 @@ void Player::perform_lurch(const InputState& input) {
     if (lurch_timer <= 0.0f) return;
     if (input.forward == 0.0f && input.right == 0.0f) return;
 
+    // Only lurch on input CHANGE (not every tick)
+    bool input_changed = (input.forward != prev_forward || input.right != prev_right);
+    if (!input_changed) return;
+
     HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
     float hspeed = HMM_LenV3(hvel);
     if (hspeed < 0.5f) return;
 
+    // Build lurch target direction from input
     HMM_Vec3 lurch_dir = build_wish_dir(input);
     float lurch_len = HMM_LenV3(lurch_dir);
     if (lurch_len < 0.001f) return;
     lurch_dir = HMM_MulV3F(lurch_dir, 1.0f / lurch_len);
 
+    // Current direction
     HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
 
-    // Skip if already aligned (prevents drift when holding one direction)
-    float alignment = HMM_DotV3(cur_dir, lurch_dir);
-    if (alignment > 0.98f) return;
-
-    // Lerp toward input direction every tick, preserving speed
+    // Slerp between current direction and lurch direction
+    // (simplified: lerp + renormalize, close enough for small angles)
     HMM_Vec3 new_dir = HMM_AddV3(
         HMM_MulV3F(cur_dir, 1.0f - lurch_strength),
         HMM_MulV3F(lurch_dir, lurch_strength)
@@ -201,8 +204,12 @@ void Player::perform_lurch(const InputState& input) {
     if (new_len > 0.001f)
         new_dir = HMM_MulV3F(new_dir, 1.0f / new_len);
 
+    // Apply: same speed, new direction
     velocity.X = new_dir.X * hspeed;
     velocity.Z = new_dir.Z * hspeed;
+
+    // Consume the lurch (one-shot per input change)
+    lurch_timer = 0.0f;
 }
 
 // ============================================================
@@ -267,11 +274,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         }
 
         if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-
-        // Slope stick: downward force to stay glued to ramp surface
-        if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f)
-            velocity.Y -= slope_stick_force * dt;
-
         do_collide_and_move(dt, world);
         return;
     }
@@ -285,22 +287,9 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     float wish_len = HMM_LenV3(wish_dir_raw);
     float wish_speed = 0.0f;
 
-    bool on_slope = (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f);
-
     HMM_Vec3 wish_dir = {};
     if (wish_len > 0.001f) {
         wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
-
-        // On slopes: project wish direction onto the slope surface
-        // (matches Unity's GetSlopeMoveDirection approach)
-        if (on_slope) {
-            float d = HMM_DotV3(wish_dir, ground_normal);
-            wish_dir = HMM_SubV3(wish_dir, HMM_MulV3F(ground_normal, d));
-            float proj_len = HMM_LenV3(wish_dir);
-            if (proj_len > 0.001f)
-                wish_dir = HMM_MulV3F(wish_dir, 1.0f / proj_len);
-        }
-
         float speed_cap = crouched ? crouch_speed : max_speed;
         wish_speed = wish_len * speed_cap;
         if (wish_speed > speed_cap) wish_speed = speed_cap;
@@ -309,12 +298,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
     if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-
-    // Slope stick force: push downward on slopes to stay grounded
-    // (matches Unity's ApplySlopeUpwardBoost / slopeUpwardStickForce)
-    if (on_slope)
-        velocity.Y -= slope_stick_force * dt;
-
     do_collide_and_move(dt, world);
 }
 
