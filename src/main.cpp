@@ -261,9 +261,6 @@ int main(int argc, char* argv[]) {
             if (kb.held(Action::MoveBack,    keys)) input.forward -= 1.0f;
             if (kb.held(Action::MoveRight,   keys)) input.right   += 1.0f;
             if (kb.held(Action::MoveLeft,    keys)) input.right   -= 1.0f;
-            // jump_held tracks keyboard/mouse-button hold state.
-            // scroll_jump_pulse is a one-frame spike from scroll wheel.
-            // Combine them: if either is true, jump is "held" for this frame's ticks.
             input.jump_held = jump_held || scroll_jump_pulse;
             input.yaw       = camera.yaw;
 
@@ -271,10 +268,14 @@ int main(int argc, char* argv[]) {
             while (accumulator >= TICK_RATE) {
                 player.update(TICK_RATE, input, collision);
                 accumulator -= TICK_RATE;
+                // Only clear scroll pulse after a tick actually ran and saw it
+                if (scroll_jump_pulse) {
+                    scroll_jump_pulse = false;
+                    input.jump_held = jump_held;  // revert to keyboard-only for remaining ticks
+                }
             }
-
-            // Clear scroll pulse after all ticks this frame have consumed it
-            scroll_jump_pulse = false;
+            // DON'T clear scroll_jump_pulse here — if no tick ran this frame,
+            // keep it alive until one does
 
             camera.position = player.eye_position();
         }
