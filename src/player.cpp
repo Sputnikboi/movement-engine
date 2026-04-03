@@ -271,7 +271,7 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
             power_sliding = false;
         }
 
-        velocity.Y = 0.0f;
+        if (velocity.Y < 1.0f) velocity.Y = 0.0f;
         do_collide_and_move(dt, world);
         return;
     }
@@ -295,8 +295,10 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    // Zero vertical velocity while grounded (prevents ramp launch at top)
-    velocity.Y = 0.0f;
+    // Clamp downward velocity, but also prevent ramp-launch by clamping
+    // small upward velocities (from ramp ascent) while allowing jump impulse through.
+    // Jump speed is 7.2+ so anything below ~1.0 is ramp noise, not a jump.
+    if (velocity.Y < 1.0f) velocity.Y = 0.0f;
     do_collide_and_move(dt, world);
 }
 
