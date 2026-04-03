@@ -147,6 +147,11 @@ int main(int argc, char* argv[]) {
                     break;
                 }
 
+                if (event.key.key == SDLK_F5 && !event.key.repeat) {
+                    g_collision_log = !g_collision_log;
+                    printf("Collision logging: %s\n", g_collision_log ? "ON" : "OFF");
+                }
+
                 if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
                     show_settings = !show_settings;
                     rebinding_action = -1;

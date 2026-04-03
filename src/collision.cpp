@@ -2,6 +2,8 @@
 #include <cmath>
 #include <cstdio>
 
+bool g_collision_log = false;
+
 // ============================================================
 //  Build triangle list from Mesh
 // ============================================================
@@ -145,8 +147,10 @@ bool CollisionWorld::sphere_overlap(HMM_Vec3 center, float radius,
 {
     bool any_hit = false;
     penetration = 0.0f;
+    int hit_count = 0;
 
-    for (auto& tri : triangles) {
+    for (size_t idx = 0; idx < triangles.size(); idx++) {
+        auto& tri = triangles[idx];
         HMM_Vec3 closest = closest_point_on_triangle(center, tri.v0, tri.v1, tri.v2);
         HMM_Vec3 delta = HMM_SubV3(center, closest);
         float dist_sq = HMM_DotV3(delta, delta);
@@ -154,12 +158,29 @@ bool CollisionWorld::sphere_overlap(HMM_Vec3 center, float radius,
         if (dist_sq < radius * radius && dist_sq > 1e-12f) {
             float dist = sqrtf(dist_sq);
             float pen  = radius - dist;
+            hit_count++;
+
+            if (g_collision_log) {
+                HMM_Vec3 push_dir = HMM_MulV3F(delta, 1.0f / dist);
+                printf("  overlap tri %zu: pen=%.4f push=(%.2f,%.2f,%.2f) tri_n=(%.2f,%.2f,%.2f) closest=(%.2f,%.2f,%.2f)\n",
+                       idx, pen,
+                       push_dir.X, push_dir.Y, push_dir.Z,
+                       tri.normal.X, tri.normal.Y, tri.normal.Z,
+                       closest.X, closest.Y, closest.Z);
+            }
+
             if (pen > penetration) {
                 penetration = pen;
-                push_out = HMM_MulV3F(delta, 1.0f / dist);  // normalize
+                push_out = HMM_MulV3F(delta, 1.0f / dist);
                 any_hit = true;
             }
         }
+    }
+
+    if (g_collision_log && any_hit) {
+        printf("  sphere_overlap: center=(%.2f,%.2f,%.2f) r=%.2f hits=%d winner_pen=%.4f winner_push=(%.2f,%.2f,%.2f)\n",
+               center.X, center.Y, center.Z, radius, hit_count,
+               penetration, push_out.X, push_out.Y, push_out.Z);
     }
 
     return any_hit;
@@ -201,44 +222,65 @@ HMM_Vec3 CollisionWorld::slide_move(HMM_Vec3 start, float radius,
     HMM_Vec3 planes[MAX_CLIPS];
     int num_planes = 0;
 
+    if (g_collision_log) {
+        printf("slide_move START pos=(%.2f,%.2f,%.2f) vel=(%.2f,%.2f,%.2f) dt=%.5f\n",
+               pos.X, pos.Y, pos.Z, velocity.X, velocity.Y, velocity.Z, dt);
+    }
+
     for (int i = 0; i < MAX_CLIPS; i++) {
         // Move by remaining displacement
+        HMM_Vec3 prev_pos = pos;
         pos = HMM_AddV3(pos, remaining);
+
+        if (g_collision_log) {
+            printf(" clip %d: moved (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f)\n",
+                   i, prev_pos.X, prev_pos.Y, prev_pos.Z, pos.X, pos.Y, pos.Z);
+        }
 
         // Check for overlap
         HMM_Vec3 push_dir;
         float pen;
         if (!sphere_overlap(pos, radius, push_dir, pen)) {
+            if (g_collision_log) printf(" clip %d: no overlap, done\n", i);
             break;  // no collision, done
         }
 
         // Push out of geometry
+        HMM_Vec3 pre_push = pos;
         pos = HMM_AddV3(pos, HMM_MulV3F(push_dir, pen + 0.001f));
+
+        if (g_collision_log) {
+            printf(" clip %d: OVERLAP pen=%.4f push_dir=(%.2f,%.2f,%.2f) pushed (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f)\n",
+                   i, pen, push_dir.X, push_dir.Y, push_dir.Z,
+                   pre_push.X, pre_push.Y, pre_push.Z,
+                   pos.X, pos.Y, pos.Z);
+        }
 
         // Record this plane
         if (num_planes < MAX_CLIPS)
             planes[num_planes++] = push_dir;
 
-        // Clip velocity against all accumulated planes
+        // Clip velocity against this plane
+        HMM_Vec3 vel_before = velocity;
         velocity = clip_velocity(velocity, push_dir);
 
-        // Recompute remaining displacement from clipped velocity
-        // (fraction of dt remaining is approximated as the ratio of
-        //  displacement consumed, but for simplicity we just use
-        //  the clipped velocity for the remaining time)
+        if (g_collision_log) {
+            printf(" clip %d: vel (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f)\n",
+                   i, vel_before.X, vel_before.Y, vel_before.Z,
+                   velocity.X, velocity.Y, velocity.Z);
+        }
+
         remaining = HMM_MulV3F(push_dir, 0.0f);  // stop remaining movement this iteration
 
         // Check if we're being pushed into a corner (velocity opposing all planes)
         bool stuck = false;
         for (int j = 0; j < num_planes; j++) {
             if (HMM_DotV3(velocity, planes[j]) < -0.01f) {
-                // Velocity goes into this plane — clip against it too
                 velocity = clip_velocity(velocity, planes[j]);
                 stuck = true;
             }
         }
         if (stuck) {
-            // If clipping against multiple planes leaves us stuck, zero out
             bool still_stuck = false;
             for (int j = 0; j < num_planes; j++) {
                 if (HMM_DotV3(velocity, planes[j]) < -0.01f) {
@@ -247,10 +289,16 @@ HMM_Vec3 CollisionWorld::slide_move(HMM_Vec3 start, float radius,
                 }
             }
             if (still_stuck) {
+                if (g_collision_log) printf(" clip %d: STUCK in corner, zeroing velocity\n", i);
                 velocity = HMM_V3(0, 0, 0);
                 break;
             }
         }
+    }
+
+    if (g_collision_log) {
+        printf("slide_move END pos=(%.2f,%.2f,%.2f) vel=(%.2f,%.2f,%.2f)\n\n",
+               pos.X, pos.Y, pos.Z, velocity.X, velocity.Y, velocity.Z);
     }
 
     return pos;

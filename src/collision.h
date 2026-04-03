@@ -5,6 +5,9 @@
 #include <vector>
 #include <cstdint>
 
+// Runtime toggle for collision logging (press F5)
+extern bool g_collision_log;
+
 // ============================================================
 //  Triangle stored for collision queries
 // ============================================================

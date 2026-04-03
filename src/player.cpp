@@ -1,4 +1,5 @@
 #include "player.h"
+#include "collision.h"
 #include <cmath>
 #include <cstdio>
 
@@ -49,6 +50,19 @@ void Player::check_ground(const CollisionWorld& world) {
 
     HitResult hit = world.raycast(ray_origin, ray_dir, ray_dist);
 
+    if (g_collision_log) {
+        printf("check_ground: pos=(%.2f,%.2f,%.2f) ray_from=(%.2f,%.2f,%.2f) dist=%.3f hit=%d",
+               position.X, position.Y, position.Z,
+               ray_origin.X, ray_origin.Y, ray_origin.Z,
+               ray_dist, hit.hit);
+        if (hit.hit) {
+            printf(" t=%.4f point=(%.2f,%.2f,%.2f) normal=(%.2f,%.2f,%.2f)",
+                   hit.t, hit.point.X, hit.point.Y, hit.point.Z,
+                   hit.normal.X, hit.normal.Y, hit.normal.Z);
+        }
+        printf("\n");
+    }
+
     if (hit.hit && hit.normal.Y > 0.7f) {  // not too steep (< ~45 degrees)
         grounded = true;
         ground_normal = hit.normal;
@@ -60,9 +74,16 @@ void Player::check_ground(const CollisionWorld& world) {
         // Only snap down if we're close (don't pull player into ground while jumping)
         else if (position.Y - ground_y < ground_check_dist && velocity.Y <= 0.0f)
             position.Y = ground_y;
+
+        if (g_collision_log) {
+            printf("  -> GROUNDED, snapped pos.Y=%.4f (ground_y=%.4f)\n", position.Y, ground_y);
+        }
     } else {
         grounded = false;
         ground_normal = HMM_V3(0.0f, 1.0f, 0.0f);
+        if (g_collision_log) {
+            printf("  -> AIRBORNE%s\n", hit.hit ? " (too steep)" : " (no hit)");
+        }
     }
 }
 
