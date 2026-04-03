@@ -38,11 +38,20 @@ int main(int argc, char* argv[]) {
 
     // --- Build level + collision ---
     Mesh level;
+    HMM_Vec3 spawn_pos = HMM_V3(0.0f, 1.0f, 15.0f);
+    bool custom_level = false;
+    bool has_spawn = false;
+
     if (argc > 1) {
-        level = load_level_gltf(argv[1]);
-        if (level.vertices.empty()) {
+        LevelData ld = load_level_gltf(argv[1]);
+        if (ld.mesh.vertices.empty()) {
             fprintf(stderr, "Failed to load level '%s', falling back to test level\n", argv[1]);
             level = create_test_level();
+        } else {
+            level = std::move(ld.mesh);
+            spawn_pos = ld.spawn_pos;
+            has_spawn = ld.has_spawn;
+            custom_level = true;
         }
     } else {
         printf("Usage: %s [level.glb]\n", argv[0]);
@@ -103,9 +112,14 @@ int main(int argc, char* argv[]) {
 
     Keybinds& kb = config.keybinds;
 
-    player.position = HMM_V3(0.0f, 1.0f, 15.0f);
+    player.position = spawn_pos;
 
-    bool noclip = false;
+    // Start in noclip if custom level has no spawn point
+    bool noclip = (custom_level && !has_spawn);
+    if (noclip) {
+        camera.position = HMM_AddV3(spawn_pos, HMM_V3(0.0f, 5.0f, 0.0f));
+        printf("No spawn point — starting in noclip. Press V to drop in.\n");
+    }
     bool show_settings = false;
     bool show_hud = true;
     float fly_speed = 15.0f;

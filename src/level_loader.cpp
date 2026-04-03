@@ -123,17 +123,54 @@ static void extract_primitive(const cgltf_primitive* prim,
 }
 
 // ============================================================
+//  Case-insensitive name check
+// ============================================================
+
+static bool name_matches(const char* name, const char* target) {
+    if (!name) return false;
+    for (int i = 0; name[i] && target[i]; i++) {
+        char a = name[i];
+        char b = target[i];
+        if (a >= 'A' && a <= 'Z') a += 32;
+        if (b >= 'A' && b <= 'Z') b += 32;
+        if (a != b) return false;
+    }
+    // Check both strings ended (allow name to have trailing stuff like ".001")
+    return true;
+}
+
+static bool name_starts_with(const char* name, const char* prefix) {
+    if (!name) return false;
+    for (int i = 0; prefix[i]; i++) {
+        char a = name[i];
+        char b = prefix[i];
+        if (a >= 'A' && a <= 'Z') a += 32;
+        if (b >= 'A' && b <= 'Z') b += 32;
+        if (a != b) return false;
+    }
+    return true;
+}
+
+// ============================================================
 //  Recursively process scene nodes
 // ============================================================
 
-static void process_node(const cgltf_node* node, Mesh& out) {
+static void process_node(const cgltf_node* node, LevelData& out) {
     float transform[16];
     node_world_transform(node, transform);
 
+    // Check for spawn point (Empty named "spawn" or "Spawn" etc.)
+    if (name_starts_with(node->name, "spawn")) {
+        // Extract world position from the transform matrix (column 3)
+        out.spawn_pos = HMM_V3(transform[12], transform[13], transform[14]);
+        out.has_spawn = true;
+        fprintf(stdout, "  Found spawn point: (%.1f, %.1f, %.1f) [node: %s]\n",
+                out.spawn_pos.X, out.spawn_pos.Y, out.spawn_pos.Z, node->name);
+    }
+
     if (node->mesh) {
         for (cgltf_size p = 0; p < node->mesh->primitives_count; p++) {
-            // Try to get color from material
-            float color[3] = {0.5f, 0.5f, 0.5f};  // default gray
+            float color[3] = {0.5f, 0.5f, 0.5f};
 
             const cgltf_primitive* prim = &node->mesh->primitives[p];
             if (prim->material) {
@@ -145,7 +182,7 @@ static void process_node(const cgltf_node* node, Mesh& out) {
                 }
             }
 
-            extract_primitive(prim, transform, color, out);
+            extract_primitive(prim, transform, color, out.mesh);
         }
     }
 
@@ -158,8 +195,8 @@ static void process_node(const cgltf_node* node, Mesh& out) {
 //  Public API
 // ============================================================
 
-Mesh load_level_gltf(const std::string& path) {
-    Mesh result;
+LevelData load_level_gltf(const std::string& path) {
+    LevelData result;
 
     cgltf_options options{};
     cgltf_data* data = nullptr;
@@ -180,10 +217,8 @@ Mesh load_level_gltf(const std::string& path) {
     cgltf_result validate_result = cgltf_validate(data);
     if (validate_result != cgltf_result_success) {
         fprintf(stderr, "Warning: glTF validation failed for %s (error %d)\n", path.c_str(), validate_result);
-        // Continue anyway — many files have minor issues
     }
 
-    // Process all scenes (usually just one)
     for (cgltf_size s = 0; s < data->scenes_count; s++) {
         const cgltf_scene* scene = &data->scenes[s];
         for (cgltf_size n = 0; n < scene->nodes_count; n++) {
@@ -193,14 +228,16 @@ Mesh load_level_gltf(const std::string& path) {
 
     cgltf_free(data);
 
-    if (result.vertices.empty()) {
+    if (result.mesh.vertices.empty()) {
         fprintf(stderr, "Warning: no mesh data found in %s\n", path.c_str());
     } else {
         fprintf(stdout, "Loaded level: %s (%zu vertices, %zu indices, %zu triangles)\n",
                 path.c_str(),
-                result.vertices.size(),
-                result.indices.size(),
-                result.indices.size() / 3);
+                result.mesh.vertices.size(),
+                result.mesh.indices.size(),
+                result.mesh.indices.size() / 3);
+        if (!result.has_spawn)
+            fprintf(stdout, "  No spawn point found — add an Empty named 'spawn' in Blender. Starting in noclip.\n");
     }
 
     return result;
