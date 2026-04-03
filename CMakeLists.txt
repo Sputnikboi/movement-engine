@@ -64,6 +64,8 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/renderer.cpp
     src/mesh.cpp
+    src/collision.cpp
+    src/player.cpp
 )
 
 add_dependencies(${PROJECT_NAME} shaders)
