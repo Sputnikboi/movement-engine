@@ -2,6 +2,7 @@
 
 #include "camera.h"
 #include "player.h"
+#include "keybinds.h"
 #include <string>
 
 // Settings that get saved/loaded from settings.ini
@@ -22,6 +23,9 @@ struct Config {
     float air_accel      = 70.0f;
     float friction       = 6.0f;
     float jump_speed     = 7.2f;
+
+    // Keybinds
+    Keybinds keybinds;
 
     // Apply config to camera and player
     void apply(Camera& camera, Player& player) const;

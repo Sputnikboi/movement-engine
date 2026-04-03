@@ -1,9 +1,26 @@
 #include "config.h"
+#include <SDL3/SDL_scancode.h>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
+
+// Action name as it appears in the ini file
+static const char* action_ini_key(int i) {
+    switch (static_cast<Action>(i)) {
+        case Action::MoveForward: return "move_forward";
+        case Action::MoveBack:    return "move_back";
+        case Action::MoveLeft:    return "move_left";
+        case Action::MoveRight:   return "move_right";
+        case Action::Jump:        return "jump";
+        case Action::Descend:     return "descend";
+        case Action::Sprint:      return "sprint";
+        case Action::Noclip:      return "noclip";
+        case Action::ToggleHUD:   return "toggle_hud";
+        default:                  return nullptr;
+    }
+}
 
 void Config::apply(Camera& camera, Player& player) const {
     camera.sensitivity = sensitivity;
@@ -60,6 +77,13 @@ bool Config::save(const std::string& path) const {
     fprintf(f, "air_accel = %.2f\n", air_accel);
     fprintf(f, "friction = %.2f\n", friction);
     fprintf(f, "jump_speed = %.2f\n", jump_speed);
+    fprintf(f, "\n");
+
+    fprintf(f, "[keybinds]\n");
+    for (int i = 0; i < ACTION_COUNT; i++) {
+        const char* k = action_ini_key(i);
+        if (k) fprintf(f, "%s = %d\n", k, static_cast<int>(keybinds.binds[i]));
+    }
 
     fclose(f);
     printf("Config saved to %s\n", path.c_str());
@@ -106,6 +130,16 @@ bool Config::load(const std::string& path) {
         else if (key == "air_accel")      air_accel       = std::stof(val);
         else if (key == "friction")       friction        = std::stof(val);
         else if (key == "jump_speed")     jump_speed      = std::stof(val);
+        else {
+            // Try keybinds
+            for (int i = 0; i < ACTION_COUNT; i++) {
+                const char* k = action_ini_key(i);
+                if (k && key == k) {
+                    keybinds.binds[i] = static_cast<SDL_Scancode>(std::stoi(val));
+                    break;
+                }
+            }
+        }
     }
 
     printf("Config loaded from %s\n", path.c_str());

@@ -9,6 +9,7 @@
 #include "collision.h"
 #include "player.h"
 #include "config.h"
+#include "keybinds.h"
 
 #include "vendor/imgui/imgui.h"
 #include "vendor/imgui/imgui_impl_sdl3.h"
@@ -56,7 +57,6 @@ int main(int argc, char* argv[]) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::StyleColorsDark();
 
-    // Make it look a bit nicer
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding   = 6.0f;
     style.FrameRounding    = 4.0f;
@@ -89,6 +89,8 @@ int main(int argc, char* argv[]) {
     config.load();
     config.apply(camera, player);
 
+    Keybinds& kb = config.keybinds;
+
     player.position = HMM_V3(0.0f, 1.0f, 15.0f);
 
     bool noclip = false;
@@ -104,6 +106,10 @@ int main(int argc, char* argv[]) {
     InputState input{};
     bool jump_pressed = false;
 
+    // --- Key rebind state ---
+    // -1 = not rebinding, 0..ACTION_COUNT-1 = waiting for key for that action
+    int rebinding_action = -1;
+
     bool running = true;
     Uint64 last_time = SDL_GetPerformanceCounter();
 
@@ -113,12 +119,10 @@ int main(int argc, char* argv[]) {
     float display_fps = 0.0f;
 
     while (running) {
-        // --- Accumulate mouse motion ---
         float mouse_dx = 0.0f, mouse_dy = 0.0f;
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            // Let ImGui process events when settings is open
             if (show_settings)
                 ImGui_ImplSDL3_ProcessEvent(&event);
 
@@ -126,7 +130,21 @@ int main(int argc, char* argv[]) {
             case SDL_EVENT_QUIT:
                 running = false;
                 break;
+
             case SDL_EVENT_KEY_DOWN:
+                // If we're waiting for a rebind, capture this key
+                if (rebinding_action >= 0 && !event.key.repeat) {
+                    if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
+                        // Cancel rebind
+                        rebinding_action = -1;
+                    } else {
+                        kb.set(static_cast<Action>(rebinding_action),
+                               event.key.scancode);
+                        rebinding_action = -1;
+                    }
+                    break;  // Don't process this key further
+                }
+
                 if (event.key.key == SDLK_ESCAPE) {
                     if (show_settings) {
                         show_settings = false;
@@ -137,26 +155,32 @@ int main(int argc, char* argv[]) {
                 }
                 if (event.key.key == SDLK_TAB && !event.key.repeat) {
                     show_settings = !show_settings;
+                    rebinding_action = -1;
                     SDL_SetWindowRelativeMouseMode(window, !show_settings);
                 }
-                if (event.key.key == SDLK_V && !show_settings) {
-                    noclip = !noclip;
-                    printf("Noclip: %s\n", noclip ? "ON" : "OFF");
-                    if (noclip)
-                        camera.position = player.eye_position();
+                if (!show_settings) {
+                    if (event.key.scancode == kb.get(Action::Noclip) && !event.key.repeat) {
+                        noclip = !noclip;
+                        printf("Noclip: %s\n", noclip ? "ON" : "OFF");
+                        if (noclip)
+                            camera.position = player.eye_position();
+                    }
+                    if (event.key.scancode == kb.get(Action::ToggleHUD) && !event.key.repeat)
+                        show_hud = !show_hud;
+                    if (event.key.scancode == kb.get(Action::Jump))
+                        jump_pressed = true;
                 }
-                if (event.key.key == SDLK_H && !event.key.repeat)
-                    show_hud = !show_hud;
-                if (event.key.key == SDLK_SPACE && !show_settings)
-                    jump_pressed = true;
                 break;
+
             case SDL_EVENT_KEY_UP:
-                if (event.key.key == SDLK_SPACE)
+                if (event.key.scancode == kb.get(Action::Jump))
                     jump_pressed = false;
                 break;
+
             case SDL_EVENT_WINDOW_RESIZED:
                 renderer.on_resize();
                 break;
+
             case SDL_EVENT_MOUSE_MOTION:
                 if (!show_settings) {
                     mouse_dx += event.motion.xrel;
@@ -172,7 +196,6 @@ int main(int argc, char* argv[]) {
         last_time = now;
         if (dt > 0.1f) dt = 0.1f;
 
-        // FPS counter
         fps_timer += dt;
         frame_count++;
         if (fps_timer >= 0.5f) {
@@ -181,7 +204,6 @@ int main(int argc, char* argv[]) {
             fps_timer = 0.0f;
         }
 
-        // --- Mouse look (only when settings closed) ---
         if (!show_settings)
             camera.mouse_look(mouse_dx, mouse_dy);
 
@@ -192,18 +214,18 @@ int main(int argc, char* argv[]) {
             HMM_Vec3 fwd   = camera.forward_flat();
             HMM_Vec3 right = camera.right();
 
-            if (keys[SDL_SCANCODE_W])      move_dir = HMM_AddV3(move_dir, fwd);
-            if (keys[SDL_SCANCODE_S])      move_dir = HMM_SubV3(move_dir, fwd);
-            if (keys[SDL_SCANCODE_D])      move_dir = HMM_AddV3(move_dir, right);
-            if (keys[SDL_SCANCODE_A])      move_dir = HMM_SubV3(move_dir, right);
-            if (keys[SDL_SCANCODE_SPACE])  move_dir.Y += 1.0f;
-            if (keys[SDL_SCANCODE_LSHIFT]) move_dir.Y -= 1.0f;
+            if (kb.held(Action::MoveForward, keys)) move_dir = HMM_AddV3(move_dir, fwd);
+            if (kb.held(Action::MoveBack,    keys)) move_dir = HMM_SubV3(move_dir, fwd);
+            if (kb.held(Action::MoveRight,   keys)) move_dir = HMM_AddV3(move_dir, right);
+            if (kb.held(Action::MoveLeft,    keys)) move_dir = HMM_SubV3(move_dir, right);
+            if (kb.held(Action::Jump,        keys)) move_dir.Y += 1.0f;
+            if (kb.held(Action::Descend,     keys)) move_dir.Y -= 1.0f;
 
             float len = HMM_LenV3(move_dir);
             if (len > 0.001f) {
                 move_dir = HMM_MulV3F(move_dir, 1.0f / len);
                 float speed = fly_speed;
-                if (keys[SDL_SCANCODE_LCTRL]) speed *= 3.0f;
+                if (kb.held(Action::Sprint, keys)) speed *= 3.0f;
                 camera.position = HMM_AddV3(camera.position, HMM_MulV3F(move_dir, speed * dt));
             }
         } else if (!show_settings) {
@@ -211,10 +233,10 @@ int main(int argc, char* argv[]) {
 
             input.forward = 0.0f;
             input.right   = 0.0f;
-            if (keys[SDL_SCANCODE_W]) input.forward += 1.0f;
-            if (keys[SDL_SCANCODE_S]) input.forward -= 1.0f;
-            if (keys[SDL_SCANCODE_D]) input.right   += 1.0f;
-            if (keys[SDL_SCANCODE_A]) input.right   -= 1.0f;
+            if (kb.held(Action::MoveForward, keys)) input.forward += 1.0f;
+            if (kb.held(Action::MoveBack,    keys)) input.forward -= 1.0f;
+            if (kb.held(Action::MoveRight,   keys)) input.right   += 1.0f;
+            if (kb.held(Action::MoveLeft,    keys)) input.right   -= 1.0f;
             input.jump = jump_pressed;
             input.yaw  = camera.yaw;
 
@@ -233,7 +255,7 @@ int main(int argc, char* argv[]) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        // --- HUD overlay (top-left) ---
+        // --- HUD ---
         if (show_hud && !show_settings) {
             ImGui::SetNextWindowPos(ImVec2(10, 10));
             ImGui::SetNextWindowBgAlpha(0.4f);
@@ -242,7 +264,6 @@ int main(int argc, char* argv[]) {
                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
 
             ImGui::Text("FPS: %.0f", display_fps);
-
             float speed_xz = sqrtf(player.velocity.X * player.velocity.X +
                                    player.velocity.Z * player.velocity.Z);
             ImGui::Text("Speed: %.1f u/s", speed_xz);
@@ -250,15 +271,15 @@ int main(int argc, char* argv[]) {
             ImGui::Text("%s", player.grounded ? "GROUND" : "AIR");
             if (noclip) ImGui::Text("NOCLIP");
             ImGui::Separator();
-            ImGui::TextDisabled("TAB: settings  V: noclip  H: hide HUD");
+            ImGui::TextDisabled("TAB: settings  H: hide HUD");
 
             ImGui::End();
         }
 
         // --- Settings window ---
         if (show_settings) {
-            ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowPos(ImVec2(430, 100), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(440, 0), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowPos(ImVec2(420, 60), ImGuiCond_FirstUseEver);
 
             ImGui::Begin("Settings", &show_settings);
 
@@ -279,6 +300,43 @@ int main(int argc, char* argv[]) {
             // --- Video ---
             if (ImGui::CollapsingHeader("Video")) {
                 ImGui::SliderFloat("FOV", &camera.fov, 60.0f, 130.0f, "%.0f");
+            }
+
+            // --- Keybinds ---
+            if (ImGui::CollapsingHeader("Keybinds", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::TextDisabled("Click a button then press a key to rebind. Escape to cancel.");
+                ImGui::Spacing();
+
+                for (int i = 0; i < ACTION_COUNT; i++) {
+                    ImGui::PushID(i);
+
+                    Action action = static_cast<Action>(i);
+                    const char* name = action_name(action);
+
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::Text("%-16s", name);
+                    ImGui::SameLine(180.0f);
+
+                    if (rebinding_action == i) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.1f, 1.0f));
+                        ImGui::Button("  ...press a key...  ");
+                        ImGui::PopStyleColor();
+                    } else {
+                        char label[64];
+                        snprintf(label, sizeof(label), "  %s  ", Keybinds::key_name(kb.get(action)));
+                        if (ImGui::Button(label)) {
+                            rebinding_action = i;
+                        }
+                    }
+
+                    ImGui::PopID();
+                }
+
+                ImGui::Spacing();
+                if (ImGui::Button("Reset Keybinds to Defaults")) {
+                    kb.reset_defaults();
+                    rebinding_action = -1;
+                }
             }
 
             // --- Movement ---
@@ -319,9 +377,10 @@ int main(int argc, char* argv[]) {
 
             ImGui::End();
 
-            // If user closed via X button
-            if (!show_settings)
+            if (!show_settings) {
                 SDL_SetWindowRelativeMouseMode(window, true);
+                rebinding_action = -1;
+            }
         }
 
         ImGui::Render();
@@ -343,11 +402,9 @@ int main(int argc, char* argv[]) {
         renderer.draw_frame(scene);
     }
 
-    // Save config on exit
     config.pull(camera, player);
     config.save();
 
-    // GPU must be idle before tearing down ImGui's Vulkan resources
     renderer.wait_idle();
 
     ImGui_ImplVulkan_Shutdown();
