@@ -13,7 +13,6 @@ enum class Action : uint8_t {
     MoveLeft,
     MoveRight,
     Jump,
-    Crouch,
     Descend,    // noclip down
     Sprint,     // noclip sprint
     Noclip,
@@ -31,7 +30,6 @@ inline const char* action_name(Action a) {
         case Action::MoveLeft:    return "Move Right";
         case Action::MoveRight:   return "Move Left";
         case Action::Jump:        return "Jump";
-        case Action::Crouch:      return "Crouch";
         case Action::Descend:     return "Descend";
         case Action::Sprint:      return "Sprint";
         case Action::Noclip:      return "Noclip";
@@ -94,7 +92,6 @@ struct Keybinds {
         binds[static_cast<int>(Action::MoveRight)][0]   = SDL_SCANCODE_D;
         binds[static_cast<int>(Action::Jump)][0]        = SDL_SCANCODE_SPACE;
         binds[static_cast<int>(Action::Jump)][1]        = INPUT_MOUSE_WHEEL_DOWN;
-        binds[static_cast<int>(Action::Crouch)][0]      = SDL_SCANCODE_LCTRL;
         binds[static_cast<int>(Action::Descend)][0]     = SDL_SCANCODE_LSHIFT;
         binds[static_cast<int>(Action::Sprint)][0]      = SDL_SCANCODE_LCTRL;
         binds[static_cast<int>(Action::Noclip)][0]      = SDL_SCANCODE_V;

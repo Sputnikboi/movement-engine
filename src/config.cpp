@@ -14,7 +14,6 @@ static const char* action_ini_key(int i) {
         case Action::MoveLeft:    return "move_left";
         case Action::MoveRight:   return "move_right";
         case Action::Jump:        return "jump";
-        case Action::Crouch:      return "crouch";
         case Action::Descend:     return "descend";
         case Action::Sprint:      return "sprint";
         case Action::Noclip:      return "noclip";
@@ -35,17 +34,8 @@ void Config::apply(Camera& camera, Player& player) const {
     player.ground_accel   = ground_accel;
     player.air_accel      = air_accel;
     player.friction       = friction;
-    player.jump_speed           = jump_speed;
-    player.auto_hop             = auto_hop;
-    player.crouch_speed         = crouch_speed;
-    player.slide_friction       = slide_friction;
-    player.slide_boost          = slide_boost;
-    player.slide_min_speed      = slide_min_speed;
-    player.slide_stop_speed     = slide_stop_speed;
-    player.slide_boost_cooldown = slide_boost_cooldown;
-    player.slide_jump_boost     = slide_jump_boost;
-    player.lurch_window         = lurch_window;
-    player.lurch_strength       = lurch_strength;
+    player.jump_speed     = jump_speed;
+    player.auto_hop       = auto_hop;
 }
 
 void Config::pull(const Camera& camera, const Player& player) {
@@ -60,17 +50,8 @@ void Config::pull(const Camera& camera, const Player& player) {
     ground_accel   = player.ground_accel;
     air_accel      = player.air_accel;
     friction       = player.friction;
-    jump_speed           = player.jump_speed;
-    auto_hop             = player.auto_hop;
-    crouch_speed         = player.crouch_speed;
-    slide_friction       = player.slide_friction;
-    slide_boost          = player.slide_boost;
-    slide_min_speed      = player.slide_min_speed;
-    slide_stop_speed     = player.slide_stop_speed;
-    slide_boost_cooldown = player.slide_boost_cooldown;
-    slide_jump_boost     = player.slide_jump_boost;
-    lurch_window         = player.lurch_window;
-    lurch_strength       = player.lurch_strength;
+    jump_speed     = player.jump_speed;
+    auto_hop       = player.auto_hop;
 }
 
 bool Config::save(const std::string& path) const {
@@ -99,15 +80,6 @@ bool Config::save(const std::string& path) const {
     fprintf(f, "friction = %.2f\n", friction);
     fprintf(f, "jump_speed = %.2f\n", jump_speed);
     fprintf(f, "auto_hop = %d\n", auto_hop ? 1 : 0);
-    fprintf(f, "crouch_speed = %.2f\n", crouch_speed);
-    fprintf(f, "slide_friction = %.2f\n", slide_friction);
-    fprintf(f, "slide_boost = %.2f\n", slide_boost);
-    fprintf(f, "slide_min_speed = %.2f\n", slide_min_speed);
-    fprintf(f, "slide_stop_speed = %.2f\n", slide_stop_speed);
-    fprintf(f, "slide_boost_cooldown = %.2f\n", slide_boost_cooldown);
-    fprintf(f, "slide_jump_boost = %.2f\n", slide_jump_boost);
-    fprintf(f, "lurch_window = %.2f\n", lurch_window);
-    fprintf(f, "lurch_strength = %.2f\n", lurch_strength);
     fprintf(f, "\n");
 
     fprintf(f, "[keybinds]\n");
@@ -164,15 +136,6 @@ bool Config::load(const std::string& path) {
         else if (key == "friction")       friction        = std::stof(val);
         else if (key == "jump_speed")     jump_speed      = std::stof(val);
         else if (key == "auto_hop")       auto_hop        = std::stoi(val) != 0;
-        else if (key == "crouch_speed")   crouch_speed    = std::stof(val);
-        else if (key == "slide_friction") slide_friction   = std::stof(val);
-        else if (key == "slide_boost")    slide_boost      = std::stof(val);
-        else if (key == "slide_min_speed") slide_min_speed = std::stof(val);
-        else if (key == "slide_stop_speed") slide_stop_speed = std::stof(val);
-        else if (key == "slide_boost_cooldown") slide_boost_cooldown = std::stof(val);
-        else if (key == "slide_jump_boost") slide_jump_boost = std::stof(val);
-        else if (key == "lurch_window")   lurch_window    = std::stof(val);
-        else if (key == "lurch_strength") lurch_strength  = std::stof(val);
         else {
             // Try keybinds (format: "action = code0,code1")
             for (int i = 0; i < ACTION_COUNT; i++) {
