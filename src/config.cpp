@@ -82,7 +82,9 @@ bool Config::save(const std::string& path) const {
     fprintf(f, "[keybinds]\n");
     for (int i = 0; i < ACTION_COUNT; i++) {
         const char* k = action_ini_key(i);
-        if (k) fprintf(f, "%s = %d\n", k, static_cast<int>(keybinds.binds[i]));
+        if (k) fprintf(f, "%s = %d,%d\n", k,
+                        static_cast<int>(keybinds.binds[i][0]),
+                        static_cast<int>(keybinds.binds[i][1]));
     }
 
     fclose(f);
@@ -131,11 +133,19 @@ bool Config::load(const std::string& path) {
         else if (key == "friction")       friction        = std::stof(val);
         else if (key == "jump_speed")     jump_speed      = std::stof(val);
         else {
-            // Try keybinds
+            // Try keybinds (format: "action = code0,code1")
             for (int i = 0; i < ACTION_COUNT; i++) {
                 const char* k = action_ini_key(i);
                 if (k && key == k) {
-                    keybinds.binds[i] = static_cast<SDL_Scancode>(std::stoi(val));
+                    auto comma = val.find(',');
+                    if (comma != std::string::npos) {
+                        keybinds.binds[i][0] = static_cast<InputCode>(std::stoi(val.substr(0, comma)));
+                        keybinds.binds[i][1] = static_cast<InputCode>(std::stoi(val.substr(comma + 1)));
+                    } else {
+                        // Legacy: single value
+                        keybinds.binds[i][0] = static_cast<InputCode>(std::stoi(val));
+                        keybinds.binds[i][1] = INPUT_NONE;
+                    }
                     break;
                 }
             }

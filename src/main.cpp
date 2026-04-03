@@ -107,8 +107,9 @@ int main(int argc, char* argv[]) {
     bool jump_pressed = false;
 
     // --- Key rebind state ---
-    // -1 = not rebinding, 0..ACTION_COUNT-1 = waiting for key for that action
+    // -1 = not rebinding, otherwise action_index * SLOTS + slot
     int rebinding_action = -1;
+    int rebinding_slot   = -1;
 
     bool running = true;
     Uint64 last_time = SDL_GetPerformanceCounter();
@@ -132,17 +133,17 @@ int main(int argc, char* argv[]) {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                // If we're waiting for a rebind, capture this key
+                // Rebind capture
                 if (rebinding_action >= 0 && !event.key.repeat) {
-                    // Escape cancels rebind instead of binding it
                     if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
                         rebinding_action = -1;
                     } else {
                         kb.set(static_cast<Action>(rebinding_action),
-                               event.key.scancode);
+                               rebinding_slot,
+                               static_cast<InputCode>(event.key.scancode));
                         rebinding_action = -1;
                     }
-                    break;  // Don't process this key further
+                    break;
                 }
 
                 if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
@@ -151,22 +152,54 @@ int main(int argc, char* argv[]) {
                     SDL_SetWindowRelativeMouseMode(window, !show_settings);
                 }
                 if (!show_settings) {
-                    if (event.key.scancode == kb.get(Action::Noclip) && !event.key.repeat) {
+                    if (kb.matches_scancode(Action::Noclip, event.key.scancode) && !event.key.repeat) {
                         noclip = !noclip;
                         printf("Noclip: %s\n", noclip ? "ON" : "OFF");
                         if (noclip)
                             camera.position = player.eye_position();
                     }
-                    if (event.key.scancode == kb.get(Action::ToggleHUD) && !event.key.repeat)
+                    if (kb.matches_scancode(Action::ToggleHUD, event.key.scancode) && !event.key.repeat)
                         show_hud = !show_hud;
-                    if (event.key.scancode == kb.get(Action::Jump))
+                    if (kb.matches_scancode(Action::Jump, event.key.scancode))
                         jump_pressed = true;
                 }
                 break;
 
             case SDL_EVENT_KEY_UP:
-                if (event.key.scancode == kb.get(Action::Jump))
+                if (kb.matches_scancode(Action::Jump, event.key.scancode))
                     jump_pressed = false;
+                break;
+
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                // Rebind capture for mouse buttons
+                if (rebinding_action >= 0) {
+                    InputCode btn = INPUT_NONE;
+                    if (event.button.button == SDL_BUTTON_LEFT)   btn = INPUT_MOUSE_LEFT;
+                    if (event.button.button == SDL_BUTTON_RIGHT)  btn = INPUT_MOUSE_RIGHT;
+                    if (event.button.button == SDL_BUTTON_MIDDLE) btn = INPUT_MOUSE_MIDDLE;
+                    if (btn != INPUT_NONE) {
+                        kb.set(static_cast<Action>(rebinding_action), rebinding_slot, btn);
+                        rebinding_action = -1;
+                    }
+                    break;
+                }
+                break;
+
+            case SDL_EVENT_MOUSE_WHEEL:
+                // Rebind capture for mouse wheel
+                if (rebinding_action >= 0) {
+                    InputCode wc = (event.wheel.y > 0) ? INPUT_MOUSE_WHEEL_UP : INPUT_MOUSE_WHEEL_DOWN;
+                    kb.set(static_cast<Action>(rebinding_action), rebinding_slot, wc);
+                    rebinding_action = -1;
+                    break;
+                }
+                if (!show_settings) {
+                    // Scroll wheel triggers as a pulse "press"
+                    InputCode wc = (event.wheel.y > 0) ? INPUT_MOUSE_WHEEL_UP : INPUT_MOUSE_WHEEL_DOWN;
+                    if (kb.matches_wheel(Action::Jump, wc))
+                        jump_pressed = true;  // will be consumed by physics tick
+                    // Can extend for other actions here
+                }
                 break;
 
             case SDL_EVENT_WINDOW_RESIZED:
@@ -296,7 +329,8 @@ int main(int argc, char* argv[]) {
 
             // --- Keybinds ---
             if (ImGui::CollapsingHeader("Keybinds", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::TextDisabled("Click a button then press a key to rebind. Escape to cancel.");
+                ImGui::TextDisabled("Click a slot to rebind. Press a key, mouse button, or scroll wheel.");
+                ImGui::TextDisabled("Escape cancels. Right-click a slot to clear it.");
                 ImGui::Spacing();
 
                 for (int i = 0; i < ACTION_COUNT; i++) {
@@ -307,18 +341,30 @@ int main(int argc, char* argv[]) {
 
                     ImGui::AlignTextToFramePadding();
                     ImGui::Text("%-16s", name);
-                    ImGui::SameLine(180.0f);
 
-                    if (rebinding_action == i) {
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.1f, 1.0f));
-                        ImGui::Button("  ...press a key...  ");
-                        ImGui::PopStyleColor();
-                    } else {
-                        char label[64];
-                        snprintf(label, sizeof(label), "  %s  ", Keybinds::key_name(kb.get(action)));
-                        if (ImGui::Button(label)) {
-                            rebinding_action = i;
+                    for (int s = 0; s < SLOTS; s++) {
+                        ImGui::SameLine(s == 0 ? 160.0f : 300.0f);
+                        ImGui::PushID(s);
+
+                        if (rebinding_action == i && rebinding_slot == s) {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.1f, 1.0f));
+                            ImGui::Button("...press...");
+                            ImGui::PopStyleColor();
+                        } else {
+                            InputCode code = kb.get(action, s);
+                            char label[64];
+                            snprintf(label, sizeof(label), "  %s  ", input_code_name(code));
+                            if (ImGui::Button(label)) {
+                                rebinding_action = i;
+                                rebinding_slot = s;
+                            }
+                            // Right-click to clear
+                            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                                kb.set(action, s, INPUT_NONE);
+                            }
                         }
+
+                        ImGui::PopID();
                     }
 
                     ImGui::PopID();
@@ -383,6 +429,7 @@ int main(int argc, char* argv[]) {
             if (!show_settings) {
                 SDL_SetWindowRelativeMouseMode(window, true);
                 rebinding_action = -1;
+                rebinding_slot = -1;
             }
         }
 
