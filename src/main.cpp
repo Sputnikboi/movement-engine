@@ -28,13 +28,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Hide cursor and warp to center — works reliably with remote desktop
-    // (Moonlight, Parsec, etc.) unlike SDL relative mouse mode
-    SDL_HideCursor();
-    {
-        int w, h;
-        SDL_GetWindowSize(window, &w, &h);
-        SDL_WarpMouseInWindow(window, w / 2.0f, h / 2.0f);
+    bool have_relative_mouse = SDL_SetWindowRelativeMouseMode(window, true);
+    if (!have_relative_mouse) {
+        fprintf(stderr, "Warning: relative mouse mode failed (%s), using manual warp\n", SDL_GetError());
+        SDL_HideCursor();
     }
 
     // --- Build level ---
@@ -62,44 +59,32 @@ int main(int argc, char* argv[]) {
     float fly_speed = 15.0f;
 
     // --- Fixed timestep ---
+    // 128 ticks/sec like Source engine. This gives deterministic physics
+    // regardless of framerate — the exact consistency you were missing in Unity.
     constexpr float TICK_RATE = 1.0f / 128.0f;
     float accumulator = 0.0f;
 
-    // --- Input state ---
+    // --- Input state (persistent across ticks) ---
     InputState input{};
     bool jump_pressed = false;
-
-    // --- Mouse warp state ---
-    bool first_frame = true;  // skip first delta (junk from initial warp)
 
     bool running = true;
     Uint64 last_time = SDL_GetPerformanceCounter();
 
     while (running) {
-        // --- Compute mouse delta from center of window ---
-        int ww, wh;
-        SDL_GetWindowSize(window, &ww, &wh);
-        float center_x = ww / 2.0f;
-        float center_y = wh / 2.0f;
+        // --- Accumulate mouse motion ---
+        float mouse_dx = 0.0f, mouse_dy = 0.0f;
 
-        float mx, my;
-        SDL_GetMouseState(&mx, &my);
-
-        float mouse_dx = mx - center_x;
-        float mouse_dy = my - center_y;
-
-        // Warp back to center immediately
-        SDL_WarpMouseInWindow(window, center_x, center_y);
-
-        // Discard first frame's delta (garbage from initial positioning)
-        if (first_frame) {
-            mouse_dx = 0.0f;
-            mouse_dy = 0.0f;
-            first_frame = false;
+        if (!have_relative_mouse) {
+            // Manual warp mode: compute delta from center
+            float mx, my;
+            SDL_GetMouseState(&mx, &my);
+            int ww, wh;
+            SDL_GetWindowSize(window, &ww, &wh);
+            mouse_dx = mx - ww / 2.0f;
+            mouse_dy = my - wh / 2.0f;
         }
 
-        // Drain events (warp generates motion events — we ignore them
-        // since we already computed delta from absolute position above)
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -115,8 +100,9 @@ int main(int argc, char* argv[]) {
                 if (event.key.key == SDLK_V) {
                     noclip = !noclip;
                     printf("Noclip: %s\n", noclip ? "ON" : "OFF");
-                    if (noclip)
+                    if (noclip) {
                         camera.position = player.eye_position();
+                    }
                 }
                 if (event.key.key == SDLK_SPACE)  jump_pressed = true;
                 break;
@@ -126,8 +112,12 @@ int main(int argc, char* argv[]) {
             case SDL_EVENT_WINDOW_RESIZED:
                 renderer.on_resize();
                 break;
-            // Mouse motion events intentionally not processed —
-            // we use absolute position delta above instead
+            case SDL_EVENT_MOUSE_MOTION:
+                if (have_relative_mouse) {
+                    mouse_dx += event.motion.xrel;
+                    mouse_dy += event.motion.yrel;
+                }
+                break;
             }
         }
 
@@ -137,11 +127,12 @@ int main(int argc, char* argv[]) {
         last_time = now;
         if (dt > 0.1f) dt = 0.1f;
 
-        // --- Mouse look ---
+        // --- Mouse look (applied once per frame, not per tick) ---
         camera.mouse_look(mouse_dx, mouse_dy);
 
         // --- Movement ---
         if (noclip) {
+            // Free-fly camera (for level inspection)
             const bool* keys = SDL_GetKeyboardState(nullptr);
             HMM_Vec3 move_dir = HMM_V3(0, 0, 0);
             HMM_Vec3 fwd   = camera.forward_flat();
@@ -162,8 +153,10 @@ int main(int argc, char* argv[]) {
                 camera.position = HMM_AddV3(camera.position, HMM_MulV3F(move_dir, speed * dt));
             }
         } else {
+            // Fixed-timestep player physics
             const bool* keys = SDL_GetKeyboardState(nullptr);
 
+            // Build input for physics ticks
             input.forward = 0.0f;
             input.right   = 0.0f;
             if (keys[SDL_SCANCODE_W]) input.forward += 1.0f;
@@ -173,13 +166,17 @@ int main(int argc, char* argv[]) {
             input.jump = jump_pressed;
             input.yaw  = camera.yaw;
 
+            // Run physics ticks
             accumulator += dt;
             while (accumulator >= TICK_RATE) {
                 player.update(TICK_RATE, input, collision);
                 accumulator -= TICK_RATE;
+
+                // Consume jump so it only fires once per press
                 input.jump = false;
             }
 
+            // Sync camera to player eye position
             camera.position = player.eye_position();
         }
 
@@ -197,7 +194,16 @@ int main(int argc, char* argv[]) {
         scene.light_dir  = HMM_V4(0.4f, 0.8f, 0.3f, 0.0f);
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
+        // --- Render ---
         renderer.draw_frame(scene);
+
+        // Manual mouse re-center fallback for Linux compositors
+        // where relative mouse mode doesn't work
+        if (!have_relative_mouse) {
+            int w, h;
+            SDL_GetWindowSize(window, &w, &h);
+            SDL_WarpMouseInWindow(window, w / 2.0f, h / 2.0f);
+        }
     }
 
     renderer.shutdown();
