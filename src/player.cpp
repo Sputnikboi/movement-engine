@@ -55,7 +55,9 @@ void Player::check_ground(const CollisionWorld& world) {
         printf("\n");
     }
 
-    if (hit.hit && hit.normal.Y > 0.7f) {
+    if (hit.hit && hit.normal.Y > 0.7f && velocity.Y <= 0.1f) {
+        // Only count as grounded if not actively jumping upward.
+        // velocity.Y > 0.1 means we just jumped — don't re-ground.
         grounded = true;
         ground_normal = hit.normal;
 
@@ -177,6 +179,10 @@ void Player::perform_lurch(const InputState& input) {
     if (lurch_timer <= 0.0f) return;
     if (input.forward == 0.0f && input.right == 0.0f) return;
 
+    // Only lurch on input CHANGE (not every tick)
+    bool input_changed = (input.forward != prev_forward || input.right != prev_right);
+    if (!input_changed) return;
+
     HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
     float hspeed = HMM_LenV3(hvel);
     if (hspeed < 0.5f) return;
@@ -188,11 +194,6 @@ void Player::perform_lurch(const InputState& input) {
 
     HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
 
-    // Skip if already aligned (prevents drift when holding one direction)
-    float alignment = HMM_DotV3(cur_dir, lurch_dir);
-    if (alignment > 0.98f) return;
-
-    // Lerp toward input direction every tick, preserving speed
     HMM_Vec3 new_dir = HMM_AddV3(
         HMM_MulV3F(cur_dir, 1.0f - lurch_strength),
         HMM_MulV3F(lurch_dir, lurch_strength)
@@ -266,14 +267,21 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
             power_sliding = false;
         }
 
-        // Project onto ground plane for smooth slope sliding
+        // On slopes: project along surface
         if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f) {
-            float speed = HMM_LenV3(velocity);
-            float d = HMM_DotV3(velocity, ground_normal);
-            velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, d));
-            float new_speed = HMM_LenV3(velocity);
-            if (new_speed > 0.001f)
-                velocity = HMM_MulV3F(velocity, speed / new_speed);
+            float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+            if (hspeed > 0.001f) {
+                HMM_Vec3 hdir = HMM_V3(velocity.X / hspeed, 0.0f, velocity.Z / hspeed);
+                float d = HMM_DotV3(hdir, ground_normal);
+                HMM_Vec3 slope_dir = HMM_SubV3(hdir, HMM_MulV3F(ground_normal, d));
+                float slope_len = HMM_LenV3(slope_dir);
+                if (slope_len > 0.001f) {
+                    slope_dir = HMM_MulV3F(slope_dir, 1.0f / slope_len);
+                    velocity.X = slope_dir.X * hspeed;
+                    velocity.Y = slope_dir.Y * hspeed;
+                    velocity.Z = slope_dir.Z * hspeed;
+                }
+            }
         } else {
             if (velocity.Y < 0.0f) velocity.Y = 0.0f;
         }
@@ -301,18 +309,28 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    // Project velocity onto ground plane so we follow slopes smoothly.
-    // This prevents the bump-then-correct cycle on ramps.
+    // On slopes: project horizontal velocity along the slope surface
+    // so we move smoothly along ramps instead of bouncing.
+    // Keep Y handling separate so jumps aren't affected.
     if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f) {
-        // On a slope: project horizontal velocity onto slope surface
-        float speed = HMM_LenV3(velocity);
-        float d = HMM_DotV3(velocity, ground_normal);
-        velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, d));
-        // Preserve speed (projection shortens the vector)
-        float new_speed = HMM_LenV3(velocity);
-        if (new_speed > 0.001f)
-            velocity = HMM_MulV3F(velocity, speed / new_speed);
+        // Get horizontal speed and direction
+        float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+        if (hspeed > 0.001f) {
+            HMM_Vec3 hdir = HMM_V3(velocity.X / hspeed, 0.0f, velocity.Z / hspeed);
+            // Project horizontal direction onto slope: remove normal component, renormalize
+            float d = HMM_DotV3(hdir, ground_normal);
+            HMM_Vec3 slope_dir = HMM_SubV3(hdir, HMM_MulV3F(ground_normal, d));
+            float slope_len = HMM_LenV3(slope_dir);
+            if (slope_len > 0.001f) {
+                slope_dir = HMM_MulV3F(slope_dir, 1.0f / slope_len);
+                // Apply: same horizontal speed, directed along slope
+                velocity.X = slope_dir.X * hspeed;
+                velocity.Y = slope_dir.Y * hspeed;
+                velocity.Z = slope_dir.Z * hspeed;
+            }
+        }
     } else {
+        // Flat ground: just clamp negative Y
         if (velocity.Y < 0.0f) velocity.Y = 0.0f;
     }
 
