@@ -99,6 +99,7 @@ bool Renderer::init(SDL_Window* window, const Mesh& level_mesh) {
     if (!create_render_pass())           return false;
     if (!create_descriptor_set_layout()) return false;
     if (!create_pipeline())              return false;
+    if (!create_particle_pipeline())     return false;
     if (!create_framebuffers())          return false;
     if (!create_command_pool())          return false;
     if (!create_mesh_buffers(level_mesh)) return false;
@@ -185,6 +186,12 @@ void Renderer::shutdown() {
 
     vkDestroyPipeline(device_, pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+    vkDestroyPipeline(device_, particle_pipeline_, nullptr);
+    vkDestroyPipelineLayout(device_, particle_layout_, nullptr);
+
+    // Particle buffers
+    if (particle_vb_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, particle_vb_, nullptr); vkFreeMemory(device_, particle_vb_mem_, nullptr); }
+    if (particle_ib_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, particle_ib_, nullptr); vkFreeMemory(device_, particle_ib_mem_, nullptr); }
     vkDestroyDescriptorSetLayout(device_, desc_set_layout_, nullptr);
     vkDestroyRenderPass(device_, render_pass_, nullptr);
 
@@ -767,6 +774,187 @@ bool Renderer::create_pipeline() {
 //  12. Framebuffers (color + depth)
 // ============================================================
 
+// ============================================================
+//  Particle pipeline (additive blend, no depth write, cull off)
+// ============================================================
+
+bool Renderer::create_particle_pipeline() {
+    VkShaderModule vert = load_shader(SHADER_DIR "particle.vert.spv");
+    VkShaderModule frag = load_shader(SHADER_DIR "particle.frag.spv");
+    if (!vert || !frag) return false;
+
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = vert;
+    stages[0].pName  = "main";
+    stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = frag;
+    stages[1].pName  = "main";
+
+    // Vertex input: ParticleVertex
+    VkVertexInputBindingDescription binding{};
+    binding.binding   = 0;
+    binding.stride    = sizeof(ParticleVertex);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attrs[4]{};
+    attrs[0].binding = 0; attrs[0].location = 0;
+    attrs[0].format  = VK_FORMAT_R32G32B32_SFLOAT;
+    attrs[0].offset  = offsetof(ParticleVertex, center);
+
+    attrs[1].binding = 0; attrs[1].location = 1;
+    attrs[1].format  = VK_FORMAT_R32G32_SFLOAT;
+    attrs[1].offset  = offsetof(ParticleVertex, corner);
+
+    attrs[2].binding = 0; attrs[2].location = 2;
+    attrs[2].format  = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attrs[2].offset  = offsetof(ParticleVertex, color);
+
+    attrs[3].binding = 0; attrs[3].location = 3;
+    attrs[3].format  = VK_FORMAT_R32G32_SFLOAT;
+    attrs[3].offset  = offsetof(ParticleVertex, params);
+
+    VkPipelineVertexInputStateCreateInfo vertex_input{};
+    vertex_input.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input.vertexBindingDescriptionCount   = 1;
+    vertex_input.pVertexBindingDescriptions      = &binding;
+    vertex_input.vertexAttributeDescriptionCount = 4;
+    vertex_input.pVertexAttributeDescriptions    = attrs;
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+    input_assembly.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamic{};
+    dynamic.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic.dynamicStateCount = 2;
+    dynamic.pDynamicStates    = dyn_states;
+
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.scissorCount  = 1;
+
+    VkPipelineRasterizationStateCreateInfo raster{};
+    raster.sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    raster.polygonMode = VK_POLYGON_MODE_FILL;
+    raster.lineWidth   = 1.0f;
+    raster.cullMode    = VK_CULL_MODE_NONE;  // billboards are double-sided
+    raster.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    VkPipelineMultisampleStateCreateInfo ms{};
+    ms.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // Depth test ON (don't draw behind walls), depth write OFF (transparent)
+    VkPipelineDepthStencilStateCreateInfo depth_stencil{};
+    depth_stencil.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil.depthTestEnable       = VK_TRUE;
+    depth_stencil.depthWriteEnable      = VK_FALSE;  // don't write to depth
+    depth_stencil.depthCompareOp        = VK_COMPARE_OP_LESS;
+
+    // ADDITIVE blending: src + dst (Blend One One)
+    VkPipelineColorBlendAttachmentState blend_att{};
+    blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                             | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_att.blendEnable         = VK_TRUE;
+    blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.colorBlendOp        = VK_BLEND_OP_ADD;
+    blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.alphaBlendOp        = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo blend{};
+    blend.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blend.attachmentCount = 1;
+    blend.pAttachments    = &blend_att;
+
+    // Push constant: float time
+    VkPushConstantRange push{};
+    push.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    push.offset     = 0;
+    push.size       = sizeof(float);
+
+    VkPipelineLayoutCreateInfo layout_info{};
+    layout_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_info.setLayoutCount         = 1;
+    layout_info.pSetLayouts            = &desc_set_layout_;
+    layout_info.pushConstantRangeCount = 1;
+    layout_info.pPushConstantRanges    = &push;
+
+    if (vkCreatePipelineLayout(device_, &layout_info, nullptr, &particle_layout_) != VK_SUCCESS) {
+        fprintf(stderr, "vkCreatePipelineLayout (particle) failed\n");
+        return false;
+    }
+
+    VkGraphicsPipelineCreateInfo pi{};
+    pi.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pi.stageCount          = 2;
+    pi.pStages             = stages;
+    pi.pVertexInputState   = &vertex_input;
+    pi.pInputAssemblyState = &input_assembly;
+    pi.pViewportState      = &viewport_state;
+    pi.pRasterizationState = &raster;
+    pi.pMultisampleState   = &ms;
+    pi.pDepthStencilState  = &depth_stencil;
+    pi.pColorBlendState    = &blend;
+    pi.pDynamicState       = &dynamic;
+    pi.layout              = particle_layout_;
+    pi.renderPass          = render_pass_;
+    pi.subpass             = 0;
+
+    if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pi, nullptr, &particle_pipeline_) != VK_SUCCESS) {
+        fprintf(stderr, "vkCreateGraphicsPipelines (particle) failed\n");
+        return false;
+    }
+
+    vkDestroyShaderModule(device_, vert, nullptr);
+    vkDestroyShaderModule(device_, frag, nullptr);
+    return true;
+}
+
+// ============================================================
+//  Particle buffer upload
+// ============================================================
+
+void Renderer::upload_particles(const std::vector<ParticleVertex>& verts,
+                                 const std::vector<uint32_t>& indices)
+{
+    particle_idx_count_ = static_cast<uint32_t>(indices.size());
+    if (particle_idx_count_ == 0) return;
+
+    VkDeviceSize vb_size = sizeof(ParticleVertex) * verts.size();
+    VkDeviceSize ib_size = sizeof(uint32_t) * indices.size();
+
+    if (vb_size > particle_vb_cap_) {
+        if (particle_vb_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, particle_vb_, nullptr); vkFreeMemory(device_, particle_vb_mem_, nullptr); }
+        particle_vb_cap_ = vb_size * 2;
+        create_buffer(particle_vb_cap_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      particle_vb_, particle_vb_mem_);
+    }
+    if (ib_size > particle_ib_cap_) {
+        if (particle_ib_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, particle_ib_, nullptr); vkFreeMemory(device_, particle_ib_mem_, nullptr); }
+        particle_ib_cap_ = ib_size * 2;
+        create_buffer(particle_ib_cap_, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      particle_ib_, particle_ib_mem_);
+    }
+
+    void* data;
+    vkMapMemory(device_, particle_vb_mem_, 0, vb_size, 0, &data);
+    memcpy(data, verts.data(), vb_size);
+    vkUnmapMemory(device_, particle_vb_mem_);
+
+    vkMapMemory(device_, particle_ib_mem_, 0, ib_size, 0, &data);
+    memcpy(data, indices.data(), ib_size);
+    vkUnmapMemory(device_, particle_ib_mem_);
+}
+
 bool Renderer::create_framebuffers() {
     framebuffers_.resize(swapchain_views_.size());
     for (size_t i = 0; i < swapchain_views_.size(); i++) {
@@ -1056,7 +1244,10 @@ void Renderer::upload_entity_mesh(const Mesh& mesh) {
     vkUnmapMemory(device_, entity_ib_mem_);
 }
 
-void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh) {
+void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
+                          const std::vector<ParticleVertex>* particle_verts,
+                          const std::vector<uint32_t>* particle_indices,
+                          float total_time) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
     uint32_t image_index;
@@ -1142,6 +1333,42 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh) {
                                sizeof(HMM_Mat4), &model);
 
             vkCmdDrawIndexed(cmd, entity_idx_count_, 1, 0, 0, 0);
+        }
+    }
+
+    // Draw particles (additive blend, after opaques, before ImGui)
+    if (particle_verts && particle_indices && !particle_indices->empty()) {
+        upload_particles(*particle_verts, *particle_indices);
+
+        if (particle_idx_count_ > 0) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particle_pipeline_);
+
+            // Re-bind descriptor set (UBO) for particle shaders
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    particle_layout_, 0, 1,
+                                    &descriptor_sets_[current_frame_], 0, nullptr);
+
+            // Push time
+            vkCmdPushConstants(cmd, particle_layout_, VK_SHADER_STAGE_VERTEX_BIT,
+                               0, sizeof(float), &total_time);
+
+            VkBuffer     pbufs[] = {particle_vb_};
+            VkDeviceSize poffs[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, pbufs, poffs);
+            vkCmdBindIndexBuffer(cmd, particle_ib_, 0, VK_INDEX_TYPE_UINT32);
+
+            // Re-set viewport/scissor for particle pipeline
+            VkViewport vp{};
+            vp.width    = static_cast<float>(swapchain_extent_.width);
+            vp.height   = static_cast<float>(swapchain_extent_.height);
+            vp.maxDepth = 1.0f;
+            vkCmdSetViewport(cmd, 0, 1, &vp);
+
+            VkRect2D sc{};
+            sc.extent = swapchain_extent_;
+            vkCmdSetScissor(cmd, 0, 1, &sc);
+
+            vkCmdDrawIndexed(cmd, particle_idx_count_, 1, 0, 0, 0);
         }
     }
 

@@ -7,6 +7,7 @@
 
 #include "vendor/HandmadeMath.h"
 #include "mesh.h"
+#include "effects.h"
 
 // Must match the UBO layout in the shaders (std140)
 struct SceneData {
@@ -20,7 +21,10 @@ class Renderer {
 public:
     bool init(SDL_Window* window, const Mesh& level_mesh);
     void shutdown();
-    void draw_frame(const SceneData& scene, const Mesh* entity_mesh = nullptr);
+    void draw_frame(const SceneData& scene, const Mesh* entity_mesh = nullptr,
+                    const std::vector<ParticleVertex>* particle_verts = nullptr,
+                    const std::vector<uint32_t>* particle_indices = nullptr,
+                    float total_time = 0.0f);
     void wait_idle();
     void reload_mesh(const Mesh& new_mesh);
     void on_resize() { resize_requested_ = true; }
@@ -65,11 +69,15 @@ private:
     VkDeviceMemory depth_memory_ = VK_NULL_HANDLE;
     VkImageView    depth_view_   = VK_NULL_HANDLE;
 
-    // --- Pipeline ---
+    // --- Pipelines ---
     VkRenderPass          render_pass_     = VK_NULL_HANDLE;
     VkDescriptorSetLayout desc_set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout      pipeline_layout_ = VK_NULL_HANDLE;
     VkPipeline            pipeline_        = VK_NULL_HANDLE;
+
+    // Particle pipeline (additive blend, no depth write)
+    VkPipelineLayout      particle_layout_   = VK_NULL_HANDLE;
+    VkPipeline            particle_pipeline_ = VK_NULL_HANDLE;
 
     // --- Descriptors + UBOs ---
     VkDescriptorPool             descriptor_pool_ = VK_NULL_HANDLE;
@@ -100,6 +108,18 @@ private:
 
     void upload_entity_mesh(const Mesh& mesh);
 
+    // --- Particle buffers (dynamic) ---
+    VkBuffer       particle_vb_        = VK_NULL_HANDLE;
+    VkDeviceMemory particle_vb_mem_    = VK_NULL_HANDLE;
+    VkBuffer       particle_ib_        = VK_NULL_HANDLE;
+    VkDeviceMemory particle_ib_mem_    = VK_NULL_HANDLE;
+    uint32_t       particle_idx_count_ = 0;
+    VkDeviceSize   particle_vb_cap_    = 0;
+    VkDeviceSize   particle_ib_cap_    = 0;
+
+    void upload_particles(const std::vector<ParticleVertex>& verts,
+                          const std::vector<uint32_t>& indices);
+
     // --- ImGui ---
     VkDescriptorPool imgui_pool_ = VK_NULL_HANDLE;
 
@@ -124,6 +144,7 @@ private:
     bool create_render_pass();
     bool create_descriptor_set_layout();
     bool create_pipeline();
+    bool create_particle_pipeline();
     bool create_framebuffers();
     bool create_command_pool();
     bool create_mesh_buffers(const Mesh& mesh);

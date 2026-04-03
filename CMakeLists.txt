@@ -41,6 +41,8 @@ file(MAKE_DIRECTORY ${SHADER_BINARY_DIR})
 set(SHADER_SOURCES
     ${SHADER_SOURCE_DIR}/mesh.vert
     ${SHADER_SOURCE_DIR}/mesh.frag
+    ${SHADER_SOURCE_DIR}/particle.vert
+    ${SHADER_SOURCE_DIR}/particle.frag
 )
 
 set(SHADER_SPIRV "")
@@ -83,6 +85,7 @@ add_executable(${PROJECT_NAME}
     src/bvh.cpp
     src/drone.cpp
     src/entity_render.cpp
+    src/effects.cpp
     ${IMGUI_SOURCES}
 )
 

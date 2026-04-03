@@ -17,6 +17,7 @@
 #include "entity.h"
 #include "drone.h"
 #include "entity_render.h"
+#include "effects.h"
 
 #include "vendor/imgui/imgui.h"
 #include "vendor/imgui/imgui_impl_sdl3.h"
@@ -197,6 +198,8 @@ int main(int argc, char* argv[]) {
     // --- Entities ---
     Entity entities[MAX_ENTITIES] = {};
     DroneConfig drone_cfg;
+    EffectSystem effects;
+    effects.init();
     float total_time = 0.0f;
     bool shoot_pressed = false;
 
@@ -435,6 +438,7 @@ int main(int argc, char* argv[]) {
                 Entity& hit_ent = entities[best_idx];
                 hit_ent.health -= 10.0f;  // hitscan damage
                 if (hit_ent.health <= 0) {
+                    effects.spawn_drone_explosion(hit_ent.position);
                     hit_ent.alive = false;
                     printf("Drone killed!\n");
                 }
@@ -466,8 +470,16 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Update effects
+        effects.update(dt);
+
         // Build entity mesh for rendering
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES);
+
+        // Build particle data
+        std::vector<ParticleVertex> particle_verts;
+        std::vector<uint32_t> particle_indices;
+        effects.build_vertices(particle_verts, particle_indices);
 
         // --- ImGui frame ---
         ImGui_ImplVulkan_NewFrame();
@@ -780,7 +792,7 @@ int main(int argc, char* argv[]) {
         scene.light_dir  = HMM_V4(0.4f, 0.8f, 0.3f, 0.0f);
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
-        renderer.draw_frame(scene, &entity_mesh);
+        renderer.draw_frame(scene, &entity_mesh, &particle_verts, &particle_indices, total_time);
     }
 
     config.pull(camera, player);
