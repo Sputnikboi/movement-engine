@@ -81,6 +81,8 @@ add_executable(${PROJECT_NAME}
     src/config.cpp
     src/level_loader.cpp
     src/bvh.cpp
+    src/drone.cpp
+    src/entity_render.cpp
     ${IMGUI_SOURCES}
 )
 

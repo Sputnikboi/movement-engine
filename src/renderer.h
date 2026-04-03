@@ -20,7 +20,7 @@ class Renderer {
 public:
     bool init(SDL_Window* window, const Mesh& level_mesh);
     void shutdown();
-    void draw_frame(const SceneData& scene);
+    void draw_frame(const SceneData& scene, const Mesh* entity_mesh = nullptr);
     void wait_idle();
     void reload_mesh(const Mesh& new_mesh);
     void on_resize() { resize_requested_ = true; }
@@ -82,12 +82,23 @@ private:
     VkCommandPool                command_pool_ = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> command_buffers_;
 
-    // --- Mesh buffers ---
+    // --- Level mesh buffers ---
     VkBuffer       vertex_buffer_        = VK_NULL_HANDLE;
     VkDeviceMemory vertex_buffer_memory_ = VK_NULL_HANDLE;
     VkBuffer       index_buffer_         = VK_NULL_HANDLE;
     VkDeviceMemory index_buffer_memory_  = VK_NULL_HANDLE;
     uint32_t       index_count_          = 0;
+
+    // --- Entity mesh buffers (dynamic, recreated per frame) ---
+    VkBuffer       entity_vb_        = VK_NULL_HANDLE;
+    VkDeviceMemory entity_vb_mem_    = VK_NULL_HANDLE;
+    VkBuffer       entity_ib_        = VK_NULL_HANDLE;
+    VkDeviceMemory entity_ib_mem_    = VK_NULL_HANDLE;
+    uint32_t       entity_idx_count_ = 0;
+    VkDeviceSize   entity_vb_capacity_ = 0;
+    VkDeviceSize   entity_ib_capacity_ = 0;
+
+    void upload_entity_mesh(const Mesh& mesh);
 
     // --- ImGui ---
     VkDescriptorPool imgui_pool_ = VK_NULL_HANDLE;

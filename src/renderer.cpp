@@ -168,6 +168,10 @@ void Renderer::shutdown() {
     vkDestroyBuffer(device_, index_buffer_, nullptr);
     vkFreeMemory(device_, index_buffer_memory_, nullptr);
 
+    // Entity buffers
+    if (entity_vb_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, entity_vb_, nullptr); vkFreeMemory(device_, entity_vb_mem_, nullptr); }
+    if (entity_ib_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, entity_ib_, nullptr); vkFreeMemory(device_, entity_ib_mem_, nullptr); }
+
     // UBOs
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroyBuffer(device_, ubo_buffers_[i], nullptr);
@@ -1012,7 +1016,47 @@ void Renderer::recreate_swapchain() {
 //  Draw frame
 // ============================================================
 
-void Renderer::draw_frame(const SceneData& scene) {
+void Renderer::upload_entity_mesh(const Mesh& mesh) {
+    entity_idx_count_ = static_cast<uint32_t>(mesh.indices.size());
+    if (entity_idx_count_ == 0) return;
+
+    VkDeviceSize vb_size = sizeof(Vertex3D) * mesh.vertices.size();
+    VkDeviceSize ib_size = sizeof(uint32_t) * mesh.indices.size();
+
+    // Grow buffers if needed (never shrink)
+    if (vb_size > entity_vb_capacity_) {
+        if (entity_vb_ != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device_, entity_vb_, nullptr);
+            vkFreeMemory(device_, entity_vb_mem_, nullptr);
+        }
+        entity_vb_capacity_ = vb_size * 2;  // double to reduce reallocations
+        create_buffer(entity_vb_capacity_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      entity_vb_, entity_vb_mem_);
+    }
+    if (ib_size > entity_ib_capacity_) {
+        if (entity_ib_ != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device_, entity_ib_, nullptr);
+            vkFreeMemory(device_, entity_ib_mem_, nullptr);
+        }
+        entity_ib_capacity_ = ib_size * 2;
+        create_buffer(entity_ib_capacity_, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      entity_ib_, entity_ib_mem_);
+    }
+
+    // Upload
+    void* data;
+    vkMapMemory(device_, entity_vb_mem_, 0, vb_size, 0, &data);
+    memcpy(data, mesh.vertices.data(), vb_size);
+    vkUnmapMemory(device_, entity_vb_mem_);
+
+    vkMapMemory(device_, entity_ib_mem_, 0, ib_size, 0, &data);
+    memcpy(data, mesh.indices.data(), ib_size);
+    vkUnmapMemory(device_, entity_ib_mem_);
+}
+
+void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
     uint32_t image_index;
@@ -1082,6 +1126,24 @@ void Renderer::draw_frame(const SceneData& scene) {
 
     // Draw level
     vkCmdDrawIndexed(cmd, index_count_, 1, 0, 0, 0);
+
+    // Draw entities
+    if (entity_mesh && !entity_mesh->indices.empty()) {
+        upload_entity_mesh(*entity_mesh);
+
+        if (entity_idx_count_ > 0) {
+            VkBuffer     ebufs[] = {entity_vb_};
+            VkDeviceSize eoffs[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, ebufs, eoffs);
+            vkCmdBindIndexBuffer(cmd, entity_ib_, 0, VK_INDEX_TYPE_UINT32);
+
+            // Identity model matrix (entities are already in world space)
+            vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                               sizeof(HMM_Mat4), &model);
+
+            vkCmdDrawIndexed(cmd, entity_idx_count_, 1, 0, 0, 0);
+        }
+    }
 
     // Draw ImGui on top
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);

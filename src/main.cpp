@@ -14,6 +14,9 @@
 #include "config.h"
 #include "keybinds.h"
 #include "level_loader.h"
+#include "entity.h"
+#include "drone.h"
+#include "entity_render.h"
 
 #include "vendor/imgui/imgui.h"
 #include "vendor/imgui/imgui_impl_sdl3.h"
@@ -191,6 +194,12 @@ int main(int argc, char* argv[]) {
     bool levels_scanned = false;
     char level_path_buf[512] = "";
 
+    // --- Entities ---
+    Entity entities[MAX_ENTITIES] = {};
+    DroneConfig drone_cfg;
+    float total_time = 0.0f;
+    bool shoot_pressed = false;
+
     // --- Fixed timestep ---
     constexpr float TICK_RATE = 1.0f / 128.0f;
     float accumulator = 0.0f;
@@ -287,6 +296,8 @@ int main(int argc, char* argv[]) {
                     }
                     break;
                 }
+                if (!show_settings && event.button.button == SDL_BUTTON_LEFT)
+                    shoot_pressed = true;
                 break;
 
             case SDL_EVENT_MOUSE_WHEEL:
@@ -384,6 +395,80 @@ int main(int argc, char* argv[]) {
             camera.position = player.eye_position();
         }
 
+        total_time += dt;
+
+        // --- Hitscan (left click) ---
+        if (shoot_pressed && !show_settings && !noclip) {
+            shoot_pressed = false;
+
+            HMM_Vec3 ray_origin = camera.position;
+            HMM_Vec3 ray_dir    = camera.forward();
+
+            // Check against all alive entities
+            float best_t = 1000.0f;
+            int best_idx = -1;
+
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Entity& e = entities[i];
+                if (!e.alive || e.type != EntityType::Drone) continue;
+
+                // Ray-sphere intersection
+                HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
+                float b = HMM_DotV3(oc, ray_dir);
+                float c = HMM_DotV3(oc, oc) - e.radius * e.radius;
+                float disc = b * b - c;
+                if (disc < 0) continue;
+
+                float t = -b - sqrtf(disc);
+                if (t < 0) t = -b + sqrtf(disc);
+                if (t > 0 && t < best_t) {
+                    // Make sure no wall is closer
+                    HitResult wall = collision.raycast(ray_origin, ray_dir, t);
+                    if (!wall.hit) {
+                        best_t = t;
+                        best_idx = i;
+                    }
+                }
+            }
+
+            if (best_idx >= 0) {
+                Entity& hit_ent = entities[best_idx];
+                hit_ent.health -= 10.0f;  // hitscan damage
+                if (hit_ent.health <= 0) {
+                    hit_ent.alive = false;
+                    printf("Drone killed!\n");
+                }
+            }
+        }
+        shoot_pressed = false;  // consume
+
+        // --- Update entities ---
+        for (int i = 0; i < MAX_ENTITIES; i++) {
+            Entity& e = entities[i];
+            if (!e.alive) continue;
+            if (e.type == EntityType::Drone) {
+                drone_update(e, entities, MAX_ENTITIES,
+                             player.position, collision, drone_cfg, dt, total_time);
+            }
+        }
+        projectiles_update(entities, MAX_ENTITIES, collision, dt);
+
+        // Check projectile-player collision
+        for (int i = 0; i < MAX_ENTITIES; i++) {
+            Entity& e = entities[i];
+            if (!e.alive || e.type != EntityType::Projectile) continue;
+            HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
+            float dist_sq = HMM_DotV3(to_player, to_player);
+            float hit_radius = e.radius + player.radius;
+            if (dist_sq < hit_radius * hit_radius) {
+                // TODO: player takes damage
+                e.alive = false;
+            }
+        }
+
+        // Build entity mesh for rendering
+        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES);
+
         // --- ImGui frame ---
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -414,10 +499,26 @@ int main(int argc, char* argv[]) {
                 ImGui::TextColored(ImVec4(1,0.7f,0.2f,1), "LURCH");
             }
             if (noclip) ImGui::Text("NOCLIP");
+            // Count alive drones
+            int drone_count = 0;
+            for (int i = 0; i < MAX_ENTITIES; i++)
+                if (entities[i].alive && entities[i].type == EntityType::Drone)
+                    drone_count++;
+            if (drone_count > 0) ImGui::Text("Drones: %d", drone_count);
+
             ImGui::Separator();
-            ImGui::TextDisabled("ESC: settings  H: hide HUD");
+            ImGui::TextDisabled("ESC: settings  H: hide HUD  LMB: shoot");
 
             ImGui::End();
+
+            // --- Crosshair ---
+            ImDrawList* draw = ImGui::GetForegroundDrawList();
+            ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+            float cs = 8.0f;
+            float ct = 2.0f;
+            ImU32 cross_col = IM_COL32(255, 255, 255, 200);
+            draw->AddLine(ImVec2(center.x - cs, center.y), ImVec2(center.x + cs, center.y), cross_col, ct);
+            draw->AddLine(ImVec2(center.x, center.y - cs), ImVec2(center.x, center.y + cs), cross_col, ct);
         }
 
         // --- Settings window ---
@@ -488,6 +589,25 @@ int main(int argc, char* argv[]) {
                     load_level(level_path_buf, renderer, collision, player, camera,
                                noclip, current_level_name);
                 }
+            }
+
+            // --- Enemies ---
+            if (ImGui::CollapsingHeader("Enemies")) {
+                if (ImGui::Button("Spawn Drone (in front of player)")) {
+                    HMM_Vec3 fwd = camera.forward_flat();
+                    HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
+                    spawn.Y += 3.0f;
+                    drone_spawn(entities, MAX_ENTITIES, spawn, drone_cfg);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Kill All")) {
+                    for (int i = 0; i < MAX_ENTITIES; i++)
+                        entities[i].alive = false;
+                }
+                ImGui::SliderFloat("Drone Health", &drone_cfg.drone_health, 1.0f, 100.0f);
+                ImGui::SliderFloat("Attack Range", &drone_cfg.attack_range, 5.0f, 50.0f);
+                ImGui::SliderFloat("Projectile Speed", &drone_cfg.projectile_speed, 5.0f, 50.0f);
+                ImGui::SliderFloat("Projectile Damage", &drone_cfg.projectile_damage, 1.0f, 20.0f);
             }
 
             // --- Mouse ---
@@ -660,7 +780,7 @@ int main(int argc, char* argv[]) {
         scene.light_dir  = HMM_V4(0.4f, 0.8f, 0.3f, 0.0f);
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
-        renderer.draw_frame(scene);
+        renderer.draw_frame(scene, &entity_mesh);
     }
 
     config.pull(camera, player);
