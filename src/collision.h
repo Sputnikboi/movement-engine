@@ -38,14 +38,13 @@ struct CollisionWorld {
     // Ray vs all triangles. Returns closest hit.
     HitResult raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist) const;
 
-    // Find closest point on any triangle to a sphere.
-    // Returns the deepest penetration (if any).
-    // push_out = direction to move sphere to resolve overlap, length = penetration depth.
-    bool sphere_overlap(HMM_Vec3 center, float radius,
-                        HMM_Vec3& push_out, float& penetration) const;
+    // Iteratively push a sphere out of all overlapping geometry.
+    // Resolves multiple simultaneous penetrations (corners, edges).
+    // Returns true if any overlap was resolved.
+    bool depenetrate(HMM_Vec3& center, float radius) const;
 
-    // Move a sphere from `start` by `displacement`, sliding against geometry.
-    // Returns the final position after up to 4 slide iterations.
+    // Move a sphere from `start` along `velocity * dt`, sliding against geometry.
+    // Uses proper Quake-style multi-plane clipping.
     // `velocity` is modified in-place (clipped against contact planes).
     HMM_Vec3 slide_move(HMM_Vec3 start, float radius,
                         HMM_Vec3& velocity, float dt) const;
