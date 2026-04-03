@@ -136,9 +136,9 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         grounded = false;
 
         // Move as airborne this tick (no friction, no ground accel)
-        HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, height * 0.5f, 0.0f));
+        HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
         sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
-        position = HMM_SubV3(sphere_center, HMM_V3(0.0f, height * 0.5f, 0.0f));
+        position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
         return;
     }
 
@@ -177,9 +177,9 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         velocity.Y = 0.0f;
 
     // Move through world with collision
-    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, height * 0.5f, 0.0f));
+    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
     sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
-    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, height * 0.5f, 0.0f));
+    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
 }
 
 // ============================================================
@@ -223,9 +223,9 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
     velocity.Y -= gravity * dt;
 
     // Move through world with collision
-    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, height * 0.5f, 0.0f));
+    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
     sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
-    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, height * 0.5f, 0.0f));
+    position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
 }
 
 // ============================================================
