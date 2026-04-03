@@ -266,17 +266,11 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
             power_sliding = false;
         }
 
-        // Project onto ground plane for smooth slope sliding
-        if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f) {
-            float speed = HMM_LenV3(velocity);
-            float d = HMM_DotV3(velocity, ground_normal);
-            velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, d));
-            float new_speed = HMM_LenV3(velocity);
-            if (new_speed > 0.001f)
-                velocity = HMM_MulV3F(velocity, speed / new_speed);
-        } else {
-            if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-        }
+        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+
+        // Slope stick: downward force to stay glued to ramp surface
+        if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f)
+            velocity.Y -= slope_stick_force * dt;
 
         do_collide_and_move(dt, world);
         return;
@@ -291,9 +285,22 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     float wish_len = HMM_LenV3(wish_dir_raw);
     float wish_speed = 0.0f;
 
+    bool on_slope = (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f);
+
     HMM_Vec3 wish_dir = {};
     if (wish_len > 0.001f) {
         wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
+
+        // On slopes: project wish direction onto the slope surface
+        // (matches Unity's GetSlopeMoveDirection approach)
+        if (on_slope) {
+            float d = HMM_DotV3(wish_dir, ground_normal);
+            wish_dir = HMM_SubV3(wish_dir, HMM_MulV3F(ground_normal, d));
+            float proj_len = HMM_LenV3(wish_dir);
+            if (proj_len > 0.001f)
+                wish_dir = HMM_MulV3F(wish_dir, 1.0f / proj_len);
+        }
+
         float speed_cap = crouched ? crouch_speed : max_speed;
         wish_speed = wish_len * speed_cap;
         if (wish_speed > speed_cap) wish_speed = speed_cap;
@@ -301,20 +308,12 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    // Project velocity onto ground plane so we follow slopes smoothly.
-    // This prevents the bump-then-correct cycle on ramps.
-    if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f) {
-        // On a slope: project horizontal velocity onto slope surface
-        float speed = HMM_LenV3(velocity);
-        float d = HMM_DotV3(velocity, ground_normal);
-        velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, d));
-        // Preserve speed (projection shortens the vector)
-        float new_speed = HMM_LenV3(velocity);
-        if (new_speed > 0.001f)
-            velocity = HMM_MulV3F(velocity, speed / new_speed);
-    } else {
-        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-    }
+    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+
+    // Slope stick force: push downward on slopes to stay grounded
+    // (matches Unity's ApplySlopeUpwardBoost / slopeUpwardStickForce)
+    if (on_slope)
+        velocity.Y -= slope_stick_force * dt;
 
     do_collide_and_move(dt, world);
 }
