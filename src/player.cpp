@@ -208,7 +208,8 @@ void Player::perform_lurch(const InputState& input) {
     velocity.X = new_dir.X * hspeed;
     velocity.Z = new_dir.Z * hspeed;
 
-    // Don't consume — lurch is available for every input change during the window
+    // Consume the lurch (one-shot per input change)
+    lurch_timer = 0.0f;
 }
 
 // ============================================================
