@@ -136,219 +136,120 @@ HitResult CollisionWorld::raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist)
 }
 
 // ============================================================
-//  Iterative depenetration
-//  Resolves ALL sphere-vs-triangle overlaps by repeatedly
-//  finding and resolving the deepest one. Handles corners
-//  where multiple faces overlap simultaneously.
+//  Sphere overlap test against all triangles
+//  Returns the DEEPEST single penetration
 // ============================================================
 
-bool CollisionWorld::depenetrate(HMM_Vec3& center, float radius) const {
-    constexpr int MAX_ITERS = 8;
-    bool any_resolved = false;
+bool CollisionWorld::sphere_overlap(HMM_Vec3 center, float radius,
+                                    HMM_Vec3& push_out, float& penetration) const
+{
+    bool any_hit = false;
+    penetration = 0.0f;
 
-    for (int iter = 0; iter < MAX_ITERS; iter++) {
-        // Find deepest overlapping triangle
-        float worst_pen = 0.0f;
-        HMM_Vec3 worst_push = {};
-        bool found = false;
+    for (auto& tri : triangles) {
+        HMM_Vec3 closest = closest_point_on_triangle(center, tri.v0, tri.v1, tri.v2);
+        HMM_Vec3 delta = HMM_SubV3(center, closest);
+        float dist_sq = HMM_DotV3(delta, delta);
 
-        for (auto& tri : triangles) {
-            HMM_Vec3 closest = closest_point_on_triangle(center, tri.v0, tri.v1, tri.v2);
-            HMM_Vec3 delta = HMM_SubV3(center, closest);
-            float dist_sq = HMM_DotV3(delta, delta);
-
-            if (dist_sq < radius * radius) {
-                if (dist_sq < 1e-12f) {
-                    // Sphere center is exactly on the triangle — use face normal
-                    float pen = radius;
-                    if (pen > worst_pen) {
-                        worst_pen = pen;
-                        worst_push = tri.normal;
-                        found = true;
-                    }
-                } else {
-                    float dist = sqrtf(dist_sq);
-                    float pen = radius - dist;
-                    if (pen > worst_pen) {
-                        worst_pen = pen;
-                        worst_push = HMM_MulV3F(delta, 1.0f / dist);
-                        found = true;
-                    }
-                }
+        if (dist_sq < radius * radius && dist_sq > 1e-12f) {
+            float dist = sqrtf(dist_sq);
+            float pen  = radius - dist;
+            if (pen > penetration) {
+                penetration = pen;
+                push_out = HMM_MulV3F(delta, 1.0f / dist);  // normalize
+                any_hit = true;
             }
         }
-
-        if (!found) break;  // fully resolved
-
-        // Push out with small epsilon to prevent re-overlap
-        center = HMM_AddV3(center, HMM_MulV3F(worst_push, worst_pen + 0.002f));
-        any_resolved = true;
     }
 
-    return any_resolved;
+    return any_hit;
 }
 
 // ============================================================
 //  Quake-style ClipVelocity
-//  Removes the component of velocity going into the plane.
+//  Removes the component of velocity going into the plane,
+//  with a tiny overbounce to prevent floating-point sticking.
 // ============================================================
 
 static HMM_Vec3 clip_velocity(HMM_Vec3 vel, HMM_Vec3 normal, float overbounce = 1.001f) {
     float backoff = HMM_DotV3(vel, normal) * overbounce;
-    return HMM_SubV3(vel, HMM_MulV3F(normal, backoff));
+    HMM_Vec3 result = HMM_SubV3(vel, HMM_MulV3F(normal, backoff));
+
+    // Zero out tiny components to prevent drift
+    if (fabsf(result.X) < 1e-5f) result.X = 0.0f;
+    if (fabsf(result.Y) < 1e-5f) result.Y = 0.0f;
+    if (fabsf(result.Z) < 1e-5f) result.Z = 0.0f;
+
+    return result;
 }
 
 // ============================================================
-//  Slide move: Quake PM_SlideMove
-//  Moves the sphere incrementally, clipping velocity against
-//  each contact plane. Properly continues sliding along walls
-//  instead of stopping dead on first contact.
+//  Slide move: move sphere through world, sliding along surfaces
+//  This is the Quake PM_SlideMove algorithm.
+//  - Try to move full displacement
+//  - If overlap, push out and clip velocity against contact plane
+//  - Repeat up to 4 times (handles corners/wedges)
 // ============================================================
 
 HMM_Vec3 CollisionWorld::slide_move(HMM_Vec3 start, float radius,
                                      HMM_Vec3& velocity, float dt) const
 {
-    constexpr int MAX_BUMPS = 4;
-    constexpr float MIN_MOVE = 0.001f;
+    constexpr int MAX_CLIPS = 4;
 
     HMM_Vec3 pos = start;
-    float time_left = dt;
-    HMM_Vec3 planes[MAX_BUMPS];
+    HMM_Vec3 remaining = HMM_MulV3F(velocity, dt);
+    HMM_Vec3 planes[MAX_CLIPS];
     int num_planes = 0;
 
-    // Pre-clip: if starting overlapping, depenetrate first
-    depenetrate(pos, radius);
+    for (int i = 0; i < MAX_CLIPS; i++) {
+        // Move by remaining displacement
+        pos = HMM_AddV3(pos, remaining);
 
-    HMM_Vec3 original_vel = velocity;
+        // Check for overlap
+        HMM_Vec3 push_dir;
+        float pen;
+        if (!sphere_overlap(pos, radius, push_dir, pen)) {
+            break;  // no collision, done
+        }
 
-    for (int bump = 0; bump < MAX_BUMPS; bump++) {
-        if (time_left <= 0.0f) break;
+        // Push out of geometry
+        pos = HMM_AddV3(pos, HMM_MulV3F(push_dir, pen + 0.001f));
 
-        HMM_Vec3 displacement = HMM_MulV3F(velocity, time_left);
-        float disp_len = HMM_LenV3(displacement);
-        if (disp_len < MIN_MOVE) break;
+        // Record this plane
+        if (num_planes < MAX_CLIPS)
+            planes[num_planes++] = push_dir;
 
-        // Try the full move
-        HMM_Vec3 target = HMM_AddV3(pos, displacement);
+        // Clip velocity against all accumulated planes
+        velocity = clip_velocity(velocity, push_dir);
 
-        // Binary search for how far we can go before overlapping.
-        // This finds a safe fraction of the displacement.
-        float lo = 0.0f, hi = 1.0f;
-        HMM_Vec3 safe_pos = pos;
-        bool hit_something = false;
+        // Recompute remaining displacement from clipped velocity
+        // (fraction of dt remaining is approximated as the ratio of
+        //  displacement consumed, but for simplicity we just use
+        //  the clipped velocity for the remaining time)
+        remaining = HMM_MulV3F(push_dir, 0.0f);  // stop remaining movement this iteration
 
-        // Quick check: is the target clear?
-        HMM_Vec3 test = target;
-        // Check overlap at target
-        HMM_Vec3 test_copy = test;
-        bool overlaps = false;
-        for (auto& tri : triangles) {
-            HMM_Vec3 closest = closest_point_on_triangle(test_copy, tri.v0, tri.v1, tri.v2);
-            HMM_Vec3 delta = HMM_SubV3(test_copy, closest);
-            if (HMM_DotV3(delta, delta) < radius * radius) {
-                overlaps = true;
-                break;
+        // Check if we're being pushed into a corner (velocity opposing all planes)
+        bool stuck = false;
+        for (int j = 0; j < num_planes; j++) {
+            if (HMM_DotV3(velocity, planes[j]) < -0.01f) {
+                // Velocity goes into this plane — clip against it too
+                velocity = clip_velocity(velocity, planes[j]);
+                stuck = true;
             }
         }
-
-        if (!overlaps) {
-            // No collision — move the full distance
-            pos = target;
-            break;
-        }
-
-        // Binary search for contact point (6 iterations = 1.5% precision)
-        hit_something = true;
-        for (int s = 0; s < 6; s++) {
-            float mid = (lo + hi) * 0.5f;
-            HMM_Vec3 mid_pos = HMM_AddV3(pos, HMM_MulV3F(displacement, mid));
-
-            bool mid_overlaps = false;
-            for (auto& tri : triangles) {
-                HMM_Vec3 closest = closest_point_on_triangle(mid_pos, tri.v0, tri.v1, tri.v2);
-                HMM_Vec3 delta = HMM_SubV3(mid_pos, closest);
-                if (HMM_DotV3(delta, delta) < radius * radius) {
-                    mid_overlaps = true;
+        if (stuck) {
+            // If clipping against multiple planes leaves us stuck, zero out
+            bool still_stuck = false;
+            for (int j = 0; j < num_planes; j++) {
+                if (HMM_DotV3(velocity, planes[j]) < -0.01f) {
+                    still_stuck = true;
                     break;
                 }
             }
-
-            if (mid_overlaps) {
-                hi = mid;
-            } else {
-                lo = mid;
-                safe_pos = mid_pos;
+            if (still_stuck) {
+                velocity = HMM_V3(0, 0, 0);
+                break;
             }
-        }
-
-        // Move to safe position
-        pos = safe_pos;
-        float fraction_used = lo;
-        time_left *= (1.0f - fraction_used);
-
-        // Depenetrate at contact point (in case binary search wasn't exact)
-        depenetrate(pos, radius);
-
-        // Find the contact normal — deepest overlapping triangle at the target
-        HMM_Vec3 contact_normal = {};
-        {
-            float worst_pen = 0.0f;
-            HMM_Vec3 probe = HMM_AddV3(pos, HMM_MulV3F(displacement, 0.01f));
-            for (auto& tri : triangles) {
-                HMM_Vec3 closest = closest_point_on_triangle(probe, tri.v0, tri.v1, tri.v2);
-                HMM_Vec3 delta = HMM_SubV3(probe, closest);
-                float dist_sq = HMM_DotV3(delta, delta);
-                if (dist_sq < radius * radius) {
-                    float dist = (dist_sq > 1e-12f) ? sqrtf(dist_sq) : 0.0f;
-                    float pen = radius - dist;
-                    if (pen > worst_pen) {
-                        worst_pen = pen;
-                        if (dist > 1e-6f)
-                            contact_normal = HMM_MulV3F(delta, 1.0f / dist);
-                        else
-                            contact_normal = tri.normal;
-                    }
-                }
-            }
-        }
-
-        float cn_len = HMM_LenV3(contact_normal);
-        if (cn_len < 0.5f) break;  // couldn't determine normal
-        contact_normal = HMM_MulV3F(contact_normal, 1.0f / cn_len);
-
-        // Record plane
-        if (num_planes < MAX_BUMPS)
-            planes[num_planes++] = contact_normal;
-
-        // Clip velocity against this plane
-        velocity = clip_velocity(velocity, contact_normal);
-
-        // Also clip against all previously accumulated planes
-        bool dead = false;
-        for (int j = 0; j < num_planes - 1; j++) {
-            if (HMM_DotV3(velocity, planes[j]) < 0.0f) {
-                velocity = clip_velocity(velocity, planes[j]);
-
-                // If now going into the latest plane, we're in a crease
-                if (HMM_DotV3(velocity, contact_normal) < 0.0f) {
-                    // Slide along the crease (cross product of the two planes)
-                    HMM_Vec3 crease = HMM_Cross(contact_normal, planes[j]);
-                    float crease_len = HMM_LenV3(crease);
-                    if (crease_len > 0.001f) {
-                        crease = HMM_MulV3F(crease, 1.0f / crease_len);
-                        float d = HMM_DotV3(velocity, crease);
-                        velocity = HMM_MulV3F(crease, d);
-                    } else {
-                        velocity = HMM_V3(0, 0, 0);
-                        dead = true;
-                    }
-                }
-            }
-        }
-
-        if (dead || HMM_LenV3(velocity) < MIN_MOVE) {
-            velocity = HMM_V3(0, 0, 0);
-            break;
         }
     }
 
