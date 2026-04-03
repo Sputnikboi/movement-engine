@@ -31,6 +31,8 @@ void CollisionWorld::build_from_mesh(const Mesh& mesh) {
     }
 
     fprintf(stdout, "CollisionWorld: %zu triangles\n", triangles.size());
+
+    bvh.build(triangles);
 }
 
 // ============================================================
@@ -122,8 +124,11 @@ HMM_Vec3 closest_point_on_triangle(HMM_Vec3 p, HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 
 // ============================================================
 
 HitResult CollisionWorld::raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist) const {
-    HitResult result;
+    if (!bvh.nodes.empty())
+        return bvh.raycast(triangles, origin, dir, max_dist);
 
+    // Fallback: brute force
+    HitResult result;
     for (auto& tri : triangles) {
         float t = ray_triangle(origin, dir, tri.v0, tri.v1, tri.v2);
         if (t >= 0.0f && t < max_dist && t < result.t) {
@@ -133,7 +138,6 @@ HitResult CollisionWorld::raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist)
             result.normal = tri.normal;
         }
     }
-
     return result;
 }
 
@@ -145,6 +149,12 @@ HitResult CollisionWorld::raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist)
 bool CollisionWorld::sphere_overlap(HMM_Vec3 center, float radius,
                                     HMM_Vec3& push_out, float& penetration) const
 {
+    // Fast path: use BVH when not logging
+    if (!g_collision_log && !bvh.nodes.empty()) {
+        return bvh.sphere_overlap(triangles, center, radius, push_out, penetration);
+    }
+
+    // Brute force path with logging
     bool any_hit = false;
     penetration = 0.0f;
     int hit_count = 0;

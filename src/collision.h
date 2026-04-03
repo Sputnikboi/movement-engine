@@ -1,7 +1,9 @@
 #pragma once
 
 #include "vendor/HandmadeMath.h"
+#include "geo_types.h"
 #include "mesh.h"
+#include "bvh.h"
 #include <vector>
 #include <cstdint>
 
@@ -9,33 +11,14 @@
 extern bool g_collision_log;
 
 // ============================================================
-//  Triangle stored for collision queries
-// ============================================================
-
-struct Triangle {
-    HMM_Vec3 v0, v1, v2;
-    HMM_Vec3 normal;
-};
-
-// ============================================================
-//  Hit result from a ray or sweep
-// ============================================================
-
-struct HitResult {
-    bool     hit      = false;
-    float    t        = 1e30f;      // parametric distance along ray
-    HMM_Vec3 point    = {};         // world-space hit point
-    HMM_Vec3 normal   = {};         // surface normal at hit
-};
-
-// ============================================================
 //  Collision world — holds the triangle soup for queries
 // ============================================================
 
 struct CollisionWorld {
     std::vector<Triangle> triangles;
+    BVH bvh;
 
-    // Build from a Mesh (extracts triangles from vertex/index data)
+    // Build from a Mesh (extracts triangles from vertex/index data, builds BVH)
     void build_from_mesh(const Mesh& mesh);
 
     // Ray vs all triangles. Returns closest hit.

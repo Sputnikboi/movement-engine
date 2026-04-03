@@ -79,6 +79,8 @@ add_executable(${PROJECT_NAME}
     src/collision.cpp
     src/player.cpp
     src/config.cpp
+    src/level_loader.cpp
+    src/bvh.cpp
     ${IMGUI_SOURCES}
 )
 

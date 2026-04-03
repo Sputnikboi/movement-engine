@@ -10,13 +10,13 @@
 #include "player.h"
 #include "config.h"
 #include "keybinds.h"
+#include "level_loader.h"
 
 #include "vendor/imgui/imgui.h"
 #include "vendor/imgui/imgui_impl_sdl3.h"
 #include "vendor/imgui/imgui_impl_vulkan.h"
 
 int main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -37,7 +37,19 @@ int main(int argc, char* argv[]) {
     SDL_SetWindowRelativeMouseMode(window, true);
 
     // --- Build level + collision ---
-    Mesh level = create_test_level();
+    Mesh level;
+    if (argc > 1) {
+        level = load_level_gltf(argv[1]);
+        if (level.vertices.empty()) {
+            fprintf(stderr, "Failed to load level '%s', falling back to test level\n", argv[1]);
+            level = create_test_level();
+        }
+    } else {
+        printf("Usage: %s [level.glb]\n", argv[0]);
+        printf("No level file given, using built-in test level\n");
+        level = create_test_level();
+    }
+
     CollisionWorld collision;
     collision.build_from_mesh(level);
 
