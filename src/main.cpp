@@ -134,8 +134,8 @@ int main(int argc, char* argv[]) {
             case SDL_EVENT_KEY_DOWN:
                 // If we're waiting for a rebind, capture this key
                 if (rebinding_action >= 0 && !event.key.repeat) {
+                    // Escape cancels rebind instead of binding it
                     if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-                        // Cancel rebind
                         rebinding_action = -1;
                     } else {
                         kb.set(static_cast<Action>(rebinding_action),
@@ -145,15 +145,7 @@ int main(int argc, char* argv[]) {
                     break;  // Don't process this key further
                 }
 
-                if (event.key.key == SDLK_ESCAPE) {
-                    if (show_settings) {
-                        show_settings = false;
-                        SDL_SetWindowRelativeMouseMode(window, true);
-                    } else {
-                        running = false;
-                    }
-                }
-                if (event.key.key == SDLK_TAB && !event.key.repeat) {
+                if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
                     show_settings = !show_settings;
                     rebinding_action = -1;
                     SDL_SetWindowRelativeMouseMode(window, !show_settings);
@@ -271,7 +263,7 @@ int main(int argc, char* argv[]) {
             ImGui::Text("%s", player.grounded ? "GROUND" : "AIR");
             if (noclip) ImGui::Text("NOCLIP");
             ImGui::Separator();
-            ImGui::TextDisabled("TAB: settings  H: hide HUD");
+            ImGui::TextDisabled("ESC: settings  H: hide HUD");
 
             ImGui::End();
         }
@@ -374,6 +366,17 @@ int main(int argc, char* argv[]) {
                 config.load();
                 config.apply(camera, player);
             }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
+            if (ImGui::Button("Quit Game")) {
+                running = false;
+            }
+            ImGui::PopStyleColor(2);
 
             ImGui::End();
 
