@@ -60,18 +60,33 @@ add_custom_target(shaders ALL DEPENDS ${SHADER_SPIRV})
 
 # --- Engine executable ---
 
+# ImGui sources
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/vendor/imgui)
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_impl_sdl3.cpp
+    ${IMGUI_DIR}/imgui_impl_vulkan.cpp
+)
+
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/renderer.cpp
     src/mesh.cpp
     src/collision.cpp
     src/player.cpp
+    src/config.cpp
+    ${IMGUI_SOURCES}
 )
 
 add_dependencies(${PROJECT_NAME} shaders)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE

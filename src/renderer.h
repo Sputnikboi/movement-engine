@@ -23,6 +23,16 @@ public:
     void draw_frame(const SceneData& scene);
     void on_resize() { resize_requested_ = true; }
 
+    // ImGui access — call between imgui NewFrame/Render in main loop
+    VkInstance       get_instance()        const { return instance_; }
+    VkPhysicalDevice get_physical_device() const { return physical_device_; }
+    VkDevice         get_device()          const { return device_; }
+    VkQueue          get_graphics_queue()  const { return graphics_queue_; }
+    uint32_t         get_graphics_family() const { return graphics_family_; }
+    VkRenderPass     get_render_pass()     const { return render_pass_; }
+    VkDescriptorPool get_imgui_pool()      const { return imgui_pool_; }
+    uint32_t         get_min_image_count() const { return static_cast<uint32_t>(swapchain_images_.size()); }
+
 private:
     SDL_Window* window_ = nullptr;
 
@@ -76,6 +86,9 @@ private:
     VkBuffer       index_buffer_         = VK_NULL_HANDLE;
     VkDeviceMemory index_buffer_memory_  = VK_NULL_HANDLE;
     uint32_t       index_count_          = 0;
+
+    // --- ImGui ---
+    VkDescriptorPool imgui_pool_ = VK_NULL_HANDLE;
 
     // --- Sync ---
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;

@@ -1,4 +1,6 @@
 #include "renderer.h"
+#include "vendor/imgui/imgui.h"
+#include "vendor/imgui/imgui_impl_vulkan.h"
 #include <SDL3/SDL_vulkan.h>
 
 #include <algorithm>
@@ -106,6 +108,24 @@ bool Renderer::init(SDL_Window* window, const Mesh& level_mesh) {
     if (!create_command_buffers())       return false;
     if (!create_sync_objects())          return false;
 
+    // ImGui descriptor pool (separate from scene descriptors)
+    {
+        VkDescriptorPoolSize pool_sizes[] = {
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 },
+        };
+        VkDescriptorPoolCreateInfo pi{};
+        pi.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pi.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pi.maxSets       = 1;
+        pi.poolSizeCount = 1;
+        pi.pPoolSizes    = pool_sizes;
+
+        if (vkCreateDescriptorPool(device_, &pi, nullptr, &imgui_pool_) != VK_SUCCESS) {
+            fprintf(stderr, "Failed to create ImGui descriptor pool\n");
+            return false;
+        }
+    }
+
     fprintf(stdout, "Renderer initialized (%u vertices, %u indices).\n",
             static_cast<uint32_t>(level_mesh.vertices.size()), index_count_);
     return true;
@@ -135,6 +155,7 @@ void Renderer::shutdown() {
     }
 
     vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
+    vkDestroyDescriptorPool(device_, imgui_pool_, nullptr);
 
     cleanup_swapchain();
 
@@ -1041,6 +1062,9 @@ void Renderer::draw_frame(const SceneData& scene) {
 
     // Draw level
     vkCmdDrawIndexed(cmd, index_count_, 1, 0, 0, 0);
+
+    // Draw ImGui on top
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
     vkCmdEndRenderPass(cmd);
     vkEndCommandBuffer(cmd);
