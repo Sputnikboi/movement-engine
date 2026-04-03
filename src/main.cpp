@@ -28,7 +28,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    SDL_SetWindowRelativeMouseMode(window, true);
+    bool have_relative_mouse = SDL_SetWindowRelativeMouseMode(window, true);
+    if (!have_relative_mouse) {
+        fprintf(stderr, "Warning: relative mouse mode failed (%s), using manual warp\n", SDL_GetError());
+        SDL_HideCursor();
+    }
 
     // --- Build level ---
     Mesh level = create_test_level();
@@ -71,6 +75,16 @@ int main(int argc, char* argv[]) {
         // --- Accumulate mouse motion ---
         float mouse_dx = 0.0f, mouse_dy = 0.0f;
 
+        if (!have_relative_mouse) {
+            // Manual warp mode: compute delta from center
+            float mx, my;
+            SDL_GetMouseState(&mx, &my);
+            int ww, wh;
+            SDL_GetWindowSize(window, &ww, &wh);
+            mouse_dx = mx - ww / 2.0f;
+            mouse_dy = my - wh / 2.0f;
+        }
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -87,7 +101,6 @@ int main(int argc, char* argv[]) {
                     noclip = !noclip;
                     printf("Noclip: %s\n", noclip ? "ON" : "OFF");
                     if (noclip) {
-                        // Preserve position when entering noclip
                         camera.position = player.eye_position();
                     }
                 }
@@ -100,8 +113,10 @@ int main(int argc, char* argv[]) {
                 renderer.on_resize();
                 break;
             case SDL_EVENT_MOUSE_MOTION:
-                mouse_dx += event.motion.xrel;
-                mouse_dy += event.motion.yrel;
+                if (have_relative_mouse) {
+                    mouse_dx += event.motion.xrel;
+                    mouse_dy += event.motion.yrel;
+                }
                 break;
             }
         }
@@ -181,6 +196,14 @@ int main(int argc, char* argv[]) {
 
         // --- Render ---
         renderer.draw_frame(scene);
+
+        // Manual mouse re-center fallback for Linux compositors
+        // where relative mouse mode doesn't work
+        if (!have_relative_mouse) {
+            int w, h;
+            SDL_GetWindowSize(window, &w, &h);
+            SDL_WarpMouseInWindow(window, w / 2.0f, h / 2.0f);
+        }
     }
 
     renderer.shutdown();
