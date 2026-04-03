@@ -3,6 +3,7 @@
 #include "vendor/HandmadeMath.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 struct Camera {
     HMM_Vec3 position = HMM_V3(0.0f, 3.0f, 10.0f);
@@ -12,6 +13,8 @@ struct Camera {
     float near_plane = 0.1f;
     float far_plane  = 500.0f;
     float sensitivity = 0.00014f;
+    float invert_x = -1.0f;            // -1 or 1
+    float invert_y =  1.0f;            // -1 or 1
 
     // --- Derived directions ---
 
@@ -23,7 +26,6 @@ struct Camera {
         );
     }
 
-    // Forward projected onto XZ plane (for movement)
     HMM_Vec3 forward_flat() const {
         return HMM_NormV3(HMM_V3(cosf(yaw), 0.0f, sinf(yaw)));
     }
@@ -50,8 +52,23 @@ struct Camera {
     // --- Input ---
 
     void mouse_look(float dx, float dy) {
-        yaw   -= dx * sensitivity;
-        pitch += dy * sensitivity;  // moving mouse up looks up
+        yaw   += invert_x * dx * sensitivity;
+        pitch += invert_y * dy * sensitivity;
         pitch = std::clamp(pitch, -HMM_PI32 / 2.0f + 0.01f, HMM_PI32 / 2.0f - 0.01f);
+    }
+
+    void flip_x() {
+        invert_x *= -1.0f;
+        printf("Invert X: %s\n", invert_x < 0 ? "ON" : "OFF");
+    }
+
+    void flip_y() {
+        invert_y *= -1.0f;
+        printf("Invert Y: %s\n", invert_y < 0 ? "ON" : "OFF");
+    }
+
+    void adjust_sensitivity(float factor) {
+        sensitivity *= factor;
+        printf("Sensitivity: %.6f\n", sensitivity);
     }
 };

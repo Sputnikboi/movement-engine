@@ -56,8 +56,11 @@ int main(int argc, char* argv[]) {
                 running = false;
                 break;
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_ESCAPE)
-                    running = false;
+                if (event.key.key == SDLK_ESCAPE)   running = false;
+                if (event.key.key == SDLK_F1)       camera.flip_x();
+                if (event.key.key == SDLK_F2)       camera.flip_y();
+                if (event.key.key == SDLK_F3)       camera.adjust_sensitivity(0.5f);
+                if (event.key.key == SDLK_F4)       camera.adjust_sensitivity(2.0f);
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
                 renderer.on_resize();
