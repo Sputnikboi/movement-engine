@@ -187,8 +187,13 @@ int main(int argc, char* argv[]) {
                     if (kb.matches_scancode(Action::Noclip, event.key.scancode) && !event.key.repeat) {
                         noclip = !noclip;
                         printf("Noclip: %s\n", noclip ? "ON" : "OFF");
-                        if (noclip)
+                        if (noclip) {
                             camera.position = player.eye_position();
+                        } else {
+                            // Drop player where the camera is
+                            player.position = HMM_SubV3(camera.position, HMM_V3(0.0f, player.eye_offset, 0.0f));
+                            player.velocity = HMM_V3(0, 0, 0);
+                        }
                     }
                     if (kb.matches_scancode(Action::ToggleHUD, event.key.scancode) && !event.key.repeat)
                         show_hud = !show_hud;

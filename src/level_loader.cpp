@@ -159,6 +159,14 @@ static void process_node(const cgltf_node* node, LevelData& out) {
     float transform[16];
     node_world_transform(node, transform);
 
+    // Log all node names so we can debug what Blender exported
+    if (node->name) {
+        fprintf(stdout, "  node: \"%s\"%s%s\n",
+                node->name,
+                node->mesh ? " [mesh]" : "",
+                (!node->mesh && !node->children_count) ? " [empty]" : "");
+    }
+
     // Check for spawn point (Empty named "spawn" or "Spawn" etc.)
     if (name_starts_with(node->name, "spawn")) {
         // Extract world position from the transform matrix (column 3)
