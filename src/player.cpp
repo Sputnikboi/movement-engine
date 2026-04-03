@@ -177,25 +177,22 @@ void Player::perform_lurch(const InputState& input) {
     if (lurch_timer <= 0.0f) return;
     if (input.forward == 0.0f && input.right == 0.0f) return;
 
-    // Only lurch on input CHANGE (not every tick)
-    bool input_changed = (input.forward != prev_forward || input.right != prev_right);
-    if (!input_changed) return;
-
     HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
     float hspeed = HMM_LenV3(hvel);
     if (hspeed < 0.5f) return;
 
-    // Build lurch target direction from input
     HMM_Vec3 lurch_dir = build_wish_dir(input);
     float lurch_len = HMM_LenV3(lurch_dir);
     if (lurch_len < 0.001f) return;
     lurch_dir = HMM_MulV3F(lurch_dir, 1.0f / lurch_len);
 
-    // Current direction
     HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
 
-    // Slerp between current direction and lurch direction
-    // (simplified: lerp + renormalize, close enough for small angles)
+    // Skip if already aligned (prevents drift when holding one direction)
+    float alignment = HMM_DotV3(cur_dir, lurch_dir);
+    if (alignment > 0.98f) return;
+
+    // Lerp toward input direction every tick, preserving speed
     HMM_Vec3 new_dir = HMM_AddV3(
         HMM_MulV3F(cur_dir, 1.0f - lurch_strength),
         HMM_MulV3F(lurch_dir, lurch_strength)
@@ -204,11 +201,8 @@ void Player::perform_lurch(const InputState& input) {
     if (new_len > 0.001f)
         new_dir = HMM_MulV3F(new_dir, 1.0f / new_len);
 
-    // Apply: same speed, new direction
     velocity.X = new_dir.X * hspeed;
     velocity.Z = new_dir.Z * hspeed;
-
-    // Don't consume — lurch is available for every input change during the window
 }
 
 // ============================================================
@@ -272,7 +266,18 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
             power_sliding = false;
         }
 
-        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+        // Project onto ground plane for smooth slope sliding
+        if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f) {
+            float speed = HMM_LenV3(velocity);
+            float d = HMM_DotV3(velocity, ground_normal);
+            velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, d));
+            float new_speed = HMM_LenV3(velocity);
+            if (new_speed > 0.001f)
+                velocity = HMM_MulV3F(velocity, speed / new_speed);
+        } else {
+            if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+        }
+
         do_collide_and_move(dt, world);
         return;
     }
@@ -296,7 +301,21 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    // Project velocity onto ground plane so we follow slopes smoothly.
+    // This prevents the bump-then-correct cycle on ramps.
+    if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f) {
+        // On a slope: project horizontal velocity onto slope surface
+        float speed = HMM_LenV3(velocity);
+        float d = HMM_DotV3(velocity, ground_normal);
+        velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, d));
+        // Preserve speed (projection shortens the vector)
+        float new_speed = HMM_LenV3(velocity);
+        if (new_speed > 0.001f)
+            velocity = HMM_MulV3F(velocity, speed / new_speed);
+    } else {
+        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    }
+
     do_collide_and_move(dt, world);
 }
 
