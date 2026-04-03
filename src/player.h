@@ -6,7 +6,7 @@
 struct InputState {
     float forward;      // -1 to 1 (W/S)
     float right;        // -1 to 1 (D/A)
-    bool  jump;         // spacebar pressed this tick
+    bool  jump_held;    // true while jump key is down
     float yaw;          // camera yaw (radians)
 };
 
@@ -38,6 +38,11 @@ struct Player {
 
     // --- Ground check config ---
     float ground_check_dist = 0.15f;   // raycast distance below feet
+
+    // --- Jump state ---
+    bool jump_held_last = false;        // was jump held last tick
+    bool just_landed    = false;        // landed this tick (skip friction)
+    bool auto_hop       = false;        // debug: allow hold-to-hop
 
     // --- Methods ---
     HMM_Vec3 eye_position() const {

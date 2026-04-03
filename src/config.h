@@ -23,6 +23,7 @@ struct Config {
     float air_accel      = 70.0f;
     float friction       = 6.0f;
     float jump_speed     = 7.2f;
+    bool  auto_hop       = false;
 
     // Keybinds
     Keybinds keybinds;

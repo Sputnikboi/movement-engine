@@ -97,8 +97,35 @@ void Player::apply_friction(float dt) {
 // ============================================================
 
 void Player::ground_move(float dt, const InputState& input, const CollisionWorld& world) {
-    // Apply friction first
-    apply_friction(dt);
+    // Determine if this is a valid jump input:
+    // - auto_hop: jump whenever held
+    // - normal: jump only on fresh press (not held last tick)
+    bool wants_jump = false;
+    if (auto_hop) {
+        wants_jump = input.jump_held;
+    } else {
+        wants_jump = input.jump_held && !jump_held_last;
+    }
+
+    // If jumping this tick, skip friction entirely.
+    // This is the key to bhop speed preservation: on the landing tick,
+    // you go grounded -> jump immediately with zero friction applied.
+    if (wants_jump) {
+        velocity.Y = jump_speed;
+        grounded = false;
+
+        // Move as airborne this tick (no friction, no ground accel)
+        HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, height * 0.5f, 0.0f));
+        sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
+        position = HMM_SubV3(sphere_center, HMM_V3(0.0f, height * 0.5f, 0.0f));
+        return;
+    }
+
+    // No jump — apply friction (but skip on the landing tick to give
+    // a 1-tick window even without jumping, matching Source behavior)
+    if (!just_landed) {
+        apply_friction(dt);
+    }
 
     // Build wish direction from input + camera yaw
     float forward_x =  cosf(input.yaw);
@@ -124,14 +151,8 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     // Ground accelerate
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    // Jump check — apply BEFORE moving so the upward velocity takes effect this tick
-    if (input.jump) {
-        velocity.Y = jump_speed;
-        grounded = false;
-    }
-
-    // Zero out vertical velocity if grounded and not jumping
-    if (grounded && velocity.Y < 0.0f)
+    // Zero out downward velocity while grounded
+    if (velocity.Y < 0.0f)
         velocity.Y = 0.0f;
 
     // Move through world with collision
@@ -191,13 +212,20 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
 // ============================================================
 
 void Player::update(float dt, const InputState& input, const CollisionWorld& world) {
+    bool was_grounded = grounded;
     check_ground(world);
+
+    // Detect the exact tick we transitioned from air -> ground
+    just_landed = (grounded && !was_grounded);
 
     if (grounded) {
         ground_move(dt, input, world);
     } else {
         air_move(dt, input, world);
     }
+
+    // Track jump held state for edge detection (must be after move)
+    jump_held_last = input.jump_held;
 
     // Safety: clamp to level bounds (prevent falling into void)
     if (position.Y < -50.0f) {

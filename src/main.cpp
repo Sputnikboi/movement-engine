@@ -104,7 +104,8 @@ int main(int argc, char* argv[]) {
 
     // --- Input state ---
     InputState input{};
-    bool jump_pressed = false;
+    bool jump_held = false;
+    bool scroll_jump_pulse = false;  // one-frame pulse from scroll wheel
 
     // --- Key rebind state ---
     // -1 = not rebinding, otherwise action_index * SLOTS + slot
@@ -161,13 +162,13 @@ int main(int argc, char* argv[]) {
                     if (kb.matches_scancode(Action::ToggleHUD, event.key.scancode) && !event.key.repeat)
                         show_hud = !show_hud;
                     if (kb.matches_scancode(Action::Jump, event.key.scancode))
-                        jump_pressed = true;
+                        jump_held = true;
                 }
                 break;
 
             case SDL_EVENT_KEY_UP:
                 if (kb.matches_scancode(Action::Jump, event.key.scancode))
-                    jump_pressed = false;
+                    jump_held = false;
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -194,11 +195,9 @@ int main(int argc, char* argv[]) {
                     break;
                 }
                 if (!show_settings) {
-                    // Scroll wheel triggers as a pulse "press"
                     InputCode wc = (event.wheel.y > 0) ? INPUT_MOUSE_WHEEL_UP : INPUT_MOUSE_WHEEL_DOWN;
                     if (kb.matches_wheel(Action::Jump, wc))
-                        jump_pressed = true;  // will be consumed by physics tick
-                    // Can extend for other actions here
+                        scroll_jump_pulse = true;
                 }
                 break;
 
@@ -262,15 +261,20 @@ int main(int argc, char* argv[]) {
             if (kb.held(Action::MoveBack,    keys)) input.forward -= 1.0f;
             if (kb.held(Action::MoveRight,   keys)) input.right   += 1.0f;
             if (kb.held(Action::MoveLeft,    keys)) input.right   -= 1.0f;
-            input.jump = jump_pressed;
-            input.yaw  = camera.yaw;
+            // jump_held tracks keyboard/mouse-button hold state.
+            // scroll_jump_pulse is a one-frame spike from scroll wheel.
+            // Combine them: if either is true, jump is "held" for this frame's ticks.
+            input.jump_held = jump_held || scroll_jump_pulse;
+            input.yaw       = camera.yaw;
 
             accumulator += dt;
             while (accumulator >= TICK_RATE) {
                 player.update(TICK_RATE, input, collision);
                 accumulator -= TICK_RATE;
-                input.jump = false;
             }
+
+            // Clear scroll pulse after all ticks this frame have consumed it
+            scroll_jump_pulse = false;
 
             camera.position = player.eye_position();
         }
@@ -387,6 +391,8 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Friction",         &player.friction,       0.0f, 20.0f);
                 ImGui::SliderFloat("Jump Speed",       &player.jump_speed,     1.0f, 20.0f);
 
+                ImGui::Spacing();
+                ImGui::Checkbox("Auto-hop (hold jump to bhop)", &player.auto_hop);
                 ImGui::Spacing();
                 if (ImGui::Button("Reset to Source defaults")) {
                     player.gravity        = 20.0f;

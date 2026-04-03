@@ -35,6 +35,7 @@ void Config::apply(Camera& camera, Player& player) const {
     player.air_accel      = air_accel;
     player.friction       = friction;
     player.jump_speed     = jump_speed;
+    player.auto_hop       = auto_hop;
 }
 
 void Config::pull(const Camera& camera, const Player& player) {
@@ -50,6 +51,7 @@ void Config::pull(const Camera& camera, const Player& player) {
     air_accel      = player.air_accel;
     friction       = player.friction;
     jump_speed     = player.jump_speed;
+    auto_hop       = player.auto_hop;
 }
 
 bool Config::save(const std::string& path) const {
@@ -77,6 +79,7 @@ bool Config::save(const std::string& path) const {
     fprintf(f, "air_accel = %.2f\n", air_accel);
     fprintf(f, "friction = %.2f\n", friction);
     fprintf(f, "jump_speed = %.2f\n", jump_speed);
+    fprintf(f, "auto_hop = %d\n", auto_hop ? 1 : 0);
     fprintf(f, "\n");
 
     fprintf(f, "[keybinds]\n");
@@ -132,6 +135,7 @@ bool Config::load(const std::string& path) {
         else if (key == "air_accel")      air_accel       = std::stof(val);
         else if (key == "friction")       friction        = std::stof(val);
         else if (key == "jump_speed")     jump_speed      = std::stof(val);
+        else if (key == "auto_hop")       auto_hop        = std::stoi(val) != 0;
         else {
             // Try keybinds (format: "action = code0,code1")
             for (int i = 0; i < ACTION_COUNT; i++) {
