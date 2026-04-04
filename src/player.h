@@ -47,6 +47,9 @@ struct Player {
     float slide_min_time_for_jump = 0.3f;  // must slide this long for jump boost
     float slide_min_speed_for_jump = 5.0f; // must be this fast for slide-jump boost
 
+    // --- Slope landing ---
+    float slope_landing_conversion = 0.5f; // fraction of fall speed converted to downhill speed
+
     // --- Lurch parameters ---
     float lurch_window   = 0.5f;    // seconds after jump where lurch is active
     float lurch_strength = 0.5f;    // 0=no redirect, 1=full snap to input dir

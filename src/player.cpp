@@ -450,6 +450,27 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
     check_ground(world);
     just_landed = (grounded && !was_grounded);
 
+    // Slope landing boost: convert some falling speed into downhill speed
+    if (just_landed && ground_normal.Y < 0.99f && ground_normal.Y > 0.7f) {
+        // Project the falling velocity onto the slope surface.
+        // slope_dir = normalize(gravity_vec - normal * dot(gravity_vec, normal))
+        // Then scale by how fast we were falling.
+        float fall_speed = -velocity.Y;  // positive when falling
+        if (fall_speed > 1.0f) {
+            HMM_Vec3 grav = HMM_V3(0.0f, -1.0f, 0.0f);
+            float d = HMM_DotV3(grav, ground_normal);
+            HMM_Vec3 slope_dir = HMM_SubV3(grav, HMM_MulV3F(ground_normal, d));
+            float slope_len = HMM_LenV3(slope_dir);
+            if (slope_len > 0.001f) {
+                slope_dir = HMM_MulV3F(slope_dir, 1.0f / slope_len);
+                // Convert a fraction of fall speed into horizontal slope speed
+                float boost = fall_speed * slope_landing_conversion;
+                velocity.X += slope_dir.X * boost;
+                velocity.Z += slope_dir.Z * boost;
+            }
+        }
+    }
+
     // Handle crouch state changes
     handle_crouch(input, world);
 
