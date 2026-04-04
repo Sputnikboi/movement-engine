@@ -1244,10 +1244,53 @@ void Renderer::upload_entity_mesh(const Mesh& mesh) {
     vkUnmapMemory(device_, entity_ib_mem_);
 }
 
+void Renderer::upload_viewmodel_mesh(const Mesh& mesh) {
+    viewmodel_idx_count_ = static_cast<uint32_t>(mesh.indices.size());
+    if (viewmodel_idx_count_ == 0) return;
+
+    VkDeviceSize vb_size = sizeof(Vertex3D) * mesh.vertices.size();
+    VkDeviceSize ib_size = sizeof(uint32_t) * mesh.indices.size();
+
+    if (vb_size > viewmodel_vb_cap_) {
+        if (viewmodel_vb_ != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device_, viewmodel_vb_, nullptr);
+            vkFreeMemory(device_, viewmodel_vb_mem_, nullptr);
+        }
+        viewmodel_vb_cap_ = vb_size * 2;
+        create_buffer(viewmodel_vb_cap_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      viewmodel_vb_, viewmodel_vb_mem_);
+    }
+    if (ib_size > viewmodel_ib_cap_) {
+        if (viewmodel_ib_ != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device_, viewmodel_ib_, nullptr);
+            vkFreeMemory(device_, viewmodel_ib_mem_, nullptr);
+        }
+        viewmodel_ib_cap_ = ib_size * 2;
+        create_buffer(viewmodel_ib_cap_, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      viewmodel_ib_, viewmodel_ib_mem_);
+    }
+
+    void* data;
+    vkMapMemory(device_, viewmodel_vb_mem_, 0, vb_size, 0, &data);
+    memcpy(data, mesh.vertices.data(), vb_size);
+    vkUnmapMemory(device_, viewmodel_vb_mem_);
+
+    vkMapMemory(device_, viewmodel_ib_mem_, 0, ib_size, 0, &data);
+    memcpy(data, mesh.indices.data(), ib_size);
+    vkUnmapMemory(device_, viewmodel_ib_mem_);
+
+    viewmodel_uploaded_ = true;
+}
+
 void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                           const std::vector<ParticleVertex>* particle_verts,
                           const std::vector<uint32_t>* particle_indices,
-                          float total_time) {
+                          float total_time,
+                          const Mesh* viewmodel_mesh,
+                          const HMM_Mat4* viewmodel_model,
+                          const SceneData* viewmodel_scene) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
     uint32_t image_index;
@@ -1333,6 +1376,48 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                                sizeof(HMM_Mat4), &model);
 
             vkCmdDrawIndexed(cmd, entity_idx_count_, 1, 0, 0, 0);
+        }
+    }
+
+    // Draw viewmodel (clear depth first so gun renders on top of world)
+    if (viewmodel_mesh && viewmodel_model && viewmodel_scene &&
+        !viewmodel_mesh->indices.empty()) {
+        // Upload viewmodel mesh (only once, or if mesh changed)
+        if (!viewmodel_uploaded_)
+            upload_viewmodel_mesh(*viewmodel_mesh);
+
+        if (viewmodel_idx_count_ > 0) {
+            // Clear depth buffer only (so viewmodel draws on top of everything)
+            VkClearAttachment clear_depth{};
+            clear_depth.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            clear_depth.clearValue.depthStencil = {1.0f, 0};
+            VkClearRect clear_rect{};
+            clear_rect.rect.extent = swapchain_extent_;
+            clear_rect.baseArrayLayer = 0;
+            clear_rect.layerCount = 1;
+            vkCmdClearAttachments(cmd, 1, &clear_depth, 1, &clear_rect);
+
+            // Update UBO with viewmodel scene data (tighter near plane)
+            memcpy(ubo_mapped_[current_frame_], viewmodel_scene, sizeof(SceneData));
+
+            // Re-bind opaque pipeline + descriptor set
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    pipeline_layout_, 0, 1,
+                                    &descriptor_sets_[current_frame_], 0, nullptr);
+
+            VkBuffer     vmbufs[] = {viewmodel_vb_};
+            VkDeviceSize vmoffs[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vmbufs, vmoffs);
+            vkCmdBindIndexBuffer(cmd, viewmodel_ib_, 0, VK_INDEX_TYPE_UINT32);
+
+            vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                               sizeof(HMM_Mat4), viewmodel_model);
+
+            vkCmdDrawIndexed(cmd, viewmodel_idx_count_, 1, 0, 0, 0);
+
+            // Restore original scene UBO for subsequent draws (particles, etc.)
+            memcpy(ubo_mapped_[current_frame_], &scene, sizeof(SceneData));
         }
     }
 

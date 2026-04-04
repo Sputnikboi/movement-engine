@@ -1,0 +1,41 @@
+# WEAPON IMPLEMENTATION NOTES
+
+## Wingman Stats (Unity)
+damage=70, firerate=1.5 shots/sec, range=100, magSize=6, reloadTime=2.5s, critMultiplier=2.5x, semi-auto
+
+## Key Engine Architecture
+- Vulkan renderer, push constants: mat4 model at offset 0
+- UBO SceneData: mat4 view, mat4 proj, vec4 light_dir, vec4 camera_pos
+- Vertex3D: float pos[3], normal[3], color[3]
+- draw_frame(SceneData, Mesh* entity, vector<ParticleVertex>*, vector<uint32_t>*, float total_time)
+- Entity buffers: entity_vb_, entity_ib_, upload_entity_mesh() - uploads each frame
+- Pipeline: pipeline_ (opaque), particle_pipeline_ (additive)
+- Camera: forward(), right(), yaw, pitch, fov, view_matrix(), projection_matrix(aspect)
+- Level loader: load_level_gltf(path) -> LevelData { Mesh mesh; vector<HMM_Vec3> spawn_points; }
+- Action enum in keybinds.h: MoveForward,MoveBack,MoveRight,MoveLeft,Jump,Crouch - need Shoot,Reload,ADS
+- Main.cpp: shooting at line ~454, entity_mesh at line ~551, draw_frame at line ~871
+- Renderer: depth_format_ = VK_FORMAT_D32_SFLOAT, depth_image_, depth_view_, depth_memory_
+- Render pass: attachment[0]=color, attachment[1]=depth
+
+## Viewmodel Rendering Strategy
+1. After entities, clear depth only (vkCmdClearAttachments depth)
+2. Draw viewmodel with same pipeline_ but custom projection (near=0.01)
+3. Viewmodel buffers: viewmodel_vb_, viewmodel_ib_ (same pattern as entity)
+4. upload_viewmodel_mesh() method
+5. Model matrix = camera-relative (hip_offset lerped to ads_offset)
+
+## Files to Create
+- src/weapon.h - Weapon struct, WeaponState enum, WeaponConfig
+- src/weapon.cpp - state machine, update, try_fire, get_viewmodel_matrix
+
+## Files to Modify
+- src/renderer.h - add viewmodel buffers, upload_viewmodel_mesh, draw_viewmodel in draw_frame
+- src/renderer.cpp - implement viewmodel rendering with depth clear
+- src/main.cpp - integrate Weapon, replace bare hitscan, pass viewmodel to renderer
+- src/keybinds.h - add Shoot, Reload, ADS actions
+- CMakeLists.txt - add weapon.cpp
+
+## Gun Model Files
+- /home/sputnikboi/Movement-Gaming/Assets/guns models/scene.gltf + scene.bin (low poly guns)
+- /home/sputnikboi/Movement-Gaming/Assets/guns models/wingman.blend (need blender to export)
+- Also: low-poly-g17, low-poly-g40 directories, "Ultimate Gun Pack by Quaternius" directory

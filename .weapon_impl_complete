@@ -1,0 +1,51 @@
+## COMPLETE WEAPON IMPLEMENTATION REFERENCE
+
+### Gun Model Options
+1. Quaternius gun pack FBX: /home/sputnikboi/Movement-Gaming/Assets/guns models/Ultimate Gun Pack by Quaternius/FBX/
+2. scene.gltf + scene.bin: /home/sputnikboi/Movement-Gaming/Assets/guns models/scene.gltf (wingman model)
+3. wingman.blend: needs blender (not installed, no root)
+
+### Export Plan
+- scene.gltf is the wingman model! Convert to GLB using trimesh (installed)
+- Or use Quaternius FBX pistol, convert to GLB
+
+### Wingman Stats: damage=70, firerate=1.5, range=100, magSize=6, reloadTime=2.5s, critMult=2.5x, semi-auto
+
+### Key Renderer Info
+- draw_frame signature: draw_frame(SceneData scene, Mesh* entity_mesh, std::vector<ParticleVertex>* pv, std::vector<uint32_t>* pi, float total_time)
+- Entity buffer pattern: entity_vb_, entity_ib_ (VkBuffer), entity_vb_mem_, entity_ib_mem_ (VkDeviceMemory), entity_idx_count_ (uint32_t)
+- upload_entity_mesh(const Mesh& mesh) - creates/recreates buffers each frame
+- Pipeline: pipeline_ for opaque, particle_pipeline_ for additive blend
+- Push constants: mat4 model, offset 0, VK_SHADER_STAGE_VERTEX_BIT
+- UBO: SceneData { mat4 view, mat4 proj, vec4 light_dir, vec4 camera_pos }
+- Vertex3D: float pos[3], normal[3], color[3]
+- Depth: depth_format_ VK_FORMAT_D32_SFLOAT, depth_image_, depth_view_
+- Render pass: 2 attachments (color idx=0, depth idx=1)
+- draw_frame line ~1247 in renderer.cpp, upload_entity_mesh ~line 1207
+
+### Key main.cpp Structure
+- Shooting: line ~454, shoot_pressed flag, ray-sphere test vs entities
+- Entity mesh build: line ~551, build_entity_mesh()
+- draw_frame call: line ~871
+- Input polling: line ~395, kb.held() for movement
+- Action enum needs: Shoot, Reload, ADS added
+
+### Camera (camera.h)
+- forward(), right(), forward_flat(), view_matrix(), projection_matrix(aspect)
+- float yaw, pitch, fov, near_plane=0.1f, far_plane=500.0f
+- HMM_Vec3 position
+
+### Level Loader
+- LevelData load_level_gltf(const std::string& path) -> { Mesh mesh; vector<HMM_Vec3> spawn_points; }
+- Loads .glb/.gltf, extracts triangles + materials as vertex colors
+
+### Viewmodel Rendering Strategy
+1. After drawing entities: insert vkCmdClearAttachments for depth only
+2. Set up viewmodel projection with near=0.01
+3. Push viewmodel SceneData (with tighter near) to UBO
+4. Draw viewmodel mesh with model matrix from Weapon::get_viewmodel_matrix()
+5. Restore normal SceneData for particles
+6. Need: viewmodel_vb_, viewmodel_ib_, upload_viewmodel_mesh(), viewmodel_idx_count_
+
+### Files to Create: src/weapon.h, src/weapon.cpp
+### Files to Modify: src/renderer.h, src/renderer.cpp, src/main.cpp, src/keybinds.h, CMakeLists.txt

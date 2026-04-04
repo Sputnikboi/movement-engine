@@ -18,6 +18,7 @@
 #include "drone.h"
 #include "entity_render.h"
 #include "effects.h"
+#include "weapon.h"
 
 #include "vendor/imgui/imgui.h"
 #include "vendor/imgui/imgui_impl_sdl3.h"
@@ -201,7 +202,24 @@ int main(int argc, char* argv[]) {
     EffectSystem effects;
     effects.init();
     float total_time = 0.0f;
-    bool shoot_pressed = false;
+
+    // --- Weapon ---
+    Weapon weapon;
+    weapon.init_wingman();
+    {
+        // Try to load viewmodel mesh
+        std::string vm_path = "assets/wingman.glb";
+        LevelData vm_data = load_level_gltf(vm_path);
+        if (!vm_data.mesh.vertices.empty()) {
+            weapon.viewmodel_mesh = std::move(vm_data.mesh);
+            weapon.mesh_loaded = true;
+            printf("Loaded viewmodel: %zu verts, %zu indices\n",
+                   weapon.viewmodel_mesh.vertices.size(),
+                   weapon.viewmodel_mesh.indices.size());
+        } else {
+            printf("WARNING: Could not load viewmodel from %s\n", vm_path.c_str());
+        }
+    }
 
     // --- Fixed timestep ---
     constexpr float TICK_RATE = 1.0f / 128.0f;
@@ -305,8 +323,7 @@ int main(int argc, char* argv[]) {
                     }
                     break;
                 }
-                if (!show_settings && event.button.button == SDL_BUTTON_LEFT)
-                    shoot_pressed = true;
+                // Shooting is now handled via keybinds in the game loop
                 break;
 
             case SDL_EVENT_MOUSE_WHEEL:
@@ -371,6 +388,9 @@ int main(int argc, char* argv[]) {
 
         if (!show_settings)
             camera.mouse_look(mouse_dx, mouse_dy);
+
+        // Get keyboard state once per frame (used by movement, weapon, etc.)
+        const bool* keys_frame = SDL_GetKeyboardState(nullptr);
 
         // --- Movement ---
         if (noclip && !show_settings) {
@@ -451,55 +471,57 @@ int main(int argc, char* argv[]) {
 
         total_time += dt;
 
-        // --- Hitscan (left click) ---
-        if (shoot_pressed && !show_settings && !noclip) {
-            shoot_pressed = false;
+        // --- Weapon update & shooting ---
+        {
+            bool fire_pressed = !show_settings && !noclip && kb.held(Action::Shoot, keys_frame);
+            bool reload_pressed = !show_settings && !noclip && kb.held(Action::Reload, keys_frame);
+            bool ads_input = !show_settings && !noclip && kb.held(Action::ADS, keys_frame);
 
-            HMM_Vec3 ray_origin = camera.position;
-            HMM_Vec3 ray_dir    = camera.forward();
+            weapon.update(dt, fire_pressed, reload_pressed, ads_input);
 
-            // Check against all alive entities
-            float best_t = 1000.0f;
-            int best_idx = -1;
+            // Try to fire — if weapon fires, do hitscan
+            if (fire_pressed && weapon.try_fire()) {
+                HMM_Vec3 ray_origin = camera.position;
+                HMM_Vec3 ray_dir    = camera.forward();
 
-            for (int i = 0; i < MAX_ENTITIES; i++) {
-                Entity& e = entities[i];
-                if (!e.alive || e.type != EntityType::Drone) continue;
+                float best_t = weapon.config.range;
+                int best_idx = -1;
 
-                // Ray-sphere intersection
-                HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
-                float b = HMM_DotV3(oc, ray_dir);
-                float c = HMM_DotV3(oc, oc) - e.radius * e.radius;
-                float disc = b * b - c;
-                if (disc < 0) continue;
+                for (int i = 0; i < MAX_ENTITIES; i++) {
+                    Entity& e = entities[i];
+                    if (!e.alive || e.type != EntityType::Drone) continue;
 
-                float t = -b - sqrtf(disc);
-                if (t < 0) t = -b + sqrtf(disc);
-                if (t > 0 && t < best_t) {
-                    // Make sure no wall is closer
-                    HitResult wall = collision.raycast(ray_origin, ray_dir, t);
-                    if (!wall.hit) {
-                        best_t = t;
-                        best_idx = i;
+                    // Ray-sphere intersection
+                    HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
+                    float b = HMM_DotV3(oc, ray_dir);
+                    float c = HMM_DotV3(oc, oc) - e.radius * e.radius;
+                    float disc = b * b - c;
+                    if (disc < 0) continue;
+
+                    float t = -b - sqrtf(disc);
+                    if (t < 0) t = -b + sqrtf(disc);
+                    if (t > 0 && t < best_t) {
+                        HitResult wall = collision.raycast(ray_origin, ray_dir, t);
+                        if (!wall.hit) {
+                            best_t = t;
+                            best_idx = i;
+                        }
+                    }
+                }
+
+                if (best_idx >= 0) {
+                    Entity& hit_ent = entities[best_idx];
+                    hit_ent.health -= weapon.config.damage;
+                    if (hit_ent.health <= 0 && hit_ent.ai_state != DRONE_DYING) {
+                        hit_ent.ai_state = DRONE_DYING;
+                        hit_ent.death_timer = 3.0f;
+                        hit_ent.velocity.Y = 2.0f;
+                        HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
+                        hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
                     }
                 }
             }
-
-            if (best_idx >= 0) {
-                Entity& hit_ent = entities[best_idx];
-                hit_ent.health -= 10.0f;  // hitscan damage
-                if (hit_ent.health <= 0 && hit_ent.ai_state != DRONE_DYING) {
-                    // Enter dying state — ragdoll fall before explosion
-                    hit_ent.ai_state = DRONE_DYING;
-                    hit_ent.death_timer = 3.0f;  // max fall time before forced explode
-                    hit_ent.velocity.Y = 2.0f;   // slight upward pop
-                    // Add knockback from shot direction
-                    HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
-                    hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
-                }
-            }
         }
-        shoot_pressed = false;  // consume
 
         // --- Update entities ---
         // Track dying drones to spawn explosions when they hit ground
@@ -592,8 +614,19 @@ int main(int argc, char* argv[]) {
                     drone_count++;
             if (drone_count > 0) ImGui::Text("Drones: %d", drone_count);
 
+            // --- Weapon HUD ---
             ImGui::Separator();
-            ImGui::TextDisabled("ESC: settings  H: hide HUD  LMB: shoot");
+            ImGui::Text("Wingman  %d / %d", weapon.ammo, weapon.config.mag_size);
+            if (weapon.state == WeaponState::RELOADING) {
+                float pct = 1.0f - weapon.reload_timer / weapon.config.reload_time;
+                ImGui::ProgressBar(pct, ImVec2(-1, 4), "");
+                ImGui::TextColored(ImVec4(1,1,0,1), "RELOADING...");
+            }
+            if (weapon.ads_blend > 0.01f)
+                ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "ADS");
+
+            ImGui::Separator();
+            ImGui::TextDisabled("ESC: settings  H: hide HUD  R: reload  RMB: aim");
 
             ImGui::End();
 
@@ -862,13 +895,30 @@ int main(int argc, char* argv[]) {
             if (h > 0) aspect = static_cast<float>(w) / static_cast<float>(h);
         }
 
+        // Use weapon's effective FOV (accounts for ADS)
+        float effective_fov = weapon.get_effective_fov(camera.fov);
+        Camera render_cam = camera;
+        render_cam.fov = effective_fov;
+
         SceneData scene{};
-        scene.view       = camera.view_matrix();
-        scene.projection = camera.projection_matrix(aspect);
+        scene.view       = render_cam.view_matrix();
+        scene.projection = render_cam.projection_matrix(aspect);
         scene.light_dir  = HMM_V4(0.4f, 0.8f, 0.3f, 0.0f);
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
-        renderer.draw_frame(scene, &entity_mesh, &particle_verts, &particle_indices, total_time);
+        // Viewmodel scene data — same view, but tighter near plane to prevent clipping
+        const Mesh* vm_mesh_ptr = weapon.mesh_loaded ? &weapon.viewmodel_mesh : nullptr;
+        HMM_Mat4 vm_model = weapon.get_viewmodel_matrix(camera);
+        SceneData vm_scene = scene;
+        {
+            // Use a near plane of 0.01 for the viewmodel to prevent wall clipping
+            Camera vm_cam = render_cam;
+            vm_cam.near_plane = 0.01f;
+            vm_scene.projection = vm_cam.projection_matrix(aspect);
+        }
+
+        renderer.draw_frame(scene, &entity_mesh, &particle_verts, &particle_indices,
+                            total_time, vm_mesh_ptr, &vm_model, &vm_scene);
     }
 
     config.pull(camera, player);

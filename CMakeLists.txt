@@ -86,6 +86,7 @@ add_executable(${PROJECT_NAME}
     src/drone.cpp
     src/entity_render.cpp
     src/effects.cpp
+    src/weapon.cpp
     ${IMGUI_SOURCES}
 )
 

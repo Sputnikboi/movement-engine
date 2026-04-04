@@ -24,7 +24,10 @@ public:
     void draw_frame(const SceneData& scene, const Mesh* entity_mesh = nullptr,
                     const std::vector<ParticleVertex>* particle_verts = nullptr,
                     const std::vector<uint32_t>* particle_indices = nullptr,
-                    float total_time = 0.0f);
+                    float total_time = 0.0f,
+                    const Mesh* viewmodel_mesh = nullptr,
+                    const HMM_Mat4* viewmodel_model = nullptr,
+                    const SceneData* viewmodel_scene = nullptr);
     void wait_idle();
     void reload_mesh(const Mesh& new_mesh);
     void on_resize() { resize_requested_ = true; }
@@ -107,6 +110,18 @@ private:
     VkDeviceSize   entity_ib_capacity_ = 0;
 
     void upload_entity_mesh(const Mesh& mesh);
+
+    // --- Viewmodel buffers (dynamic, same pattern as entity) ---
+    VkBuffer       viewmodel_vb_        = VK_NULL_HANDLE;
+    VkDeviceMemory viewmodel_vb_mem_    = VK_NULL_HANDLE;
+    VkBuffer       viewmodel_ib_        = VK_NULL_HANDLE;
+    VkDeviceMemory viewmodel_ib_mem_    = VK_NULL_HANDLE;
+    uint32_t       viewmodel_idx_count_ = 0;
+    VkDeviceSize   viewmodel_vb_cap_    = 0;
+    VkDeviceSize   viewmodel_ib_cap_    = 0;
+    bool           viewmodel_uploaded_  = false;
+
+    void upload_viewmodel_mesh(const Mesh& mesh);
 
     // --- Particle buffers (dynamic) ---
     VkBuffer       particle_vb_        = VK_NULL_HANDLE;
