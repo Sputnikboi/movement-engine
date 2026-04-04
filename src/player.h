@@ -53,8 +53,8 @@ struct Player {
     // --- Lurch parameters ---
     float lurch_window   = 0.5f;    // seconds after jump where lurch is active
     float lurch_strength = 0.5f;    // 0=no redirect, 1=full snap to input dir
-    float lurch_strafe_decay_window = 1.5f;  // accumulator decays over this many seconds
-    float lurch_strafe_full_time   = 1.0f;   // seconds of strafing to reach min power
+    float lurch_strafe_decay_window = 0.375f;  // accumulator decays over this many seconds
+    float lurch_strafe_full_time   = 0.25f;   // seconds of strafing to reach min power
     float lurch_strafe_min_power   = 0.1f;   // lurch power floor (fraction of full strength)
 
     // --- Ground check ---
