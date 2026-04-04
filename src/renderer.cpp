@@ -1382,9 +1382,7 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
     // Draw viewmodel (clear depth first so gun renders on top of world)
     if (viewmodel_mesh && viewmodel_model && viewmodel_scene &&
         !viewmodel_mesh->indices.empty()) {
-        // Upload viewmodel mesh (only once, or if mesh changed)
-        if (!viewmodel_uploaded_)
-            upload_viewmodel_mesh(*viewmodel_mesh);
+        upload_viewmodel_mesh(*viewmodel_mesh);
 
         if (viewmodel_idx_count_ > 0) {
             // Clear depth buffer only (so viewmodel draws on top of everything)

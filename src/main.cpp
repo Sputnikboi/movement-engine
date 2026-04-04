@@ -207,18 +207,25 @@ int main(int argc, char* argv[]) {
     Weapon weapon;
     weapon.init_wingman();
     {
-        // Try to load viewmodel mesh
-        std::string vm_path = "assets/wingman.glb";
-        LevelData vm_data = load_level_gltf(vm_path);
-        if (!vm_data.mesh.vertices.empty()) {
-            weapon.viewmodel_mesh = std::move(vm_data.mesh);
-            weapon.mesh_loaded = true;
-            printf("Loaded viewmodel: %zu verts, %zu indices\n",
-                   weapon.viewmodel_mesh.vertices.size(),
-                   weapon.viewmodel_mesh.indices.size());
-        } else {
-            printf("WARNING: Could not load viewmodel from %s\n", vm_path.c_str());
+        // Try several paths — exe might run from build/ or project root
+        const char* vm_paths[] = {
+            "assets/wingman.glb",
+            "../assets/wingman.glb",
+            "wingman.glb",
+        };
+        for (const char* vp : vm_paths) {
+            LevelData vm_data = load_level_gltf(vp);
+            if (!vm_data.mesh.vertices.empty()) {
+                weapon.viewmodel_mesh = std::move(vm_data.mesh);
+                weapon.mesh_loaded = true;
+                printf("Loaded viewmodel from '%s': %zu verts, %zu indices\n",
+                       vp, weapon.viewmodel_mesh.vertices.size(),
+                       weapon.viewmodel_mesh.indices.size());
+                break;
+            }
         }
+        if (!weapon.mesh_loaded)
+            printf("WARNING: Could not load viewmodel (tried assets/, ../assets/, ./)\n");
     }
 
     // --- Fixed timestep ---
