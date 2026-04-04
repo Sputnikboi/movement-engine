@@ -178,6 +178,11 @@ void Player::perform_lurch(const InputState& input) {
     if (lurch_timer <= 0.0f) return;
     if (input.forward == 0.0f && input.right == 0.0f) return;
 
+    // Only fire on input CHANGE — but don't consume the timer,
+    // so every direction change during the window gets a lurch.
+    bool input_changed = (input.forward != prev_forward || input.right != prev_right);
+    if (!input_changed) return;
+
     HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
     float hspeed = HMM_LenV3(hvel);
     if (hspeed < 0.5f) return;
@@ -189,9 +194,7 @@ void Player::perform_lurch(const InputState& input) {
 
     HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
 
-    // Skip if already aligned
-    if (HMM_DotV3(cur_dir, lurch_dir) > 0.99f) return;
-
+    // Lerp: at strength 0.5, redirects 50% toward input direction
     HMM_Vec3 new_dir = HMM_AddV3(
         HMM_MulV3F(cur_dir, 1.0f - lurch_strength),
         HMM_MulV3F(lurch_dir, lurch_strength)
@@ -202,7 +205,7 @@ void Player::perform_lurch(const InputState& input) {
 
     velocity.X = new_dir.X * hspeed;
     velocity.Z = new_dir.Z * hspeed;
-    // Unlimited — applies every tick during the window
+    // Timer NOT consumed — unlimited lurches during the window
 }
 
 // ============================================================
@@ -267,9 +270,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         }
 
         if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-        if (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f)
-            velocity.Y -= slope_stick_force * dt;
-
         do_collide_and_move(dt, world);
         return;
     }
@@ -306,11 +306,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
     if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-
-    // Stick force on slopes to stay grued to surface
-    if (on_slope)
-        velocity.Y -= slope_stick_force * dt;
-
     do_collide_and_move(dt, world);
 }
 

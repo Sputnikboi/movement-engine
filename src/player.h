@@ -51,9 +51,6 @@ struct Player {
     float lurch_window   = 0.5f;    // seconds after jump where lurch is active
     float lurch_strength = 0.5f;    // 0=no redirect, 1=full snap to input dir
 
-    // --- Slope handling ---
-    float slope_stick_force = 10.0f;
-
     // --- Ground check ---
     float ground_check_dist = 0.15f;
 
