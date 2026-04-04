@@ -16,7 +16,7 @@ void Weapon::init_wingman() {
 
     config.ads_fov_mult    = 0.7f;
     config.ads_sens_mult   = 0.67f;
-    config.ads_speed       = 8.0f;
+    config.ads_speed       = 12.0f;
 
     config.hip_offset      = HMM_V3(0.25f, -0.2f, 0.4f);
     config.ads_offset      = HMM_V3(0.0f, -0.125f, 0.3f);

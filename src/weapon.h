@@ -38,7 +38,7 @@ struct WeaponConfig {
     // ADS
     float ads_fov_mult    = 0.7f;     // FOV multiplied by this when ADS
     float ads_sens_mult   = 0.67f;    // sensitivity multiplied by this when ADS
-    float ads_speed       = 8.0f;     // blend speed (1/s)
+    float ads_speed       = 12.0f;     // blend speed (1/s)
 
     // Viewmodel offsets (relative to camera)
     HMM_Vec3 hip_offset   = {0.25f, -0.2f, 0.4f};  // right, down, forward
