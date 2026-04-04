@@ -14,28 +14,37 @@ void Weapon::init_wingman() {
     config.reload_time     = 2.5f;
     config.crit_multiplier = 2.5f;
 
-    config.ads_fov_mult    = 0.8f;
-    config.ads_sens_mult   = 0.7f;
+    config.ads_fov_mult    = 0.7f;
+    config.ads_sens_mult   = 0.67f;
     config.ads_speed       = 8.0f;
 
     config.hip_offset      = HMM_V3(0.25f, -0.2f, 0.4f);
     config.ads_offset      = HMM_V3(0.0f, -0.125f, 0.3f);
 
     config.recoil_kick     = 0.03f;
-    config.recoil_pitch    = 30.0f;
+    config.recoil_pitch    = -30.0f;
     config.recoil_roll     = 5.0f;
     config.recoil_side     = 0.01f;
     config.recoil_recovery = 10.0f;
+    config.recoil_tilt_dir = 1.0f;
+
+    config.reload_buffer_delay = 0.3f;
 
     config.model_scale     = 1.0f;
     config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
 
+    config.reload_phase1    = 0.25f;
+    config.reload_phase2    = 0.55f;
     config.reload_drop_dist = 0.15f;
     config.reload_tilt      = 25.0f;
+    config.mag_drop_dist    = 0.4f;
+    config.mag_insert_dist  = 0.15f;
 
     ammo  = config.mag_size;
     state = WeaponState::IDLE;
     reload_buffered = false;
+    reload_phase = ReloadPhase::NONE;
+    reload_progress = 0.0f;
 }
 
 // ============================================================
@@ -46,9 +55,13 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
     // Tick fire cooldown
     if (fire_timer > 0.0f) fire_timer -= dt;
 
-    // Buffer reload input during fire cooldown
-    if (reload_pressed && state == WeaponState::FIRING && ammo < config.mag_size)
-        reload_buffered = true;
+    // Buffer reload input during fire cooldown (once enough time has passed)
+    if (reload_pressed && state == WeaponState::FIRING && ammo < config.mag_size) {
+        float fire_cooldown = 1.0f / config.fire_rate;
+        float time_since_shot = fire_cooldown - fire_timer;
+        if (time_since_shot >= config.reload_buffer_delay)
+            reload_buffered = true;
+    }
 
     // ADS blend
     ads_held = ads_input;
@@ -61,13 +74,13 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
     // Recoil recovery (exponential decay)
     float rec = config.recoil_recovery * dt;
-    if (recoil_offset > 0.0f) {
+    if (fabsf(recoil_offset) > 0.001f) {
         recoil_offset -= rec * recoil_offset;
-        if (recoil_offset < 0.001f) recoil_offset = 0.0f;
+        if (fabsf(recoil_offset) < 0.001f) recoil_offset = 0.0f;
     }
-    if (recoil_pitch > 0.0f) {
+    if (fabsf(recoil_pitch) > 0.01f) {
         recoil_pitch -= rec * recoil_pitch;
-        if (recoil_pitch < 0.01f) recoil_pitch = 0.0f;
+        if (fabsf(recoil_pitch) < 0.01f) recoil_pitch = 0.0f;
     }
     if (fabsf(recoil_roll) > 0.01f) {
         recoil_roll -= rec * recoil_roll;
@@ -81,10 +94,13 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
     // State machine
     switch (state) {
     case WeaponState::IDLE:
+        reload_phase = ReloadPhase::NONE;
+        reload_progress = 0.0f;
         if ((reload_pressed || reload_buffered) && ammo < config.mag_size) {
             state = WeaponState::RELOADING;
             reload_timer = config.reload_time;
             reload_buffered = false;
+            reload_phase = ReloadPhase::MAG_OUT;
         }
         break;
 
@@ -96,15 +112,29 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
                 state = WeaponState::RELOADING;
                 reload_timer = config.reload_time;
                 reload_buffered = false;
+                reload_phase = ReloadPhase::MAG_OUT;
             }
         }
         break;
 
     case WeaponState::RELOADING:
         reload_timer -= dt;
+        reload_progress = 1.0f - (reload_timer / config.reload_time);
+        reload_progress = fminf(fmaxf(reload_progress, 0.0f), 1.0f);
+
+        // Determine current phase
+        if (reload_progress < config.reload_phase1)
+            reload_phase = ReloadPhase::MAG_OUT;
+        else if (reload_progress < config.reload_phase2)
+            reload_phase = ReloadPhase::MAG_SWAP;
+        else
+            reload_phase = ReloadPhase::GUN_UP;
+
         if (reload_timer <= 0.0f) {
             ammo = config.mag_size;
             state = WeaponState::IDLE;
+            reload_phase = ReloadPhase::NONE;
+            reload_progress = 0.0f;
         }
         reload_buffered = false;
         break;
@@ -124,27 +154,29 @@ bool Weapon::try_fire() {
     fire_timer = 1.0f / config.fire_rate;
     state = WeaponState::FIRING;
 
-    // Apply recoil — alternating side tilt direction
+    // Apply recoil — consistent tilt direction
     recoil_offset += config.recoil_kick;
     recoil_pitch  += config.recoil_pitch;
-    float side_sign = (ammo % 2 == 0) ? 1.0f : -1.0f;  // alternate per shot
-    recoil_roll   += config.recoil_roll * side_sign;
-    recoil_side   += config.recoil_side * side_sign;
+    float dir = config.recoil_tilt_dir;
+    recoil_roll   += config.recoil_roll * dir;
+    recoil_side   += config.recoil_side * dir;
 
     // Auto-reload on empty
     if (ammo <= 0) {
         state = WeaponState::RELOADING;
         reload_timer = config.reload_time;
+        reload_phase = ReloadPhase::MAG_OUT;
     }
 
     return true;
 }
 
 // ============================================================
-//  Viewmodel matrix — positions the gun in camera space
+//  Helper: base viewmodel transform (shared by body + mag)
 // ============================================================
 
-HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
+HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
+                                        float extra_tilt_deg) const {
     // Lerp between hip and ADS offset
     HMM_Vec3 offset = HMM_LerpV3(config.hip_offset, ads_blend, config.ads_offset);
 
@@ -152,15 +184,36 @@ HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
     offset.Z -= recoil_offset;        // kick backward
     offset.X += recoil_side;          // sideways shift
 
-    // Reload animation: drop gun down and tilt it
-    float reload_blend = 0.0f;
+    // Reload: gun drops and tilts based on phase
+    float drop_blend = 0.0f;
+    float tilt_blend = 0.0f;
     if (state == WeaponState::RELOADING && config.reload_time > 0.0f) {
-        // Progress 0→1 over the reload
-        float t = 1.0f - (reload_timer / config.reload_time);
-        // Bell curve: peaks at t=0.5 so gun drops down mid-reload and comes back up
-        reload_blend = sinf(t * 3.14159f);
+        float t = reload_progress;
+        float p1 = config.reload_phase1;
+        float p2 = config.reload_phase2;
+
+        if (t < p1) {
+            // Phase 1 (MAG_OUT): gun drops down, 0→1 ease-in
+            float local_t = t / p1;
+            float ease = local_t * local_t; // quadratic ease-in
+            drop_blend = ease;
+            tilt_blend = ease;
+        } else if (t < p2) {
+            // Phase 2 (MAG_SWAP): gun stays fully dropped
+            drop_blend = 1.0f;
+            tilt_blend = 1.0f;
+        } else {
+            // Phase 3 (GUN_UP): gun returns to idle, 1→0 ease-out
+            float local_t = (t - p2) / (1.0f - p2);
+            float ease = 1.0f - local_t * local_t; // quadratic ease-out
+            drop_blend = ease;
+            tilt_blend = ease;
+        }
     }
-    offset.Y -= config.reload_drop_dist * reload_blend;
+    offset.Y -= config.reload_drop_dist * drop_blend;
+
+    // Add extra offset (for mag separation)
+    offset = HMM_AddV3(offset, extra_offset);
 
     // Build camera-relative position
     HMM_Vec3 fwd   = cam.forward();
@@ -179,10 +232,7 @@ HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
     rot.Columns[2] = HMM_V4(-fwd.X,  -fwd.Y,  -fwd.Z,  0.0f);
     rot.Columns[3] = HMM_V4(0.0f,    0.0f,    0.0f,    1.0f);
 
-    // Translation
     HMM_Mat4 trans = HMM_Translate(world_pos);
-
-    // Scale
     HMM_Mat4 scale = HMM_Scale(HMM_V3(config.model_scale, config.model_scale, config.model_scale));
 
     // Model rotation correction
@@ -194,21 +244,59 @@ HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
         )
     );
 
-    // Recoil rotation: pitch up + roll tilt (applied in camera space)
+    // Recoil rotation: pitch + roll tilt
     HMM_Mat4 recoil_rot = HMM_MulM4(
-        HMM_Rotate_RH(HMM_AngleDeg(-recoil_pitch), HMM_V3(1, 0, 0)),  // pitch up
-        HMM_Rotate_RH(HMM_AngleDeg(recoil_roll), HMM_V3(0, 0, 1))     // roll tilt
+        HMM_Rotate_RH(HMM_AngleDeg(-recoil_pitch), HMM_V3(1, 0, 0)),  // pitch
+        HMM_Rotate_RH(HMM_AngleDeg(recoil_roll), HMM_V3(0, 0, 1))     // roll
     );
 
-    // Reload tilt (rotate around forward axis to simulate mag swap)
+    // Reload tilt
+    float total_tilt = config.reload_tilt * tilt_blend + extra_tilt_deg;
     HMM_Mat4 reload_rot = HMM_M4D(1.0f);
-    if (reload_blend > 0.001f) {
-        reload_rot = HMM_Rotate_RH(HMM_AngleDeg(config.reload_tilt * reload_blend),
-                                    HMM_V3(0, 0, 1));
+    if (fabsf(total_tilt) > 0.001f) {
+        reload_rot = HMM_Rotate_RH(HMM_AngleDeg(total_tilt), HMM_V3(0, 0, 1));
     }
 
     return HMM_MulM4(trans, HMM_MulM4(rot, HMM_MulM4(recoil_rot,
                       HMM_MulM4(reload_rot, HMM_MulM4(scale, fix)))));
+}
+
+// ============================================================
+//  Viewmodel matrix (gun body — everything except mag during reload)
+// ============================================================
+
+HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
+    return build_base_transform(cam, HMM_V3(0, 0, 0), 0.0f);
+}
+
+// ============================================================
+//  Mag matrix — offset from body during reload phases
+// ============================================================
+
+HMM_Mat4 Weapon::get_mag_matrix(const Camera& cam) const {
+    if (state != WeaponState::RELOADING || !has_mag_submesh)
+        return get_viewmodel_matrix(cam);
+
+    float t = reload_progress;
+    float p1 = config.reload_phase1;
+    float p2 = config.reload_phase2;
+    HMM_Vec3 mag_extra = HMM_V3(0, 0, 0);
+
+    if (t < p1) {
+        // Phase 1: mag detaching and dropping
+        float local_t = t / p1;
+        float ease = local_t * local_t;
+        mag_extra.Y = -config.mag_drop_dist * ease;
+    } else if (t < p2) {
+        // Phase 2: old mag is gone, new mag slides up from below
+        float local_t = (t - p1) / (p2 - p1);
+        float ease = 1.0f - (1.0f - local_t) * (1.0f - local_t); // ease-out
+        // Start from below, end at body position
+        mag_extra.Y = -config.mag_insert_dist * (1.0f - ease);
+    }
+    // Phase 3: mag is attached, moves with body (no extra offset)
+
+    return build_base_transform(cam, mag_extra, 0.0f);
 }
 
 // ============================================================

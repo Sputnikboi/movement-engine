@@ -15,6 +15,14 @@ enum class WeaponState : uint8_t {
     RELOADING,
 };
 
+// Reload sub-phases
+enum class ReloadPhase : uint8_t {
+    NONE,
+    MAG_OUT,      // gun lowers, mag detaches and drops
+    MAG_SWAP,     // gun stays low, new mag slides in
+    GUN_UP,       // gun returns to idle position
+};
+
 // ============================================================
 //  Static config for a weapon type
 // ============================================================
@@ -28,8 +36,8 @@ struct WeaponConfig {
     float crit_multiplier = 2.5f;
 
     // ADS
-    float ads_fov_mult    = 0.8f;     // FOV multiplied by this when ADS
-    float ads_sens_mult   = 0.7f;     // sensitivity multiplied by this when ADS
+    float ads_fov_mult    = 0.7f;     // FOV multiplied by this when ADS
+    float ads_sens_mult   = 0.67f;    // sensitivity multiplied by this when ADS
     float ads_speed       = 8.0f;     // blend speed (1/s)
 
     // Viewmodel offsets (relative to camera)
@@ -38,18 +46,30 @@ struct WeaponConfig {
 
     // Recoil
     float recoil_kick       = 0.03f;    // backward displacement per shot
-    float recoil_pitch      = 30.0f;    // degrees upward per shot
+    float recoil_pitch      = -30.0f;   // degrees per shot (negative = down in view)
     float recoil_roll       = 5.0f;     // degrees tilt per shot
     float recoil_side       = 0.01f;    // sideways displacement per shot
     float recoil_recovery   = 10.0f;    // recovery speed (1/s)
+    float recoil_tilt_dir   = 1.0f;     // +1 = right tilt, -1 = left tilt
+
+    // Reload buffer — how soon after firing you can queue a reload
+    float reload_buffer_delay = 0.3f;   // seconds after shot before reload accepted
 
     // Viewmodel scale + rotation correction (degrees)
     float model_scale     = 1.0f;
     HMM_Vec3 model_rotation = {0.0f, 90.0f, 0.0f};  // X, Y, Z degrees
 
-    // Reload animation
+    // Reload animation — 3 phases (fractions of reload_time)
+    float reload_phase1 = 0.25f;   // mag_out end (0..0.25)
+    float reload_phase2 = 0.55f;   // mag_swap end (0.25..0.55)
+    // phase3 is remainder:          gun_up (0.55..1.0)
+
     float reload_drop_dist  = 0.15f;   // how far gun drops during reload
     float reload_tilt       = 25.0f;   // degrees of tilt during reload
+
+    // Mag animation
+    float mag_drop_dist     = 0.4f;    // how far mag falls after detach
+    float mag_insert_dist   = 0.15f;   // how far new mag slides up from below
 };
 
 // ============================================================
@@ -64,7 +84,7 @@ struct Weapon {
     float        reload_timer = 0.0f;
     float        ads_blend  = 0.0f;   // 0 = hip, 1 = ADS
     bool         ads_held   = false;
-    bool         reload_buffered = false; // reload pressed during fire cooldown
+    bool         reload_buffered = false;
 
     // Recoil state
     float        recoil_offset = 0.0f;  // current backward kick
@@ -76,16 +96,28 @@ struct Weapon {
     Mesh         viewmodel_mesh;
     bool         mesh_loaded = false;
 
+    // Mag sub-mesh (index range within viewmodel_mesh)
+    uint32_t     mag_index_start = 0;
+    uint32_t     mag_index_count = 0;
+    bool         has_mag_submesh = false;
+
+    // Reload phase tracking
+    ReloadPhase  reload_phase = ReloadPhase::NONE;
+    float        reload_progress = 0.0f; // 0..1
+
     // --- Methods ---
     void init_wingman();
     void update(float dt, bool fire_pressed, bool reload_pressed, bool ads_held);
-
-    // Attempt to fire. Returns true if a shot was produced.
     bool try_fire();
 
-    // Build the model matrix for rendering the viewmodel.
+    // Viewmodel matrices
     HMM_Mat4 get_viewmodel_matrix(const Camera& cam) const;
+    HMM_Mat4 get_mag_matrix(const Camera& cam) const;
 
-    // Current effective FOV (accounts for ADS blend).
     float get_effective_fov(float base_fov) const;
+
+private:
+    // Build the common base transform (position, orientation, scale, model correction)
+    HMM_Mat4 build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
+                                   float extra_tilt_deg) const;
 };

@@ -21,13 +21,18 @@ class Renderer {
 public:
     bool init(SDL_Window* window, const Mesh& level_mesh);
     void shutdown();
+    // mag_index_start/mag_index_count: sub-range for magazine (drawn with viewmodel_mag_model).
+    // If mag_index_count == 0, the entire viewmodel is drawn with viewmodel_model.
     void draw_frame(const SceneData& scene, const Mesh* entity_mesh = nullptr,
                     const std::vector<ParticleVertex>* particle_verts = nullptr,
                     const std::vector<uint32_t>* particle_indices = nullptr,
                     float total_time = 0.0f,
                     const Mesh* viewmodel_mesh = nullptr,
                     const HMM_Mat4* viewmodel_model = nullptr,
-                    const SceneData* viewmodel_scene = nullptr);
+                    const SceneData* viewmodel_scene = nullptr,
+                    const HMM_Mat4* viewmodel_mag_model = nullptr,
+                    uint32_t mag_index_start = 0,
+                    uint32_t mag_index_count = 0);
     void wait_idle();
     void reload_mesh(const Mesh& new_mesh);
     void on_resize() { resize_requested_ = true; }

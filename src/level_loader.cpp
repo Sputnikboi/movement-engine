@@ -177,6 +177,9 @@ static void process_node(const cgltf_node* node, LevelData& out) {
     }
 
     if (node->mesh) {
+        // Record index start before adding this node's primitives
+        uint32_t idx_before = static_cast<uint32_t>(out.mesh.indices.size());
+
         for (cgltf_size p = 0; p < node->mesh->primitives_count; p++) {
             float color[3] = {0.5f, 0.5f, 0.5f};
 
@@ -191,6 +194,16 @@ static void process_node(const cgltf_node* node, LevelData& out) {
             }
 
             extract_primitive(prim, transform, color, out.mesh);
+        }
+
+        // Record sub-mesh range if node has a name
+        uint32_t idx_after = static_cast<uint32_t>(out.mesh.indices.size());
+        if (node->name && idx_after > idx_before) {
+            SubMeshRange range;
+            snprintf(range.name, sizeof(range.name), "%s", node->name);
+            range.index_start = idx_before;
+            range.index_count = idx_after - idx_before;
+            out.submeshes.push_back(range);
         }
     }
 

@@ -222,6 +222,17 @@ int main(int argc, char* argv[]) {
                 printf("Loaded viewmodel from '%s': %zu verts, %zu indices\n",
                        vp, weapon.viewmodel_mesh.vertices.size(),
                        weapon.viewmodel_mesh.indices.size());
+                // Find "Mag" sub-mesh
+                for (const auto& sub : vm_data.submeshes) {
+                    if (strncmp(sub.name, "Mag", 3) == 0 || strncmp(sub.name, "mag", 3) == 0) {
+                        weapon.mag_index_start = sub.index_start;
+                        weapon.mag_index_count = sub.index_count;
+                        weapon.has_mag_submesh = true;
+                        printf("  Found mag sub-mesh '%s': indices %u..%u (%u)\n",
+                               sub.name, sub.index_start,
+                               sub.index_start + sub.index_count, sub.index_count);
+                    }
+                }
                 break;
             }
         }
@@ -630,7 +641,11 @@ int main(int argc, char* argv[]) {
             if (weapon.state == WeaponState::RELOADING) {
                 float pct = 1.0f - weapon.reload_timer / weapon.config.reload_time;
                 ImGui::ProgressBar(pct, ImVec2(-1, 4), "");
-                ImGui::TextColored(ImVec4(1,1,0,1), "RELOADING...");
+                const char* phase_name =
+                    weapon.reload_phase == ReloadPhase::MAG_OUT  ? "MAG OUT" :
+                    weapon.reload_phase == ReloadPhase::MAG_SWAP ? "MAG SWAP" :
+                    weapon.reload_phase == ReloadPhase::GUN_UP   ? "GUN UP" : "RELOADING";
+                ImGui::TextColored(ImVec4(1,1,0,1), "%s...", phase_name);
             }
             if (weapon.ads_blend > 0.01f)
                 ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "ADS");
@@ -750,15 +765,30 @@ int main(int argc, char* argv[]) {
 
                 ImGui::Text("Recoil");
                 ImGui::SliderFloat("Recoil Kick",     &weapon.config.recoil_kick,     0.0f, 0.2f, "%.3f");
-                ImGui::SliderFloat("Recoil Pitch",    &weapon.config.recoil_pitch,    0.0f, 60.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Pitch",    &weapon.config.recoil_pitch,    -60.0f, 60.0f, "%.1f deg");
                 ImGui::SliderFloat("Recoil Roll",     &weapon.config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
                 ImGui::SliderFloat("Recoil Side",     &weapon.config.recoil_side,     0.0f, 0.1f, "%.3f");
                 ImGui::SliderFloat("Recoil Recovery", &weapon.config.recoil_recovery, 1.0f, 30.0f);
+                {
+                    const char* tilt_items[] = { "Right", "Left" };
+                    int tilt_idx = (weapon.config.recoil_tilt_dir >= 0.0f) ? 0 : 1;
+                    if (ImGui::Combo("Tilt Direction", &tilt_idx, tilt_items, 2))
+                        weapon.config.recoil_tilt_dir = (tilt_idx == 0) ? 1.0f : -1.0f;
+                }
+                ImGui::SliderFloat("Reload Buffer Delay", &weapon.config.reload_buffer_delay, 0.0f, 1.0f, "%.2fs");
                 ImGui::Separator();
 
-                ImGui::Text("Reload Anim");
+                ImGui::Text("Reload Anim (3-phase)");
+                ImGui::SliderFloat("Phase1 End (mag out)", &weapon.config.reload_phase1, 0.05f, 0.5f, "%.2f");
+                ImGui::SliderFloat("Phase2 End (mag swap)", &weapon.config.reload_phase2, 0.1f, 0.9f, "%.2f");
                 ImGui::SliderFloat("Reload Drop",     &weapon.config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
                 ImGui::SliderFloat("Reload Tilt",     &weapon.config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
+                ImGui::SliderFloat("Mag Drop Dist",   &weapon.config.mag_drop_dist,    0.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat("Mag Insert Dist", &weapon.config.mag_insert_dist,  0.0f, 0.5f, "%.3f");
+                if (weapon.has_mag_submesh)
+                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Mag sub-mesh: found (%u indices)", weapon.mag_index_count);
+                else
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "Mag sub-mesh: not found");
 
                 if (ImGui::Button("Reset Weapon Defaults")) {
                     weapon.init_wingman();
@@ -963,16 +993,21 @@ int main(int argc, char* argv[]) {
         // Viewmodel scene data — same view, but tighter near plane to prevent clipping
         const Mesh* vm_mesh_ptr = weapon.mesh_loaded ? &weapon.viewmodel_mesh : nullptr;
         HMM_Mat4 vm_model = weapon.get_viewmodel_matrix(camera);
+        HMM_Mat4 vm_mag_model = weapon.get_mag_matrix(camera);
         SceneData vm_scene = scene;
         {
-            // Use a near plane of 0.01 for the viewmodel to prevent wall clipping
             Camera vm_cam = render_cam;
             vm_cam.near_plane = 0.01f;
             vm_scene.projection = vm_cam.projection_matrix(aspect);
         }
 
+        const HMM_Mat4* mag_ptr = weapon.has_mag_submesh ? &vm_mag_model : nullptr;
+        uint32_t mag_start = weapon.has_mag_submesh ? weapon.mag_index_start : 0;
+        uint32_t mag_count = weapon.has_mag_submesh ? weapon.mag_index_count : 0;
+
         renderer.draw_frame(scene, &entity_mesh, &particle_verts, &particle_indices,
-                            total_time, vm_mesh_ptr, &vm_model, &vm_scene);
+                            total_time, vm_mesh_ptr, &vm_model, &vm_scene,
+                            mag_ptr, mag_start, mag_count);
     }
 
     config.pull(camera, player);

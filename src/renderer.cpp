@@ -1300,7 +1300,10 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                           float total_time,
                           const Mesh* viewmodel_mesh,
                           const HMM_Mat4* viewmodel_model,
-                          const SceneData* viewmodel_scene) {
+                          const SceneData* viewmodel_scene,
+                          const HMM_Mat4* viewmodel_mag_model,
+                          uint32_t mag_index_start,
+                          uint32_t mag_index_count) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
     // Use a separate semaphore per swapchain image to avoid reusing one
@@ -1424,10 +1427,31 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
             vkCmdBindVertexBuffers(cmd, 0, 1, vmbufs, vmoffs);
             vkCmdBindIndexBuffer(cmd, viewmodel_ib_, 0, VK_INDEX_TYPE_UINT32);
 
-            vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                               sizeof(HMM_Mat4), viewmodel_model);
+            if (mag_index_count > 0 && viewmodel_mag_model) {
+                // Draw body (everything except mag range) with body transform
+                vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                                   sizeof(HMM_Mat4), viewmodel_model);
 
-            vkCmdDrawIndexed(cmd, viewmodel_idx_count_, 1, 0, 0, 0);
+                // Draw indices before the mag range
+                if (mag_index_start > 0) {
+                    vkCmdDrawIndexed(cmd, mag_index_start, 1, 0, 0, 0);
+                }
+                // Draw indices after the mag range
+                uint32_t after_mag = mag_index_start + mag_index_count;
+                if (after_mag < viewmodel_idx_count_) {
+                    vkCmdDrawIndexed(cmd, viewmodel_idx_count_ - after_mag, 1, after_mag, 0, 0);
+                }
+
+                // Draw mag with its own transform
+                vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                                   sizeof(HMM_Mat4), viewmodel_mag_model);
+                vkCmdDrawIndexed(cmd, mag_index_count, 1, mag_index_start, 0, 0);
+            } else {
+                // No mag separation — draw entire viewmodel with one transform
+                vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                                   sizeof(HMM_Mat4), viewmodel_model);
+                vkCmdDrawIndexed(cmd, viewmodel_idx_count_, 1, 0, 0, 0);
+            }
 
             // Restore original scene UBO for subsequent draws (particles, etc.)
             memcpy(ubo_mapped_[current_frame_], &scene, sizeof(SceneData));
