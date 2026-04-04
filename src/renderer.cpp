@@ -155,8 +155,9 @@ void Renderer::reload_mesh(const Mesh& new_mesh) {
 void Renderer::shutdown() {
     vkDeviceWaitIdle(device_);
 
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (size_t i = 0; i < image_available_.size(); i++)
         vkDestroySemaphore(device_, image_available_[i], nullptr);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device_, render_finished_[i], nullptr);
         vkDestroyFence(device_, in_flight_[i], nullptr);
     }
@@ -1143,9 +1144,13 @@ bool Renderer::create_command_buffers() {
 // ============================================================
 
 bool Renderer::create_sync_objects() {
-    image_available_.resize(MAX_FRAMES_IN_FLIGHT);
+    // image_available_ needs one semaphore per swapchain image to avoid
+    // reusing a semaphore the presentation engine still holds.
+    uint32_t sc_count = static_cast<uint32_t>(swapchain_images_.size());
+    image_available_.resize(sc_count);
     render_finished_.resize(MAX_FRAMES_IN_FLIGHT);
     in_flight_.resize(MAX_FRAMES_IN_FLIGHT);
+    image_avail_idx_ = 0;
 
     VkSemaphoreCreateInfo sem{};
     sem.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1153,9 +1158,14 @@ bool Renderer::create_sync_objects() {
     fence.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
+    for (uint32_t i = 0; i < sc_count; i++) {
+        if (vkCreateSemaphore(device_, &sem, nullptr, &image_available_[i]) != VK_SUCCESS) {
+            fprintf(stderr, "Failed to create image_available semaphore\n");
+            return false;
+        }
+    }
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        if (vkCreateSemaphore(device_, &sem, nullptr, &image_available_[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(device_, &sem, nullptr, &render_finished_[i]) != VK_SUCCESS ||
+        if (vkCreateSemaphore(device_, &sem, nullptr, &render_finished_[i]) != VK_SUCCESS ||
             vkCreateFence(device_, &fence, nullptr, &in_flight_[i]) != VK_SUCCESS) {
             fprintf(stderr, "Failed to create sync objects\n");
             return false;
@@ -1293,10 +1303,15 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                           const SceneData* viewmodel_scene) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
+    // Use a separate semaphore per swapchain image to avoid reusing one
+    // the presentation engine still holds.
+    uint32_t sem_idx = image_avail_idx_;
+    image_avail_idx_ = (image_avail_idx_ + 1) % static_cast<uint32_t>(image_available_.size());
+
     uint32_t image_index;
     VkResult result = vkAcquireNextImageKHR(
         device_, swapchain_, UINT64_MAX,
-        image_available_[current_frame_], VK_NULL_HANDLE, &image_index
+        image_available_[sem_idx], VK_NULL_HANDLE, &image_index
     );
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || resize_requested_) {
@@ -1462,7 +1477,7 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
     vkEndCommandBuffer(cmd);
 
     // Submit
-    VkSemaphore          wait_sems[]   = {image_available_[current_frame_]};
+    VkSemaphore          wait_sems[]   = {image_available_[sem_idx]};
     VkSemaphore          signal_sems[] = {render_finished_[current_frame_]};
     VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
