@@ -262,6 +262,13 @@ void Player::perform_lurch(const InputState& input) {
 
     HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
 
+    // Each lurch after the first reclaims some power by draining the accumulator
+    if (lurch_count > 0) {
+        lurch_strafe_accum -= lurch_reclaim_per_use * lurch_strafe_full_time;
+        if (lurch_strafe_accum < 0.0f) lurch_strafe_accum = 0.0f;
+    }
+    lurch_count++;
+
     // Scale lurch strength based on recent air strafe time.
     // At 0 accumulated strafe: full power.
     // At lurch_strafe_full_time accumulated: lurch_strafe_min_power fraction.
@@ -467,7 +474,10 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
     if (lurch_strafe_decay_window > 0.0f) {
         float decay_rate = lurch_strafe_full_time / lurch_strafe_decay_window;
         lurch_strafe_accum -= decay_rate * dt;
-        if (lurch_strafe_accum < 0.0f) lurch_strafe_accum = 0.0f;
+        if (lurch_strafe_accum < 0.0f) {
+            lurch_strafe_accum = 0.0f;
+            lurch_count = 0;
+        }
     }
     if (sliding) slide_timer += dt;
 

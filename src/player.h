@@ -56,6 +56,7 @@ struct Player {
     float lurch_strafe_decay_window = 0.375f;  // accumulator decays over this many seconds
     float lurch_strafe_full_time   = 0.25f;   // seconds of strafing to reach min power
     float lurch_strafe_min_power   = 0.1f;   // lurch power floor (fraction of full strength)
+    float lurch_reclaim_per_use    = 0.25f;   // fraction of accum drained per lurch after the first
 
     // --- Ground check ---
     float ground_check_dist = 0.15f;
@@ -75,6 +76,7 @@ struct Player {
     // --- Lurch state ---
     float lurch_timer          = 0.0f;
     float lurch_strafe_accum   = 0.0f;  // accumulated air strafe time (0 to lurch_strafe_full_time)
+    int   lurch_count          = 0;     // lurches performed in current accumulator window
     float prev_forward         = 0.0f;
     float prev_right           = 0.0f;
 
