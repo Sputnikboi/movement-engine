@@ -9,6 +9,7 @@ struct InputState {
     bool  jump_held;    // true while jump key is down
     bool  crouch_held;  // true while crouch key is down
     float yaw;          // camera yaw (radians)
+    float pitch;        // camera pitch (radians, positive = up)
 };
 
 struct Player {
@@ -61,6 +62,12 @@ struct Player {
     // --- Ground check ---
     float ground_check_dist = 0.15f;
 
+    // --- Ladder state ---
+    bool     on_ladder       = false;
+    HMM_Vec3 ladder_normal   = {};     // face normal of the ladder surface
+    float    ladder_speed    = 6.0f;
+    float    ladder_jump_off = 5.0f;   // push-off when jumping off ladder
+
     // --- Crouch/slide state ---
     bool  crouched          = false;
     bool  sliding           = false;
@@ -95,6 +102,7 @@ private:
     void apply_friction(float dt, float fric);
     void ground_move(float dt, const InputState& input, const CollisionWorld& world);
     void air_move(float dt, const InputState& input, const CollisionWorld& world);
+    void ladder_move(float dt, const InputState& input, const CollisionWorld& world);
     void handle_crouch(const InputState& input, const CollisionWorld& world);
     void try_slide(const InputState& input);
     void perform_lurch(const InputState& input);

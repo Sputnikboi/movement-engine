@@ -18,8 +18,18 @@ struct CollisionWorld {
     std::vector<Triangle> triangles;
     BVH bvh;
 
+    // Ladder triangles (separate from main collision — used for overlap detection only)
+    std::vector<Triangle> ladder_tris;
+
     // Build from a Mesh (extracts triangles from vertex/index data, builds BVH)
     void build_from_mesh(const Mesh& mesh);
+
+    // Add ladder geometry (call after build_from_mesh)
+    void add_ladder_tris(const Mesh& mesh, uint32_t index_start, uint32_t index_count);
+
+    // Check if sphere overlaps any ladder triangle.
+    // If true, returns the ladder surface normal (face normal pointing away from wall).
+    bool on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const;
 
     // Ray vs all triangles. Returns closest hit.
     HitResult raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist) const;

@@ -62,7 +62,19 @@ static bool load_level(const std::string& path,
 
     // Update collision
     collision.triangles.clear();
+    collision.ladder_tris.clear();
     collision.build_from_mesh(ld.mesh);
+
+    // Extract ladder geometry from named nodes
+    for (const auto& sub : ld.submeshes) {
+        // Case-insensitive check for "ladder" prefix
+        char lower[8] = {};
+        for (int c = 0; c < 6 && sub.name[c]; c++)
+            lower[c] = (sub.name[c] >= 'A' && sub.name[c] <= 'Z') ? sub.name[c] + 32 : sub.name[c];
+        if (strncmp(lower, "ladder", 6) == 0) {
+            collision.add_ladder_tris(ld.mesh, sub.index_start, sub.index_count);
+        }
+    }
 
     // Update player
     player.position = ld.spawn_pos;
@@ -464,6 +476,7 @@ int main(int argc, char* argv[]) {
             input.jump_held   = jump_held || scroll_jump_pulse;
             input.crouch_held = kb.held(Action::Crouch, keys);
             input.yaw         = camera.yaw;
+            input.pitch       = camera.pitch;
 
             accumulator += dt;
             while (accumulator >= TICK_RATE) {
@@ -1073,6 +1086,13 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Lurch");
                 ImGui::SliderFloat("Lurch Window",    &player.lurch_window,   0.0f, 2.0f, "%.2f");
                 ImGui::SliderFloat("Lurch Strength",  &player.lurch_strength, 0.0f, 1.0f, "%.2f");
+
+                ImGui::Separator();
+                ImGui::Text("Ladder");
+                ImGui::SliderFloat("Ladder Speed",    &player.ladder_speed,    1.0f, 15.0f);
+                ImGui::SliderFloat("Ladder Jump Off", &player.ladder_jump_off, 1.0f, 15.0f);
+                if (player.on_ladder)
+                    ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
 
                 ImGui::Spacing();
                 if (ImGui::Button("Reset to Source defaults")) {

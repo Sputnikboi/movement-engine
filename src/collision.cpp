@@ -402,3 +402,84 @@ bool CollisionWorld::step_move(HMM_Vec3 start, float radius, float step_height,
     out_pos = final_pos;
     return true;
 }
+
+// ============================================================
+//  Ladder support
+// ============================================================
+
+void CollisionWorld::add_ladder_tris(const Mesh& mesh, uint32_t index_start, uint32_t index_count) {
+    auto load = [](const float* p) { return HMM_V3(p[0], p[1], p[2]); };
+
+    for (uint32_t i = index_start; i + 2 < index_start + index_count; i += 3) {
+        Triangle tri;
+        tri.v0 = load(mesh.vertices[mesh.indices[i + 0]].pos);
+        tri.v1 = load(mesh.vertices[mesh.indices[i + 1]].pos);
+        tri.v2 = load(mesh.vertices[mesh.indices[i + 2]].pos);
+
+        HMM_Vec3 e1 = HMM_SubV3(tri.v1, tri.v0);
+        HMM_Vec3 e2 = HMM_SubV3(tri.v2, tri.v0);
+        HMM_Vec3 cross = HMM_Cross(e1, e2);
+        float len = HMM_LenV3(cross);
+        if (len < 0.0001f) continue;
+        tri.normal = HMM_MulV3F(cross, 1.0f / len);
+
+        ladder_tris.push_back(tri);
+    }
+    fprintf(stdout, "CollisionWorld: added %zu ladder triangles (total %zu)\n",
+            (size_t)index_count / 3, ladder_tris.size());
+}
+
+// Simple sphere-triangle distance check (point-triangle + inflate by radius)
+static float sphere_tri_dist(HMM_Vec3 center, const Triangle& tri) {
+    // Project center onto triangle plane
+    float plane_dist = HMM_DotV3(HMM_SubV3(center, tri.v0), tri.normal);
+    HMM_Vec3 projected = HMM_SubV3(center, HMM_MulV3F(tri.normal, plane_dist));
+
+    // Check if projected point is inside triangle (barycentric)
+    HMM_Vec3 v0 = HMM_SubV3(tri.v2, tri.v0);
+    HMM_Vec3 v1 = HMM_SubV3(tri.v1, tri.v0);
+    HMM_Vec3 v2 = HMM_SubV3(projected, tri.v0);
+
+    float d00 = HMM_DotV3(v0, v0);
+    float d01 = HMM_DotV3(v0, v1);
+    float d02 = HMM_DotV3(v0, v2);
+    float d11 = HMM_DotV3(v1, v1);
+    float d12 = HMM_DotV3(v1, v2);
+
+    float denom = d00 * d11 - d01 * d01;
+    if (fabsf(denom) < 1e-10f) return 1e30f;
+
+    float u = (d11 * d02 - d01 * d12) / denom;
+    float v = (d00 * d12 - d01 * d02) / denom;
+
+    if (u >= 0.0f && v >= 0.0f && (u + v) <= 1.0f) {
+        // Inside triangle — distance is just the plane distance
+        return fabsf(plane_dist);
+    }
+
+    // Outside triangle — compute distance to nearest edge/vertex
+    // (simplified: just use plane distance as approximation for ladder overlap)
+    // For a more exact result we'd need edge distance, but this is good enough
+    // since ladder geometry is typically a simple flat quad.
+    return fabsf(plane_dist) + 0.5f; // penalty for being outside the face
+}
+
+bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const {
+    float best_dist = 1e30f;
+    HMM_Vec3 best_normal = HMM_V3(0, 0, 0);
+    float check_radius = radius + 0.15f; // slightly generous
+
+    for (const auto& tri : ladder_tris) {
+        float dist = sphere_tri_dist(center, tri);
+        if (dist < check_radius && dist < best_dist) {
+            best_dist = dist;
+            best_normal = tri.normal;
+        }
+    }
+
+    if (best_dist < check_radius) {
+        ladder_normal = best_normal;
+        return true;
+    }
+    return false;
+}

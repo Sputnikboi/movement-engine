@@ -293,6 +293,73 @@ void Player::perform_lurch(const InputState& input) {
 }
 
 // ============================================================
+//  Ladder movement
+//  - Forward/back input moves up/down based on look direction
+//  - Strafe slides along the ladder surface horizontally
+//  - Jump pushes off the ladder
+//  - No gravity while on ladder
+// ============================================================
+
+void Player::ladder_move(float dt, const InputState& input, const CollisionWorld& world) {
+    // Jump off ladder
+    bool wants_jump = auto_hop ? input.jump_held : (input.jump_held && !jump_held_last);
+    if (wants_jump) {
+        on_ladder = false;
+        // Push away from ladder + upward
+        velocity = HMM_AddV3(HMM_MulV3F(ladder_normal, ladder_jump_off),
+                             HMM_V3(0, jump_speed * 0.5f, 0));
+        grounded = false;
+        lurch_timer = lurch_window;
+        do_collide_and_move(dt, world);
+        return;
+    }
+
+    // Build movement on the ladder surface:
+    //   "up" on the ladder = cross(ladder_normal, right_on_ladder)
+    //   but simpler: forward input -> move along world Y scaled by pitch,
+    //   plus move into the ladder (so you stay attached).
+
+    // Camera-based movement: forward input moves you in the camera's
+    // forward direction projected onto the ladder plane.
+    float forward_x = cosf(input.yaw);
+    float forward_z = sinf(input.yaw);
+    float pitch = input.pitch; // from camera
+
+    // Vertical component from looking up/down + forward input
+    // Looking up + W = climb. Looking down + W = descend.
+    float vert = 0.0f;
+    float horiz_fwd = 0.0f;
+    if (fabsf(input.forward) > 0.01f) {
+        // sin(pitch) gives vertical component (-1 looking straight down, +1 looking up)
+        vert = sinf(pitch) * input.forward * ladder_speed;
+        // Horizontal component diminishes as you look more vertical
+        horiz_fwd = cosf(pitch) * input.forward * ladder_speed * 0.3f;
+    }
+
+    // Strafe along the ladder surface (horizontal, perpendicular to ladder normal)
+    float right_x =  forward_z;
+    float right_z = -forward_x;
+    float horiz_strafe = input.right * ladder_speed * 0.5f;
+
+    velocity.Y = vert;
+    velocity.X = right_x * horiz_strafe + forward_x * horiz_fwd;
+    velocity.Z = right_z * horiz_strafe + forward_z * horiz_fwd;
+
+    // Slight push toward ladder to stay attached
+    velocity.X -= ladder_normal.X * 0.5f;
+    velocity.Z -= ladder_normal.Z * 0.5f;
+
+    // No gravity on ladder
+    do_collide_and_move(dt, world);
+
+    // If we hit ground while climbing down, detach
+    check_ground(world);
+    if (grounded && velocity.Y <= 0.0f) {
+        on_ladder = false;
+    }
+}
+
+// ============================================================
 //  Ground movement
 // ============================================================
 
@@ -504,6 +571,32 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
                 velocity.Z += slope_dir.Z * boost;
             }
         }
+    }
+
+    // --- Ladder check ---
+    {
+        HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
+        HMM_Vec3 lnorm;
+        bool touching_ladder = world.on_ladder(sphere_center, radius, lnorm);
+
+        if (touching_ladder && !on_ladder && !grounded) {
+            // Attach to ladder (only from air — walking past shouldn't grab)
+            on_ladder = true;
+            ladder_normal = lnorm;
+            velocity = HMM_V3(0, 0, 0); // kill momentum on grab
+        } else if (touching_ladder && on_ladder) {
+            ladder_normal = lnorm; // update normal (might change on curved ladders)
+        } else if (!touching_ladder && on_ladder) {
+            on_ladder = false; // walked/jumped off
+        }
+    }
+
+    if (on_ladder) {
+        ladder_move(dt, input, world);
+        jump_held_last = input.jump_held;
+        prev_forward = input.forward;
+        prev_right = input.right;
+        return;
     }
 
     // Handle crouch state changes
