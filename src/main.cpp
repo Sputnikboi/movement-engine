@@ -211,6 +211,7 @@ int main(int argc, char* argv[]) {
         const char* vm_paths[] = {
             "assets/wingman.glb",
             "../assets/wingman.glb",
+            "../../assets/wingman.glb",
             "wingman.glb",
         };
         for (const char* vp : vm_paths) {
