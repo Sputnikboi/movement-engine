@@ -21,7 +21,7 @@ void EffectSystem::spawn_drone_explosion(HMM_Vec3 pos) {
         if (!death_effects[i].alive) {
             DeathEffect& e = death_effects[i];
             e.position          = pos;
-            e.lifetime          = 0.8f;
+            e.lifetime          = 0.27f;
             e.age               = 0.0f;
             e.alive             = true;
             e.ball_start_radius = 1.2f;
@@ -172,18 +172,7 @@ void EffectSystem::append_to_mesh(Mesh& out) const {
             float white = t * 0.6f;
             append_emissive_ball(out, e.position, ball_r,
                                 1.3f, 0.85f + white * 0.45f, 0.15f + white * 0.85f,
-                                0.0f, 1); // alpha=0 → shader outputs 1.0 (opaque)
-        }
-
-        // Expanding solid torus ring (opaque, emissive)
-        {
-            float ring_t = 1.0f - (1.0f - t) * (1.0f - t);
-            float major_r = e.ring_max_radius * ring_t;
-            float tube_r = e.ring_tube_radius * (1.0f - t * 0.3f);
-            float fade = 1.0f - t * 0.7f;
-            append_emissive_torus(out, e.position, major_r, tube_r,
-                                  1.0f * fade, 0.7f * fade, 0.1f * fade,
-                                  0.0f); // opaque
+                                0.0f, 1);
         }
     }
 }
@@ -198,15 +187,25 @@ void EffectSystem::append_transparent(Mesh& out) const {
         if (!e.alive) continue;
         float t = e.age / e.lifetime;
 
-        // Outer glow layer — larger, transparent, fades out
+        // Outer glow sphere — alpha fade
         {
             float outer_t = t * t;
             float outer_r = e.ball_start_radius * 1.8f * (1.0f - outer_t);
-            float alpha = (1.0f - t) * 0.45f; // starts semi-transparent, fades
-            // Warm orange-red glow
+            float alpha = (1.0f - t) * 0.45f;
             append_emissive_ball(out, e.position, outer_r,
                                 1.0f, 0.4f, 0.05f,
                                 alpha, 1);
+        }
+
+        // Expanding torus ring — full color, alpha fade out
+        {
+            float ring_t = 1.0f - (1.0f - t) * (1.0f - t);
+            float major_r = e.ring_max_radius * ring_t;
+            float tube_r = e.ring_tube_radius * (1.0f - t * 0.3f);
+            float alpha = 1.0f - t; // linear alpha fade
+            append_emissive_torus(out, e.position, major_r, tube_r,
+                                  1.0f, 0.7f, 0.1f,
+                                  alpha);
         }
     }
 }
