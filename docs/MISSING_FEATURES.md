@@ -22,11 +22,10 @@ Organized by priority/impact.
 | Slide-jump boost | ✅ | ✅ | Extra speed when jumping out of slide |
 | Lurch (momentum redirect) | ✅ | ✅ | Fires on input change during post-jump window |
 | Slope movement | ✅ | ✅ | Multi-ray ground check, slope sticking, no more ramp-edge bumps |
-| Wall running | ❌ | ❌ | Not in Unity version either |
-| Coyote time | ✅ | ❌ | Grace period for jumping after leaving edge |
-| Landing grace | ✅ | ❌ | Unity had a speed preservation window on land |
 | Ground contact system | ✅ | ✅ | Multi-ray (5-point) ground probe + iterative depenetration |
 | Step climbing | ✅ | ✅ | Source-style up→forward→down step move |
+| Landing grace | ✅ | ✅ | Single-tick grace from new engine — feels good enough |
+| Coyote time | ✅ | ❌ | Low priority — grace period for jumping after leaving edge |
 
 ## Camera
 
@@ -35,44 +34,44 @@ Organized by priority/impact.
 | FPS mouselook | ✅ | ✅ | |
 | FOV setting | ✅ | ✅ | Slider in settings |
 | Sensitivity + inversion | ✅ | ✅ | Per-axis inversion, saved in config |
-| View bobbing | ✅ | ❌ | Procedural head bob while walking |
-| Camera smoothing | ✅ | ❌ | Unity had SmoothDamp on some transitions |
-| Crouch camera lerp | ✅ | ❌ | Smooth eye height transition when crouching |
-| Screen shake | ✅ | ❌ | On damage, explosions |
+| ADS FOV scaling | ✅ | ❌ | **Soon** — FOV zoom for aim down sights |
+| View bobbing | ✅ | ❌ | Low priority |
+| Camera smoothing | ✅ | ❌ | Low priority |
+| Crouch camera lerp | ✅ | ❌ | Low priority |
+| Screen shake | ✅ | ❌ | Low priority |
 
-## Weapons
+## Weapons — HIGH PRIORITY
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
 | Hitscan shooting | ✅ | 🟡 | Engine: left click, 10 damage, no feedback |
-| Weapon switching | ✅ | ❌ | Unity had pistol + wingman + gun handler |
-| ADS (aim down sights) | ✅ | ❌ | FOV zoom + position offset |
-| Recoil (procedural) | ✅ | ❌ | ProceduralWeaponAnimator: visual + spread |
-| Reload animation | ✅ | ❌ | Magazine drop, procedural animation |
-| Magazine / ammo system | ✅ | ❌ | Ammo count, reload mechanic |
-| Weapon modifications | ✅ | ❌ | ScriptableObject mod system with rarities |
+| Weapon viewmodel | ✅ | ❌ | **Next** — first-person gun model rendering |
+| ADS (aim down sights) | ✅ | ❌ | **Next** — FOV zoom + position offset |
+| Reload animation | ✅ | ❌ | **Next** — magazine drop, procedural animation |
+| Magazine / ammo system | ✅ | ❌ | **Next** — ammo count, reload mechanic |
+| Recoil (procedural) | ✅ | ❌ | **Next** — visual + spread |
+| Weapon switching | ✅ | ❌ | After core weapon loop works |
 | Muzzle flash | ✅ | ❌ | Particle + light flash |
 | Tracers | ✅ | ❌ | Pooled tracer projectiles |
 | Damage numbers | ✅ | ❌ | Billboard floating text with crits |
 | Critical hit zones | ✅ | ❌ | Per-collider crit multiplier |
 | Crosshair | ✅ | ✅ | Simple white cross via ImGui |
-| Weapon viewmodel | ✅ | ❌ | First-person gun model rendering |
 
-## Enemies
+## Enemies — HIGH PRIORITY
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Drone (chase/circle/attack) | ✅ | ✅ | AI states match Unity version |
+| Drone (chase/circle/attack) | ✅ | ✅ | AI states match Unity version — **needs work** |
 | Drone hover + bob | ✅ | ✅ | Raycast-based hover, noise bob |
 | Drone projectiles | ✅ | ✅ | Fired at player, wall collision |
-| Drone death ragdoll | ✅ | ✅ | Falls with gravity + knockback, then explodes |
-| Drone death explosion | ✅ | 🟡 | Engine has particles, Unity had fancier shader effects |
-| Rusher Drone | ✅ | ❌ | Melee-charge enemy with dash + stun |
-| Boss enemy | ✅ | ❌ | Phase system, charge attack, bullet patterns |
+| Drone death animation | ✅ | 🟡 | **Needs work** — falls then explodes, needs polish |
+| Drone collision | ✅ | 🟡 | **Needs work** — collision issues |
+| Drone death explosion | ✅ | 🟡 | Engine has particles, Unity had fancier effects |
+| Rusher Drone | ✅ | ❌ | **Soon** — melee-charge enemy with dash + stun |
 | Enemy health bars | ✅ | ❌ | Billboard UI above enemies |
-| IDamageable interface | ✅ | ❌ | Engine uses direct health field |
 | EnemyManager (waves) | ✅ | ❌ | Spawn waves, track alive enemies |
-| Object pooling | ✅ | ❌ | Unity had generic ObjectPooler |
+| Object pooling | ✅ | ❌ | Engine uses direct allocation |
+| Boss enemy | ✅ | ❌ | Low priority — Unity version was placeholder |
 
 ## Player Health & Feedback
 
@@ -83,11 +82,11 @@ Organized by priority/impact.
 | Damage taken feedback | ✅ | ❌ | Screen flash, directional indicator |
 | Death / respawn | ❌ | 🟡 | Engine respawns on void-out only |
 
-## Audio
+## Audio — HIGH PRIORITY
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Sound manager | ✅ | ❌ | Unity had SoundManager singleton |
+| Sound manager | ✅ | ❌ | SDL3 audio API |
 | Footsteps | ✅ | ❌ | |
 | Gunshot sounds | ✅ | ❌ | |
 | Jump / land sounds | ✅ | ❌ | |
@@ -101,13 +100,13 @@ Organized by priority/impact.
 |---------|-------|--------|-------|
 | 3D mesh rendering | ✅ | ✅ | Lit, depth-buffered |
 | Material colors from glTF | ✅ | ✅ | Base color as vertex color |
-| Textures | ✅ | ❌ | Engine has flat colors only |
-| Normal maps | ✅ | ❌ | |
-| Shadows | ✅ | ❌ | |
-| Post-processing | ✅ | ❌ | Unity had bloom, color grading |
 | Transparent / additive rendering | ✅ | ✅ | Particle pipeline |
 | Distance fog | ✅ | ✅ | In mesh.frag |
-| Anti-aliasing | ✅ | ❌ | MSAA or FXAA |
+| Textures | ✅ | ❌ | Art style TBD |
+| Normal maps | ✅ | ❌ | Art style TBD |
+| Shadows | ✅ | ❌ | Art style TBD |
+| Post-processing | ✅ | ❌ | Art style TBD |
+| Anti-aliasing | ✅ | ❌ | Art style TBD |
 
 ## UI
 
@@ -118,8 +117,7 @@ Organized by priority/impact.
 | HUD (FPS, speed, state) | ✅ | ✅ | |
 | Pause menu | ✅ | ✅ | Escape toggles |
 | Level browser | ❌ | ✅ | Engine-only: in-game level selector |
-| Mod display UI | ✅ | ❌ | Weapon mod slots |
-| Settings validation | ✅ | ❌ | Unity had SettingsValidator |
+| Weapon mod UI | ✅ | ❌ | Low priority — mod system TBD |
 
 ## Level / World
 
@@ -129,29 +127,30 @@ Organized by priority/impact.
 | Spawn points | ✅ | ✅ | Empty named "spawn" in Blender |
 | Built-in test level | ✅ | ✅ | Hardcoded geometry |
 | Hot-reload levels | ❌ | ✅ | Engine-only: reload without restart |
-| Trigger volumes | ✅ | ❌ | Unity Trigger.cs for zone events |
+| Trigger volumes | ✅ | ❌ | Trivial to add when needed |
 | Scene transitions | ✅ | ❌ | |
 
 ---
 
-## Priority Recommendations
+## Current Focus
 
-### High Impact (would make the game feel like a game)
-1. **Audio** — footsteps, gunshots, explosions via SDL3 audio API
-2. **Player health + damage feedback** — screen flash, respawn on death
-3. **Weapon viewmodel** — first-person gun rendering (load glTF model)
-4. **Damage numbers** — billboard text on enemy hits
+### 🔴 Now — Weapons + Enemies
+1. **Weapon viewmodel** — load glTF gun model, render in first person
+2. **Shooting / reloading / ADS** — match Unity version's feel
+3. **Fix drone AI** — collision and behavior issues
+4. **Fix drone death animation** — polish the ragdoll/explosion
+5. **Rusher drone** — second enemy type
 
-### Medium Impact (polish)
-5. **Coyote time** — small grace period for jump after leaving edge
-6. **Crouch camera lerp** — smooth eye height transition
-7. **Muzzle flash** — particle + brief light on shoot
-8. **Enemy health bars** — billboard above drones
-9. **Textures** — load from glTF materials instead of flat colors
+### 🟡 Soon — Audio + Polish
+6. **Audio system** — SDL3 audio, footsteps, gunshots, explosions
+7. **ADS FOV scaling** — camera zoom when aiming
+8. **Enemy health bars** — billboard UI
+9. **Player health + damage feedback**
 
-### Lower Priority (content expansion)
-10. **Rusher Drone** — second enemy type
-11. **Weapon system** — multiple guns, ammo, reload
-12. **Boss enemy** — phase system
-13. **Shadows** — shadow mapping
-14. **Wave spawner** — enemy wave management
+### 🟢 Later
+10. **Coyote time**
+11. **Camera polish** (bobbing, smoothing, crouch lerp)
+12. **Wave spawner**
+13. **Weapon switching / multiple weapons**
+14. **Rendering upgrades** (pending art style decision)
+15. **Mod system** (TBD)
