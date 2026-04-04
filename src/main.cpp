@@ -711,6 +711,41 @@ int main(int argc, char* argv[]) {
             }
 
             // --- Enemies ---
+            if (ImGui::CollapsingHeader("Weapon")) {
+                ImGui::Text("State: %s",
+                    weapon.state == WeaponState::IDLE ? "Idle" :
+                    weapon.state == WeaponState::FIRING ? "Firing" :
+                    weapon.state == WeaponState::RELOADING ? "Reloading" : "?");
+                ImGui::Separator();
+
+                ImGui::SliderFloat("Damage",       &weapon.config.damage,     1.0f, 200.0f);
+                ImGui::SliderFloat("Fire Rate",    &weapon.config.fire_rate,  0.5f, 10.0f, "%.1f shots/s");
+                ImGui::SliderFloat("Range",        &weapon.config.range,      10.0f, 500.0f);
+                ImGui::SliderFloat("Reload Time",  &weapon.config.reload_time, 0.5f, 5.0f, "%.1fs");
+                ImGui::SliderFloat("Crit Multi",   &weapon.config.crit_multiplier, 1.0f, 5.0f, "%.1fx");
+                ImGui::Separator();
+
+                ImGui::Text("Viewmodel");
+                ImGui::SliderFloat("Model Scale",  &weapon.config.model_scale, 0.01f, 5.0f, "%.3f");
+                ImGui::SliderFloat3("Hip Offset",  &weapon.config.hip_offset.X, -1.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat3("ADS Offset",  &weapon.config.ads_offset.X, -1.0f, 1.0f, "%.3f");
+                ImGui::Separator();
+
+                ImGui::Text("ADS");
+                ImGui::SliderFloat("ADS FOV Mult", &weapon.config.ads_fov_mult, 0.5f, 1.0f, "%.2f");
+                ImGui::SliderFloat("ADS Speed",    &weapon.config.ads_speed,    1.0f, 20.0f);
+                ImGui::Separator();
+
+                ImGui::Text("Recoil");
+                ImGui::SliderFloat("Recoil Kick",     &weapon.config.recoil_kick,     0.0f, 0.2f, "%.3f");
+                ImGui::SliderFloat("Recoil Pitch",    &weapon.config.recoil_pitch,    0.0f, 10.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Recovery", &weapon.config.recoil_recovery, 1.0f, 30.0f);
+
+                if (ImGui::Button("Reset Weapon Defaults")) {
+                    weapon.init_wingman();
+                }
+            }
+
             if (ImGui::CollapsingHeader("Enemies")) {
                 if (ImGui::Button("Spawn Drone (in front of player)")) {
                     HMM_Vec3 fwd = camera.forward_flat();
