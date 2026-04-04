@@ -215,95 +215,128 @@ static HMM_Vec3 clip_velocity(HMM_Vec3 vel, HMM_Vec3 normal, float overbounce = 
 }
 
 // ============================================================
+//  Iterative depenetration
+//  Resolves ALL sphere overlaps, not just the deepest.
+//  Run multiple iterations so pushing out of wall A doesn't
+//  leave you stuck in wall B.
+// ============================================================
+
+HMM_Vec3 CollisionWorld::depenetrate(HMM_Vec3 center, float radius, int max_iters) const {
+    for (int i = 0; i < max_iters; i++) {
+        HMM_Vec3 push_dir;
+        float pen;
+        if (!sphere_overlap(center, radius, push_dir, pen))
+            break;
+        center = HMM_AddV3(center, HMM_MulV3F(push_dir, pen + 0.001f));
+    }
+    return center;
+}
+
+// ============================================================
 //  Slide move: move sphere through world, sliding along surfaces
-//  This is the Quake PM_SlideMove algorithm.
-//  - Try to move full displacement
-//  - If overlap, push out and clip velocity against contact plane
-//  - Repeat up to 4 times (handles corners/wedges)
+//  Proper Quake PM_SlideMove:
+//  - Move by remaining displacement
+//  - On collision, push out, clip velocity, recompute remaining
+//  - Repeat up to 4 bumps (handles corners/wedges)
 // ============================================================
 
 HMM_Vec3 CollisionWorld::slide_move(HMM_Vec3 start, float radius,
                                      HMM_Vec3& velocity, float dt) const
 {
-    constexpr int MAX_CLIPS = 4;
+    constexpr int MAX_BUMPS = 4;
+    constexpr float MIN_REMAINING = 1e-4f;
 
     HMM_Vec3 pos = start;
-    HMM_Vec3 remaining = HMM_MulV3F(velocity, dt);
-    HMM_Vec3 planes[MAX_CLIPS];
+    float time_left = dt;
+    HMM_Vec3 planes[MAX_BUMPS + 1];
     int num_planes = 0;
+    HMM_Vec3 original_vel = velocity;
 
     if (g_collision_log) {
         printf("slide_move START pos=(%.2f,%.2f,%.2f) vel=(%.2f,%.2f,%.2f) dt=%.5f\n",
                pos.X, pos.Y, pos.Z, velocity.X, velocity.Y, velocity.Z, dt);
     }
 
-    for (int i = 0; i < MAX_CLIPS; i++) {
-        // Move by remaining displacement
-        HMM_Vec3 prev_pos = pos;
-        pos = HMM_AddV3(pos, remaining);
+    for (int bump = 0; bump < MAX_BUMPS; bump++) {
+        if (time_left <= 0.0f) break;
+
+        HMM_Vec3 displacement = HMM_MulV3F(velocity, time_left);
+        float disp_len = HMM_LenV3(displacement);
+        if (disp_len < MIN_REMAINING) break;
+
+        // Try full remaining displacement
+        HMM_Vec3 target = HMM_AddV3(pos, displacement);
 
         if (g_collision_log) {
-            printf(" clip %d: moved (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f)\n",
-                   i, prev_pos.X, prev_pos.Y, prev_pos.Z, pos.X, pos.Y, pos.Z);
+            printf(" bump %d: try (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f) time_left=%.5f\n",
+                   bump, pos.X, pos.Y, pos.Z, target.X, target.Y, target.Z, time_left);
         }
 
-        // Check for overlap
+        // Check overlap at target
         HMM_Vec3 push_dir;
         float pen;
-        if (!sphere_overlap(pos, radius, push_dir, pen)) {
-            if (g_collision_log) printf(" clip %d: no overlap, done\n", i);
-            break;  // no collision, done
+        if (!sphere_overlap(target, radius, push_dir, pen)) {
+            // No collision — accept move
+            pos = target;
+            if (g_collision_log) printf(" bump %d: clear, done\n", bump);
+            break;
         }
 
-        // Push out of geometry
-        HMM_Vec3 pre_push = pos;
-        pos = HMM_AddV3(pos, HMM_MulV3F(push_dir, pen + 0.001f));
+        // Push out of geometry (iterative to handle multi-surface)
+        pos = depenetrate(HMM_AddV3(target, HMM_MulV3F(push_dir, pen + 0.001f)),
+                          radius, 4);
 
         if (g_collision_log) {
-            printf(" clip %d: OVERLAP pen=%.4f push_dir=(%.2f,%.2f,%.2f) pushed (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f)\n",
-                   i, pen, push_dir.X, push_dir.Y, push_dir.Z,
-                   pre_push.X, pre_push.Y, pre_push.Z,
-                   pos.X, pos.Y, pos.Z);
+            printf(" bump %d: OVERLAP pen=%.4f push=(%.2f,%.2f,%.2f) resolved_pos=(%.2f,%.2f,%.2f)\n",
+                   bump, pen, push_dir.X, push_dir.Y, push_dir.Z, pos.X, pos.Y, pos.Z);
         }
 
-        // Record this plane
-        if (num_planes < MAX_CLIPS)
+        // Record contact plane
+        if (num_planes < MAX_BUMPS + 1)
             planes[num_planes++] = push_dir;
 
-        // Clip velocity against this plane
-        HMM_Vec3 vel_before = velocity;
+        // Clip velocity against this contact normal
         velocity = clip_velocity(velocity, push_dir);
 
-        if (g_collision_log) {
-            printf(" clip %d: vel (%.2f,%.2f,%.2f) -> (%.2f,%.2f,%.2f)\n",
-                   i, vel_before.X, vel_before.Y, vel_before.Z,
-                   velocity.X, velocity.Y, velocity.Z);
-        }
-
-        remaining = HMM_MulV3F(push_dir, 0.0f);  // stop remaining movement this iteration
-
-        // Check if we're being pushed into a corner (velocity opposing all planes)
-        bool stuck = false;
-        for (int j = 0; j < num_planes; j++) {
-            if (HMM_DotV3(velocity, planes[j]) < -0.01f) {
+        // Also clip against all previous planes to handle wedges
+        for (int j = 0; j < num_planes - 1; j++) {
+            if (HMM_DotV3(velocity, planes[j]) < 0.0f) {
                 velocity = clip_velocity(velocity, planes[j]);
-                stuck = true;
-            }
-        }
-        if (stuck) {
-            bool still_stuck = false;
-            for (int j = 0; j < num_planes; j++) {
-                if (HMM_DotV3(velocity, planes[j]) < -0.01f) {
-                    still_stuck = true;
-                    break;
+
+                // If now going into the latest plane, we're in a corner
+                if (HMM_DotV3(velocity, push_dir) < 0.0f) {
+                    // Try crease direction (cross product of the two planes)
+                    HMM_Vec3 crease = HMM_Cross(planes[j], push_dir);
+                    float crease_len = HMM_LenV3(crease);
+                    if (crease_len > 1e-6f) {
+                        crease = HMM_MulV3F(crease, 1.0f / crease_len);
+                        float d = HMM_DotV3(velocity, crease);
+                        velocity = HMM_MulV3F(crease, d);
+                    } else {
+                        // Opposing parallel planes — dead stop
+                        velocity = HMM_V3(0, 0, 0);
+                        if (g_collision_log) printf(" bump %d: STUCK corner, zero vel\n", bump);
+                        time_left = 0.0f;
+                        break;
+                    }
                 }
             }
-            if (still_stuck) {
-                if (g_collision_log) printf(" clip %d: STUCK in corner, zeroing velocity\n", i);
-                velocity = HMM_V3(0, 0, 0);
-                break;
-            }
         }
+
+        if (g_collision_log) {
+            printf(" bump %d: clipped vel=(%.2f,%.2f,%.2f)\n",
+                   bump, velocity.X, velocity.Y, velocity.Z);
+        }
+
+        // Estimate how much of the timestep was consumed.
+        // We moved from where we were before this bump to `pos` (after depenetration).
+        // The fraction consumed is roughly how far we got vs how far we tried.
+        HMM_Vec3 actual_move = HMM_SubV3(pos, HMM_SubV3(target, displacement));
+        float actual_dist = HMM_LenV3(actual_move);
+        float frac = (disp_len > MIN_REMAINING) ? (actual_dist / disp_len) : 1.0f;
+        if (frac > 1.0f) frac = 1.0f;
+        time_left *= (1.0f - frac);
+        if (time_left < 1e-6f) time_left = 0.0f;
     }
 
     if (g_collision_log) {
@@ -312,4 +345,60 @@ HMM_Vec3 CollisionWorld::slide_move(HMM_Vec3 start, float radius,
     }
 
     return pos;
+}
+
+// ============================================================
+//  Step move: Source-style step climbing
+//  1. Move up by step_height
+//  2. Try normal slide_move horizontally
+//  3. Move back down to find ground
+//  Returns true if the step produced a better result than
+//  a normal slide_move would.
+// ============================================================
+
+bool CollisionWorld::step_move(HMM_Vec3 start, float radius, float step_height,
+                               HMM_Vec3 velocity, float dt, HMM_Vec3& out_pos) const
+{
+    // Only step if there's horizontal velocity
+    float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+    if (hspeed < 0.1f) return false;
+
+    // Phase 1: Move up
+    HMM_Vec3 up_pos = HMM_AddV3(start, HMM_V3(0.0f, step_height, 0.0f));
+    up_pos = depenetrate(up_pos, radius, 4);
+
+    // Check we actually moved up meaningfully
+    float actual_up = up_pos.Y - start.Y;
+    if (actual_up < 0.01f) return false;
+
+    // Phase 2: Move horizontally at the elevated position
+    HMM_Vec3 step_vel = velocity;
+    step_vel.Y = 0.0f;  // horizontal only for the step
+    HMM_Vec3 stepped = slide_move(up_pos, radius, step_vel, dt);
+
+    // Phase 3: Move back down to find ground
+    HMM_Vec3 down_target = HMM_SubV3(stepped, HMM_V3(0.0f, actual_up + 0.05f, 0.0f));
+
+    // Raycast down to find where we land
+    HMM_Vec3 ray_origin = stepped;
+    HMM_Vec3 ray_dir = HMM_V3(0.0f, -1.0f, 0.0f);
+    float ray_dist = actual_up + 0.1f;
+    HitResult hit = raycast(ray_origin, ray_dir, ray_dist);
+
+    HMM_Vec3 final_pos;
+    if (hit.hit && hit.normal.Y > 0.7f) {
+        // Land on the surface we found
+        final_pos = HMM_V3(stepped.X, hit.point.Y + radius, stepped.Z);
+    } else {
+        // No ground found — use the down target and depenetrate
+        final_pos = depenetrate(down_target, radius, 4);
+    }
+
+    // Only accept if we made more horizontal progress than staying put
+    float step_hdist = sqrtf((final_pos.X - start.X) * (final_pos.X - start.X) +
+                             (final_pos.Z - start.Z) * (final_pos.Z - start.Z));
+    if (step_hdist < 0.01f) return false;
+
+    out_pos = final_pos;
+    return true;
 }

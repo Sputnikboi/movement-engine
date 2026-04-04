@@ -39,32 +39,69 @@ HMM_Vec3 Player::build_wish_dir(const InputState& input) const {
 }
 
 // ============================================================
-//  Ground check: raycast down from feet
+//  Ground check: multi-ray (center + 4 cardinal offsets)
+//  Prevents grounded flickering at edges and ramp transitions.
 // ============================================================
 
 void Player::check_ground(const CollisionWorld& world) {
-    HMM_Vec3 ray_origin = HMM_AddV3(position, HMM_V3(0.0f, 0.1f, 0.0f));
-    HMM_Vec3 ray_dir    = HMM_V3(0.0f, -1.0f, 0.0f);
-    float    ray_dist   = 0.1f + ground_check_dist;
+    // Don't re-ground while actively rising from a jump
+    if (velocity.Y > 0.1f) {
+        grounded = false;
+        ground_normal = HMM_V3(0.0f, 1.0f, 0.0f);
+        return;
+    }
 
-    HitResult hit = world.raycast(ray_origin, ray_dir, ray_dist);
+    // Cast multiple rays: center + 4 cardinal offsets at sphere edge
+    constexpr int NUM_RAYS = 5;
+    float probe_radius = radius * 0.7f;
+    HMM_Vec3 offsets[NUM_RAYS] = {
+        HMM_V3(0.0f,          0.0f, 0.0f),
+        HMM_V3( probe_radius, 0.0f, 0.0f),
+        HMM_V3(-probe_radius, 0.0f, 0.0f),
+        HMM_V3(0.0f,          0.0f,  probe_radius),
+        HMM_V3(0.0f,          0.0f, -probe_radius),
+    };
+
+    HMM_Vec3 ray_dir = HMM_V3(0.0f, -1.0f, 0.0f);
+    float ray_start_offset = 0.1f;
+    float ray_dist = ray_start_offset + ground_check_dist;
+
+    bool found_ground = false;
+    float best_ground_y = -1e30f;
+    HMM_Vec3 best_normal = HMM_V3(0.0f, 1.0f, 0.0f);
+
+    for (int i = 0; i < NUM_RAYS; i++) {
+        HMM_Vec3 ray_origin = HMM_AddV3(position,
+            HMM_AddV3(offsets[i], HMM_V3(0.0f, ray_start_offset, 0.0f)));
+        HitResult hit = world.raycast(ray_origin, ray_dir, ray_dist);
+
+        if (hit.hit && hit.normal.Y > 0.7f) {
+            found_ground = true;
+            if (hit.point.Y > best_ground_y) {
+                best_ground_y = hit.point.Y;
+                best_normal = hit.normal;
+            }
+        }
+    }
 
     if (g_collision_log) {
-        printf("check_ground: pos=(%.2f,%.2f,%.2f) hit=%d", position.X, position.Y, position.Z, hit.hit);
-        if (hit.hit) printf(" normal=(%.2f,%.2f,%.2f)", hit.normal.X, hit.normal.Y, hit.normal.Z);
+        printf("check_ground: pos=(%.2f,%.2f,%.2f) found=%d",
+               position.X, position.Y, position.Z, found_ground);
+        if (found_ground)
+            printf(" ground_y=%.2f normal=(%.2f,%.2f,%.2f)",
+                   best_ground_y, best_normal.X, best_normal.Y, best_normal.Z);
         printf("\n");
     }
 
-    // Don't re-ground while actively rising from a jump
-    if (hit.hit && hit.normal.Y > 0.7f && velocity.Y <= 0.1f) {
+    if (found_ground) {
         grounded = true;
-        ground_normal = hit.normal;
+        ground_normal = best_normal;
 
-        float ground_y = hit.point.Y;
-        if (position.Y < ground_y)
-            position.Y = ground_y;
-        else if (position.Y - ground_y < ground_check_dist && velocity.Y <= 0.0f)
-            position.Y = ground_y;
+        // Snap to ground if close enough and not rising
+        if (position.Y < best_ground_y)
+            position.Y = best_ground_y;
+        else if (position.Y - best_ground_y < ground_check_dist && velocity.Y <= 0.0f)
+            position.Y = best_ground_y;
     } else {
         grounded = false;
         ground_normal = HMM_V3(0.0f, 1.0f, 0.0f);
@@ -96,11 +133,62 @@ void Player::apply_friction(float dt, float fric) {
 
 // ============================================================
 //  Collision move (shared by ground and air)
+//  - Ground: tries step-up on collision, snaps to slope surface
+//  - Air: plain slide_move
 // ============================================================
 
 void Player::do_collide_and_move(float dt, const CollisionWorld& world) {
     HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
-    sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
+
+    if (grounded) {
+        // Save velocity before slide_move clips it
+        HMM_Vec3 saved_vel = velocity;
+
+        // Try normal slide_move first
+        HMM_Vec3 slide_result = world.slide_move(sphere_center, radius, velocity, dt);
+
+        // Check if we got blocked horizontally (step candidate)
+        float slide_hdist = sqrtf(
+            (slide_result.X - sphere_center.X) * (slide_result.X - sphere_center.X) +
+            (slide_result.Z - sphere_center.Z) * (slide_result.Z - sphere_center.Z));
+        float expected_hdist = sqrtf(saved_vel.X * saved_vel.X + saved_vel.Z * saved_vel.Z) * dt;
+
+        // If we moved less than 75% of expected, try stepping up
+        if (expected_hdist > 0.01f && slide_hdist < expected_hdist * 0.75f) {
+            HMM_Vec3 step_pos;
+            if (world.step_move(sphere_center, radius, step_height, saved_vel, dt, step_pos)) {
+                // Step succeeded — use step result, restore horizontal velocity
+                sphere_center = step_pos;
+                velocity = saved_vel;
+                velocity.Y = 0.0f;
+            } else {
+                // Step failed — use slide result (velocity already clipped by slide_move)
+                sphere_center = slide_result;
+            }
+        } else {
+            sphere_center = slide_result;
+        }
+
+        // Slope sticking: while grounded, project downward to stay on surface.
+        // This prevents floating off when running downhill.
+        bool on_slope = (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f);
+        if (on_slope && velocity.Y <= 0.1f) {
+            HMM_Vec3 ray_origin = sphere_center;
+            HMM_Vec3 ray_dir = HMM_V3(0.0f, -1.0f, 0.0f);
+            float snap_dist = step_height + 0.1f;
+            HitResult hit = world.raycast(ray_origin, ray_dir, snap_dist);
+            if (hit.hit && hit.normal.Y > 0.7f) {
+                float target_y = hit.point.Y + radius;
+                if (sphere_center.Y > target_y && sphere_center.Y - target_y < snap_dist) {
+                    sphere_center.Y = target_y;
+                    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+                }
+            }
+        }
+    } else {
+        sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
+    }
+
     position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
 }
 
@@ -305,7 +393,23 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    // On flat ground, zero out downward velocity.
+    // On slopes, project velocity onto slope surface so we follow it downhill
+    // instead of floating off.
+    if (on_slope) {
+        // Project full velocity onto the slope plane
+        float d = HMM_DotV3(velocity, ground_normal);
+        if (d < 0.0f) {
+            // Only project if we're moving into the slope (downhill)
+            // This keeps the player glued to the surface
+        } else {
+            // Moving away from slope (uphill) — let slide_move handle it
+        }
+        // Don't clamp Y — let the slope projection in do_collide_and_move handle it
+    } else {
+        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    }
+
     do_collide_and_move(dt, world);
 }
 

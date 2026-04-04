@@ -30,11 +30,21 @@ struct CollisionWorld {
     bool sphere_overlap(HMM_Vec3 center, float radius,
                         HMM_Vec3& push_out, float& penetration) const;
 
+    // Iterative depenetration: resolve ALL overlaps (not just deepest).
+    // Pushes sphere out of geometry over multiple iterations.
+    // Returns final resolved position.
+    HMM_Vec3 depenetrate(HMM_Vec3 center, float radius, int max_iters = 8) const;
+
     // Move a sphere from `start` by `displacement`, sliding against geometry.
     // Returns the final position after up to 4 slide iterations.
     // `velocity` is modified in-place (clipped against contact planes).
     HMM_Vec3 slide_move(HMM_Vec3 start, float radius,
                         HMM_Vec3& velocity, float dt) const;
+
+    // Step-move: try to step up over small obstacles (Source-style).
+    // Returns true if step-up succeeded, writing the new position to `out_pos`.
+    bool step_move(HMM_Vec3 start, float radius, float step_height,
+                   HMM_Vec3 velocity, float dt, HMM_Vec3& out_pos) const;
 };
 
 // ============================================================

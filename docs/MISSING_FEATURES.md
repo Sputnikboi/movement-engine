@@ -21,12 +21,12 @@ Organized by priority/impact.
 | Slide (power slide + boost) | ✅ | ✅ | Speed boost, cooldown, low friction |
 | Slide-jump boost | ✅ | ✅ | Extra speed when jumping out of slide |
 | Lurch (momentum redirect) | ✅ | ✅ | Fires on input change during post-jump window |
-| Slope movement | ✅ | 🟡 | Wish dir projection works, still has bump/airtime at ramp edges |
+| Slope movement | ✅ | ✅ | Multi-ray ground check, slope sticking, no more ramp-edge bumps |
 | Wall running | ❌ | ❌ | Not in Unity version either |
 | Coyote time | ✅ | ❌ | Grace period for jumping after leaving edge |
 | Landing grace | ✅ | ❌ | Unity had a speed preservation window on land |
-| Ground contact system | ✅ | 🟡 | Unity used OnCollisionStay contacts, engine uses single raycast |
-| Step climbing | ✅ | ❌ | Auto-step up small ledges |
+| Ground contact system | ✅ | ✅ | Multi-ray (5-point) ground probe + iterative depenetration |
+| Step climbing | ✅ | ✅ | Source-style up→forward→down step move |
 
 ## Camera
 
