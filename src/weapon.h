@@ -33,16 +33,22 @@ struct WeaponConfig {
 
     // Viewmodel offsets (relative to camera)
     HMM_Vec3 hip_offset   = {0.25f, -0.2f, 0.4f};  // right, down, forward
-    HMM_Vec3 ads_offset   = {0.0f, -0.15f, 0.3f};  // centered for ADS
+    HMM_Vec3 ads_offset   = {0.0f, -0.125f, 0.3f};  // centered for ADS
 
     // Recoil
-    float recoil_kick     = 0.03f;    // backward displacement
-    float recoil_pitch    = 2.0f;     // degrees upward per shot
-    float recoil_recovery = 10.0f;    // recovery speed (1/s)
+    float recoil_kick       = 0.03f;    // backward displacement per shot
+    float recoil_pitch      = 30.0f;    // degrees upward per shot
+    float recoil_roll       = 5.0f;     // degrees tilt per shot
+    float recoil_side       = 0.01f;    // sideways displacement per shot
+    float recoil_recovery   = 10.0f;    // recovery speed (1/s)
 
     // Viewmodel scale + rotation correction (degrees)
     float model_scale     = 1.0f;
     HMM_Vec3 model_rotation = {0.0f, 90.0f, 0.0f};  // X, Y, Z degrees
+
+    // Reload animation
+    float reload_drop_dist  = 0.15f;   // how far gun drops during reload
+    float reload_tilt       = 25.0f;   // degrees of tilt during reload
 };
 
 // ============================================================
@@ -57,10 +63,13 @@ struct Weapon {
     float        reload_timer = 0.0f;
     float        ads_blend  = 0.0f;   // 0 = hip, 1 = ADS
     bool         ads_held   = false;
+    bool         reload_buffered = false; // reload pressed during fire cooldown
 
     // Recoil state
     float        recoil_offset = 0.0f;  // current backward kick
     float        recoil_pitch  = 0.0f;  // current pitch offset (degrees)
+    float        recoil_roll   = 0.0f;  // current roll tilt (degrees)
+    float        recoil_side   = 0.0f;  // current sideways offset
 
     // Viewmodel mesh
     Mesh         viewmodel_mesh;

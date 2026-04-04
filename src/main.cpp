@@ -747,8 +747,15 @@ int main(int argc, char* argv[]) {
 
                 ImGui::Text("Recoil");
                 ImGui::SliderFloat("Recoil Kick",     &weapon.config.recoil_kick,     0.0f, 0.2f, "%.3f");
-                ImGui::SliderFloat("Recoil Pitch",    &weapon.config.recoil_pitch,    0.0f, 10.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Pitch",    &weapon.config.recoil_pitch,    0.0f, 60.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Roll",     &weapon.config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Side",     &weapon.config.recoil_side,     0.0f, 0.1f, "%.3f");
                 ImGui::SliderFloat("Recoil Recovery", &weapon.config.recoil_recovery, 1.0f, 30.0f);
+                ImGui::Separator();
+
+                ImGui::Text("Reload Anim");
+                ImGui::SliderFloat("Reload Drop",     &weapon.config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
+                ImGui::SliderFloat("Reload Tilt",     &weapon.config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
 
                 if (ImGui::Button("Reset Weapon Defaults")) {
                     weapon.init_wingman();
