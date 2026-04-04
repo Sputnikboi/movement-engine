@@ -245,6 +245,7 @@ void Player::try_slide(const InputState& input) {
 
 void Player::perform_lurch(const InputState& input) {
     if (lurch_timer <= 0.0f) return;
+    if (lurch_cooldown > 0.0f) return;  // suppressed by recent air strafing
     if (input.forward == 0.0f && input.right == 0.0f) return;
 
     // Only fire on input CHANGE — but don't consume the timer,
@@ -429,6 +430,11 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
             wish_speed = air_wish_speed;
     }
 
+    // If there's air strafe input, suppress lurch for a duration
+    if (wish_len > 0.001f) {
+        lurch_cooldown = lurch_cooldown_after_strafe;
+    }
+
     accelerate(wish_dir, wish_speed, air_accel, dt);
 
     velocity.Y -= gravity * dt;
@@ -444,6 +450,7 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
     // Tick timers
     if (slide_boost_timer > 0.0f) slide_boost_timer -= dt;
     if (lurch_timer > 0.0f) lurch_timer -= dt;
+    if (lurch_cooldown > 0.0f) lurch_cooldown -= dt;
     if (sliding) slide_timer += dt;
 
     bool was_grounded = grounded;

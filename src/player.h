@@ -53,6 +53,7 @@ struct Player {
     // --- Lurch parameters ---
     float lurch_window   = 0.5f;    // seconds after jump where lurch is active
     float lurch_strength = 0.5f;    // 0=no redirect, 1=full snap to input dir
+    float lurch_cooldown_after_strafe = 0.5f; // seconds lurch is disabled after air strafing
 
     // --- Ground check ---
     float ground_check_dist = 0.15f;
@@ -71,6 +72,7 @@ struct Player {
 
     // --- Lurch state ---
     float lurch_timer    = 0.0f;
+    float lurch_cooldown = 0.0f;   // time remaining before lurch is allowed again
     float prev_forward   = 0.0f;
     float prev_right     = 0.0f;
 
