@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
     float scroll_forward_pulse = 0.0f;  // +1 or -1 when wheel bound to forward/back
     float scroll_right_pulse   = 0.0f;  // +1 or -1 when wheel bound to left/right
     int   scroll_move_ticks    = 0;     // ticks remaining for scroll movement pulse
-    static constexpr int SCROLL_MOVE_TICK_COUNT = 3; // how many ticks a scroll pulse lasts
+    static constexpr int SCROLL_MOVE_TICK_COUNT = 1; // how many ticks a scroll pulse lasts
 
     // --- Key rebind state ---
     // -1 = not rebinding, otherwise action_index * SLOTS + slot
