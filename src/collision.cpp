@@ -429,39 +429,53 @@ void CollisionWorld::add_ladder_tris(const Mesh& mesh, uint32_t index_start, uin
             (size_t)index_count / 3, ladder_tris.size());
 }
 
-// Simple sphere-triangle distance check (point-triangle + inflate by radius)
-static float sphere_tri_dist(HMM_Vec3 center, const Triangle& tri) {
-    // Project center onto triangle plane
-    float plane_dist = HMM_DotV3(HMM_SubV3(center, tri.v0), tri.normal);
-    HMM_Vec3 projected = HMM_SubV3(center, HMM_MulV3F(tri.normal, plane_dist));
+// Closest point on line segment AB to point P
+static HMM_Vec3 closest_on_segment(HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 p) {
+    HMM_Vec3 ab = HMM_SubV3(b, a);
+    float len_sq = HMM_DotV3(ab, ab);
+    if (len_sq < 1e-10f) return a;
+    float t = HMM_DotV3(HMM_SubV3(p, a), ab) / len_sq;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return HMM_AddV3(a, HMM_MulV3F(ab, t));
+}
 
-    // Check if projected point is inside triangle (barycentric)
-    HMM_Vec3 v0 = HMM_SubV3(tri.v2, tri.v0);
-    HMM_Vec3 v1 = HMM_SubV3(tri.v1, tri.v0);
-    HMM_Vec3 v2 = HMM_SubV3(projected, tri.v0);
+// True 3D distance from point to triangle (interior, edges, and vertices)
+static float point_tri_dist(HMM_Vec3 p, const Triangle& tri) {
+    float plane_dist = HMM_DotV3(HMM_SubV3(p, tri.v0), tri.normal);
+    HMM_Vec3 proj = HMM_SubV3(p, HMM_MulV3F(tri.normal, plane_dist));
 
-    float d00 = HMM_DotV3(v0, v0);
-    float d01 = HMM_DotV3(v0, v1);
-    float d02 = HMM_DotV3(v0, v2);
-    float d11 = HMM_DotV3(v1, v1);
-    float d12 = HMM_DotV3(v1, v2);
+    HMM_Vec3 e0 = HMM_SubV3(tri.v1, tri.v0);
+    HMM_Vec3 e1 = HMM_SubV3(tri.v2, tri.v0);
+    HMM_Vec3 vp = HMM_SubV3(proj, tri.v0);
+
+    float d00 = HMM_DotV3(e0, e0);
+    float d01 = HMM_DotV3(e0, e1);
+    float d02 = HMM_DotV3(e0, vp);
+    float d11 = HMM_DotV3(e1, e1);
+    float d12 = HMM_DotV3(e1, vp);
 
     float denom = d00 * d11 - d01 * d01;
-    if (fabsf(denom) < 1e-10f) return 1e30f;
-
-    float u = (d11 * d02 - d01 * d12) / denom;
-    float v = (d00 * d12 - d01 * d02) / denom;
-
-    if (u >= 0.0f && v >= 0.0f && (u + v) <= 1.0f) {
-        // Inside triangle — distance is just the plane distance
-        return fabsf(plane_dist);
+    if (fabsf(denom) > 1e-10f) {
+        float u = (d11 * d02 - d01 * d12) / denom;
+        float v = (d00 * d12 - d01 * d02) / denom;
+        if (u >= 0.0f && v >= 0.0f && (u + v) <= 1.0f)
+            return fabsf(plane_dist);
     }
 
-    // Outside triangle — compute distance to nearest edge/vertex
-    // (simplified: just use plane distance as approximation for ladder overlap)
-    // For a more exact result we'd need edge distance, but this is good enough
-    // since ladder geometry is typically a simple flat quad.
-    return fabsf(plane_dist) + 0.5f; // penalty for being outside the face
+    // Outside triangle — distance to closest point on the 3 edges
+    HMM_Vec3 c0 = closest_on_segment(tri.v0, tri.v1, p);
+    HMM_Vec3 c1 = closest_on_segment(tri.v1, tri.v2, p);
+    HMM_Vec3 c2 = closest_on_segment(tri.v2, tri.v0, p);
+
+    float dist0 = HMM_LenV3(HMM_SubV3(p, c0));
+    float dist1 = HMM_LenV3(HMM_SubV3(p, c1));
+    float dist2 = HMM_LenV3(HMM_SubV3(p, c2));
+
+    float best = dist0;
+    if (dist1 < best) best = dist1;
+    if (dist2 < best) best = dist2;
+    return best;
 }
 
 bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const {
@@ -470,7 +484,7 @@ bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_n
     float check_radius = radius + 0.15f; // slightly generous
 
     for (const auto& tri : ladder_tris) {
-        float dist = sphere_tri_dist(center, tri);
+        float dist = point_tri_dist(center, tri);
         if (dist < check_radius && dist < best_dist) {
             best_dist = dist;
             best_normal = tri.normal;
