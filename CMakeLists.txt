@@ -84,6 +84,7 @@ add_executable(${PROJECT_NAME}
     src/level_loader.cpp
     src/bvh.cpp
     src/drone.cpp
+    src/rusher.cpp
     src/entity_render.cpp
     src/effects.cpp
     src/weapon.cpp

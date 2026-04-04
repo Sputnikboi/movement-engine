@@ -168,6 +168,30 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities) {
                           e.tumble_x, e.tumble_z);
         } break;
 
+        case EntityType::Rusher: {
+            // Purple-red base, brightens as health drops
+            float hp_frac = (e.max_health > 0) ? e.health / e.max_health : 0.0f;
+            float r = 0.8f + (1.0f - hp_frac) * 0.2f;
+            float g = 0.1f;
+            float b = 0.4f + hp_frac * 0.2f;
+
+            // Charging/dashing: glow brighter
+            if (e.ai_state == 1 || e.ai_state == 2) { // RUSHER_CHARGING or DASHING
+                r = 1.0f; g = 0.3f; b = 0.1f; // angry orange
+            }
+
+            // Hit flash
+            if (e.hit_flash > 0.0f) {
+                float flash = fminf(e.hit_flash * 6.0f, 1.0f);
+                r = r + (1.0f - r) * flash;
+                g = g + (1.0f - g) * flash;
+                b = b + (1.0f - b) * flash;
+            }
+
+            append_sphere(out, sphere, e.position, e.radius, r, g, b,
+                          e.tumble_x, e.tumble_z);
+        } break;
+
         case EntityType::Projectile: {
             // Bright orange-yellow
             append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.7f, 0.1f);

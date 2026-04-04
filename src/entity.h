@@ -11,6 +11,7 @@
 enum class EntityType : uint8_t {
     None,
     Drone,
+    Rusher,
     Projectile,
 };
 

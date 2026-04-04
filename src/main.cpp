@@ -16,6 +16,7 @@
 #include "level_loader.h"
 #include "entity.h"
 #include "drone.h"
+#include "rusher.h"
 #include "entity_render.h"
 #include "effects.h"
 #include "weapon.h"
@@ -199,6 +200,7 @@ int main(int argc, char* argv[]) {
     // --- Entities ---
     Entity entities[MAX_ENTITIES] = {};
     DroneConfig drone_cfg;
+    RusherConfig rusher_cfg;
     EffectSystem effects;
     effects.init();
     float total_time = 0.0f;
@@ -514,7 +516,8 @@ int main(int argc, char* argv[]) {
 
                 for (int i = 0; i < MAX_ENTITIES; i++) {
                     Entity& e = entities[i];
-                    if (!e.alive || e.type != EntityType::Drone) continue;
+                    if (!e.alive) continue;
+                    if (e.type != EntityType::Drone && e.type != EntityType::Rusher) continue;
 
                     // Ray-sphere intersection
                     HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
@@ -539,18 +542,22 @@ int main(int argc, char* argv[]) {
                     hit_ent.health -= weapon.config.damage;
                     hit_ent.hit_flash = drone_cfg.hit_flash_time;
 
-                    if (hit_ent.health <= 0 && hit_ent.ai_state != DRONE_DYING) {
-                        hit_ent.ai_state = DRONE_DYING;
+                    // Determine dying state for this entity type
+                    uint8_t dying_state = (hit_ent.type == EntityType::Rusher)
+                                          ? (uint8_t)RUSHER_DYING : (uint8_t)DRONE_DYING;
+                    float tumble = (hit_ent.type == EntityType::Rusher)
+                                   ? rusher_cfg.death_tumble_speed : drone_cfg.death_tumble_speed;
+
+                    if (hit_ent.health <= 0 && hit_ent.ai_state != dying_state) {
+                        hit_ent.ai_state = dying_state;
                         hit_ent.death_timer = 0.0f;
-                        // Pop upward + knockback from shot direction
                         hit_ent.velocity.Y += 3.0f;
                         HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
                         hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
-                        // Random tumble spin
                         hit_ent.angular_vel = HMM_V3(
-                            randf(-1.0f, 1.0f) * drone_cfg.death_tumble_speed * 57.3f,
+                            randf(-1.0f, 1.0f) * tumble * 57.3f,
                             0.0f,
-                            randf(-1.0f, 1.0f) * drone_cfg.death_tumble_speed * 57.3f
+                            randf(-1.0f, 1.0f) * tumble * 57.3f
                         );
                     }
                 }
@@ -560,23 +567,32 @@ int main(int argc, char* argv[]) {
         // --- Update entities (only when not paused) ---
         if (!show_settings) {
             // Track dying drones to spawn explosions when they hit ground
-            struct DyingDrone { int idx; HMM_Vec3 pos; bool was_alive; };
-            DyingDrone dying[MAX_ENTITIES];
+            struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
+            DyingEnemy dying[MAX_ENTITIES];
             int dying_count = 0;
 
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& e = entities[i];
                 if (!e.alive) continue;
                 if (e.type == EntityType::Drone) {
-                    if (e.ai_state == DRONE_DYING) {
+                    if (e.ai_state == DRONE_DYING)
                         dying[dying_count++] = {i, e.position, true};
-                    }
                     drone_update(e, entities, MAX_ENTITIES,
                                  player.position, collision, drone_cfg, dt, total_time);
                 }
+                if (e.type == EntityType::Rusher) {
+                    if (e.ai_state == RUSHER_DYING)
+                        dying[dying_count++] = {i, e.position, true};
+                    rusher_update(e, entities, MAX_ENTITIES,
+                                  player.position, collision, rusher_cfg, dt, total_time);
+                    // Check dash damage to player
+                    if (rusher_check_player_hit(e, player.position, player.radius, rusher_cfg)) {
+                        // TODO: player takes damage (rusher_cfg.melee_damage)
+                    }
+                }
             }
 
-            // Check which dying drones just expired
+            // Check which dying enemies just expired → explosion
             for (int d = 0; d < dying_count; d++) {
                 Entity& e = entities[dying[d].idx];
                 if (!e.alive && dying[d].was_alive) {
@@ -586,11 +602,18 @@ int main(int argc, char* argv[]) {
 
             projectiles_update(entities, MAX_ENTITIES, collision, dt);
 
-            // --- Drone-player collision (push player, damage TODO) ---
+            // Helper: is entity a live (non-dying) enemy?
+            auto is_live_enemy = [](const Entity& e) -> bool {
+                if (!e.alive) return false;
+                if (e.type == EntityType::Drone)  return e.ai_state != DRONE_DYING;
+                if (e.type == EntityType::Rusher) return e.ai_state != RUSHER_DYING;
+                return false;
+            };
+
+            // --- Enemy-player collision (push apart) ---
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& e = entities[i];
-                if (!e.alive || e.type != EntityType::Drone) continue;
-                if (e.ai_state == DRONE_DYING) continue;
+                if (!is_live_enemy(e)) continue;
 
                 HMM_Vec3 delta = HMM_SubV3(player.position, e.position);
                 float dist = HMM_LenV3(delta);
@@ -598,7 +621,6 @@ int main(int argc, char* argv[]) {
                 if (dist < min_dist && dist > 0.001f) {
                     HMM_Vec3 push_dir = HMM_MulV3F(delta, 1.0f / dist);
                     float overlap = min_dist - dist;
-                    // Push player out, push drone away (50/50 split)
                     player.position = HMM_AddV3(player.position,
                                                 HMM_MulV3F(push_dir, overlap * 0.5f));
                     e.position = HMM_SubV3(e.position,
@@ -606,15 +628,13 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // --- Drone-drone collision (push apart) ---
+            // --- Enemy-enemy collision (push apart) ---
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& a = entities[i];
-                if (!a.alive || a.type != EntityType::Drone) continue;
-                if (a.ai_state == DRONE_DYING) continue;
+                if (!is_live_enemy(a)) continue;
                 for (int j = i + 1; j < MAX_ENTITIES; j++) {
                     Entity& b = entities[j];
-                    if (!b.alive || b.type != EntityType::Drone) continue;
-                    if (b.ai_state == DRONE_DYING) continue;
+                    if (!is_live_enemy(b)) continue;
 
                     HMM_Vec3 delta = HMM_SubV3(b.position, a.position);
                     float dist = HMM_LenV3(delta);
@@ -689,12 +709,15 @@ int main(int argc, char* argv[]) {
                 ImGui::TextColored(ImVec4(1,0.7f,0.2f,1), "LURCH");
             }
             if (noclip) ImGui::Text("NOCLIP");
-            // Count alive drones
-            int drone_count = 0;
-            for (int i = 0; i < MAX_ENTITIES; i++)
-                if (entities[i].alive && entities[i].type == EntityType::Drone)
-                    drone_count++;
-            if (drone_count > 0) ImGui::Text("Drones: %d", drone_count);
+            // Count alive enemies
+            int drone_count = 0, rusher_count_hud = 0;
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                if (!entities[i].alive) continue;
+                if (entities[i].type == EntityType::Drone) drone_count++;
+                if (entities[i].type == EntityType::Rusher) rusher_count_hud++;
+            }
+            if (drone_count > 0 || rusher_count_hud > 0)
+                ImGui::Text("Enemies: %d", drone_count + rusher_count_hud);
 
             // --- Weapon HUD ---
             ImGui::Separator();
@@ -912,6 +935,43 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Death Gravity",    &drone_cfg.death_gravity,     5.0f, 30.0f);
                 ImGui::SliderFloat("Tumble Speed",     &drone_cfg.death_tumble_speed,1.0f, 20.0f);
                 ImGui::SliderFloat("Hit Flash Time",   &drone_cfg.hit_flash_time,    0.05f, 0.5f, "%.2fs");
+
+                ImGui::Separator();
+                ImGui::Separator();
+                ImGui::Text("=== RUSHER ===");
+                if (ImGui::Button("Spawn Rusher (in front of player)")) {
+                    HMM_Vec3 fwd = camera.forward_flat();
+                    HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
+                    spawn.Y += 3.0f;
+                    rusher_spawn(entities, MAX_ENTITIES, spawn, rusher_cfg);
+                }
+
+                int rusher_count = 0;
+                for (int i = 0; i < MAX_ENTITIES; i++)
+                    if (entities[i].alive && entities[i].type == EntityType::Rusher) rusher_count++;
+                ImGui::Text("Rushers: %d", rusher_count);
+
+                ImGui::Separator();
+                ImGui::Text("Stats");
+                ImGui::SliderFloat("Rusher Health",      &rusher_cfg.health,         1.0f, 100.0f);
+                ImGui::SliderFloat("Rusher Radius",      &rusher_cfg.radius,         0.2f, 2.0f);
+                ImGui::SliderFloat("Melee Damage",       &rusher_cfg.melee_damage,   1.0f, 100.0f);
+
+                ImGui::Separator();
+                ImGui::Text("Movement");
+                ImGui::SliderFloat("R Chase Speed",      &rusher_cfg.chase_speed,    5.0f, 30.0f);
+                ImGui::SliderFloat("R Acceleration",     &rusher_cfg.acceleration,   1.0f, 20.0f);
+                ImGui::SliderFloat("R Hover Height",     &rusher_cfg.hover_height,   0.5f, 6.0f);
+                ImGui::SliderFloat("R Hover Force",      &rusher_cfg.hover_force,    1.0f, 30.0f);
+
+                ImGui::Separator();
+                ImGui::Text("Dash Attack");
+                ImGui::SliderFloat("R Attack Range",     &rusher_cfg.attack_range,   2.0f, 20.0f);
+                ImGui::SliderFloat("Charge Up Time",     &rusher_cfg.charge_up_time, 0.1f, 3.0f, "%.2fs");
+                ImGui::SliderFloat("Braking Force",      &rusher_cfg.braking_force,  1.0f, 30.0f);
+                ImGui::SliderFloat("Dash Force",         &rusher_cfg.dash_force,     10.0f, 100.0f);
+                ImGui::SliderFloat("Dash Duration",      &rusher_cfg.dash_duration,  0.1f, 2.0f, "%.2fs");
+                ImGui::SliderFloat("Dash Cooldown",      &rusher_cfg.dash_cooldown,  0.1f, 5.0f, "%.2fs");
             }
 
             // --- Mouse ---
