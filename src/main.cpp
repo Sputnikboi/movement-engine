@@ -557,48 +557,92 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // --- Update entities ---
-        // Track dying drones to spawn explosions when they hit ground
-        struct DyingDrone { int idx; HMM_Vec3 pos; bool was_alive; };
-        DyingDrone dying[MAX_ENTITIES];
-        int dying_count = 0;
+        // --- Update entities (only when not paused) ---
+        if (!show_settings) {
+            // Track dying drones to spawn explosions when they hit ground
+            struct DyingDrone { int idx; HMM_Vec3 pos; bool was_alive; };
+            DyingDrone dying[MAX_ENTITIES];
+            int dying_count = 0;
 
-        for (int i = 0; i < MAX_ENTITIES; i++) {
-            Entity& e = entities[i];
-            if (!e.alive) continue;
-            if (e.type == EntityType::Drone) {
-                if (e.ai_state == DRONE_DYING) {
-                    dying[dying_count++] = {i, e.position, true};
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Entity& e = entities[i];
+                if (!e.alive) continue;
+                if (e.type == EntityType::Drone) {
+                    if (e.ai_state == DRONE_DYING) {
+                        dying[dying_count++] = {i, e.position, true};
+                    }
+                    drone_update(e, entities, MAX_ENTITIES,
+                                 player.position, collision, drone_cfg, dt, total_time);
                 }
-                drone_update(e, entities, MAX_ENTITIES,
-                             player.position, collision, drone_cfg, dt, total_time);
             }
-        }
 
-        // Check which dying drones just expired
-        for (int d = 0; d < dying_count; d++) {
-            Entity& e = entities[dying[d].idx];
-            if (!e.alive && dying[d].was_alive) {
-                // Drone just died — spawn explosion at final position
-                effects.spawn_drone_explosion(dying[d].pos);
-                printf("Drone exploded!\n");
+            // Check which dying drones just expired
+            for (int d = 0; d < dying_count; d++) {
+                Entity& e = entities[dying[d].idx];
+                if (!e.alive && dying[d].was_alive) {
+                    effects.spawn_drone_explosion(dying[d].pos);
+                }
             }
-        }
 
-        projectiles_update(entities, MAX_ENTITIES, collision, dt);
+            projectiles_update(entities, MAX_ENTITIES, collision, dt);
 
-        // Check projectile-player collision
-        for (int i = 0; i < MAX_ENTITIES; i++) {
-            Entity& e = entities[i];
-            if (!e.alive || e.type != EntityType::Projectile) continue;
-            HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
-            float dist_sq = HMM_DotV3(to_player, to_player);
-            float hit_radius = e.radius + player.radius;
-            if (dist_sq < hit_radius * hit_radius) {
-                // TODO: player takes damage
-                e.alive = false;
+            // --- Drone-player collision (push player, damage TODO) ---
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Entity& e = entities[i];
+                if (!e.alive || e.type != EntityType::Drone) continue;
+                if (e.ai_state == DRONE_DYING) continue;
+
+                HMM_Vec3 delta = HMM_SubV3(player.position, e.position);
+                float dist = HMM_LenV3(delta);
+                float min_dist = player.radius + e.radius;
+                if (dist < min_dist && dist > 0.001f) {
+                    HMM_Vec3 push_dir = HMM_MulV3F(delta, 1.0f / dist);
+                    float overlap = min_dist - dist;
+                    // Push player out, push drone away (50/50 split)
+                    player.position = HMM_AddV3(player.position,
+                                                HMM_MulV3F(push_dir, overlap * 0.5f));
+                    e.position = HMM_SubV3(e.position,
+                                           HMM_MulV3F(push_dir, overlap * 0.5f));
+                }
             }
-        }
+
+            // --- Drone-drone collision (push apart) ---
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Entity& a = entities[i];
+                if (!a.alive || a.type != EntityType::Drone) continue;
+                if (a.ai_state == DRONE_DYING) continue;
+                for (int j = i + 1; j < MAX_ENTITIES; j++) {
+                    Entity& b = entities[j];
+                    if (!b.alive || b.type != EntityType::Drone) continue;
+                    if (b.ai_state == DRONE_DYING) continue;
+
+                    HMM_Vec3 delta = HMM_SubV3(b.position, a.position);
+                    float dist = HMM_LenV3(delta);
+                    float min_dist = a.radius + b.radius;
+                    if (dist < min_dist && dist > 0.001f) {
+                        HMM_Vec3 push_dir = HMM_MulV3F(delta, 1.0f / dist);
+                        float overlap = min_dist - dist;
+                        a.position = HMM_SubV3(a.position,
+                                               HMM_MulV3F(push_dir, overlap * 0.5f));
+                        b.position = HMM_AddV3(b.position,
+                                               HMM_MulV3F(push_dir, overlap * 0.5f));
+                    }
+                }
+            }
+
+            // --- Projectile-player collision ---
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Entity& e = entities[i];
+                if (!e.alive || e.type != EntityType::Projectile) continue;
+                HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
+                float dist_sq = HMM_DotV3(to_player, to_player);
+                float hit_radius = e.radius + player.radius;
+                if (dist_sq < hit_radius * hit_radius) {
+                    // TODO: player takes damage
+                    e.alive = false;
+                }
+            }
+        } // end !show_settings
 
         // Update effects
         effects.update(dt);
