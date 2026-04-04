@@ -25,6 +25,7 @@ void Weapon::init_wingman() {
     config.recoil_recovery = 10.0f;
 
     config.model_scale     = 1.0f;
+    config.model_rotation  = HMM_V3(0.0f, 0.0f, 90.0f);
 
     ammo  = config.mag_size;
     state = WeaponState::IDLE;
@@ -144,8 +145,14 @@ HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
     // Scale
     HMM_Mat4 scale = HMM_Scale(HMM_V3(config.model_scale, config.model_scale, config.model_scale));
 
-    // Model correction: rotate +90 degrees on Z to fix Blender export orientation
-    HMM_Mat4 fix = HMM_Rotate_RH(HMM_AngleDeg(90.0f), HMM_V3(0.0f, 0.0f, 1.0f));
+    // Model rotation correction (applied in X, Y, Z order)
+    HMM_Mat4 fix = HMM_MulM4(
+        HMM_Rotate_RH(HMM_AngleDeg(config.model_rotation.Z), HMM_V3(0, 0, 1)),
+        HMM_MulM4(
+            HMM_Rotate_RH(HMM_AngleDeg(config.model_rotation.Y), HMM_V3(0, 1, 0)),
+            HMM_Rotate_RH(HMM_AngleDeg(config.model_rotation.X), HMM_V3(1, 0, 0))
+        )
+    );
 
     return HMM_MulM4(trans, HMM_MulM4(rot, HMM_MulM4(scale, fix)));
 }

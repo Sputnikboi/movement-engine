@@ -734,9 +734,10 @@ int main(int argc, char* argv[]) {
                 ImGui::Separator();
 
                 ImGui::Text("Viewmodel");
-                ImGui::SliderFloat("Model Scale",  &weapon.config.model_scale, 0.01f, 5.0f, "%.3f");
-                ImGui::SliderFloat3("Hip Offset",  &weapon.config.hip_offset.X, -1.0f, 1.0f, "%.3f");
-                ImGui::SliderFloat3("ADS Offset",  &weapon.config.ads_offset.X, -1.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat("Model Scale",     &weapon.config.model_scale, 0.01f, 5.0f, "%.3f");
+                ImGui::SliderFloat3("Model Rotation", &weapon.config.model_rotation.X, -180.0f, 180.0f, "%.1f deg");
+                ImGui::SliderFloat3("Hip Offset",     &weapon.config.hip_offset.X, -1.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat3("ADS Offset",     &weapon.config.ads_offset.X, -1.0f, 1.0f, "%.3f");
                 ImGui::Separator();
 
                 ImGui::Text("ADS");

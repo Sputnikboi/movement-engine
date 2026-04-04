@@ -40,8 +40,9 @@ struct WeaponConfig {
     float recoil_pitch    = 2.0f;     // degrees upward per shot
     float recoil_recovery = 10.0f;    // recovery speed (1/s)
 
-    // Viewmodel scale
+    // Viewmodel scale + rotation correction (degrees)
     float model_scale     = 1.0f;
+    HMM_Vec3 model_rotation = {0.0f, 0.0f, 90.0f};  // X, Y, Z degrees
 };
 
 // ============================================================
