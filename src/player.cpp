@@ -133,7 +133,7 @@ void Player::apply_friction(float dt, float fric) {
 
 // ============================================================
 //  Collision move (shared by ground and air)
-//  - Ground: tries step-up on collision, snaps to slope surface
+//  - Ground: tries step-up on collision
 //  - Air: plain slide_move
 // ============================================================
 
@@ -157,33 +157,14 @@ void Player::do_collide_and_move(float dt, const CollisionWorld& world) {
         if (expected_hdist > 0.01f && slide_hdist < expected_hdist * 0.75f) {
             HMM_Vec3 step_pos;
             if (world.step_move(sphere_center, radius, step_height, saved_vel, dt, step_pos)) {
-                // Step succeeded — use step result, restore horizontal velocity
                 sphere_center = step_pos;
                 velocity = saved_vel;
                 velocity.Y = 0.0f;
             } else {
-                // Step failed — use slide result (velocity already clipped by slide_move)
                 sphere_center = slide_result;
             }
         } else {
             sphere_center = slide_result;
-        }
-
-        // Slope sticking: while grounded, project downward to stay on surface.
-        // This prevents floating off when running downhill.
-        bool on_slope = (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f);
-        if (on_slope && velocity.Y <= 0.1f) {
-            HMM_Vec3 ray_origin = sphere_center;
-            HMM_Vec3 ray_dir = HMM_V3(0.0f, -1.0f, 0.0f);
-            float snap_dist = step_height + 0.1f;
-            HitResult hit = world.raycast(ray_origin, ray_dir, snap_dist);
-            if (hit.hit && hit.normal.Y > 0.7f) {
-                float target_y = hit.point.Y + radius;
-                if (sphere_center.Y > target_y && sphere_center.Y - target_y < snap_dist) {
-                    sphere_center.Y = target_y;
-                    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-                }
-            }
         }
     } else {
         sphere_center = world.slide_move(sphere_center, radius, velocity, dt);
@@ -367,8 +348,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         apply_friction(dt, friction);
     }
 
-    bool on_slope = (ground_normal.Y < 0.999f && ground_normal.Y > 0.7f);
-
     HMM_Vec3 wish_dir_raw = build_wish_dir(input);
     float wish_len = HMM_LenV3(wish_dir_raw);
     float wish_speed = 0.0f;
@@ -377,15 +356,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     if (wish_len > 0.001f) {
         wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
 
-        // On slopes: project wish direction onto slope surface
-        if (on_slope) {
-            float d = HMM_DotV3(wish_dir, ground_normal);
-            wish_dir = HMM_SubV3(wish_dir, HMM_MulV3F(ground_normal, d));
-            float proj_len = HMM_LenV3(wish_dir);
-            if (proj_len > 0.001f)
-                wish_dir = HMM_MulV3F(wish_dir, 1.0f / proj_len);
-        }
-
         float speed_cap = crouched ? crouch_speed : max_speed;
         wish_speed = wish_len * speed_cap;
         if (wish_speed > speed_cap) wish_speed = speed_cap;
@@ -393,23 +363,7 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    // On flat ground, zero out downward velocity.
-    // On slopes, project velocity onto slope surface so we follow it downhill
-    // instead of floating off.
-    if (on_slope) {
-        // Project full velocity onto the slope plane
-        float d = HMM_DotV3(velocity, ground_normal);
-        if (d < 0.0f) {
-            // Only project if we're moving into the slope (downhill)
-            // This keeps the player glued to the surface
-        } else {
-            // Moving away from slope (uphill) — let slide_move handle it
-        }
-        // Don't clamp Y — let the slope projection in do_collide_and_move handle it
-    } else {
-        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
-    }
-
+    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
     do_collide_and_move(dt, world);
 }
 
