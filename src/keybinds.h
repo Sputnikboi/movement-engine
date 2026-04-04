@@ -21,6 +21,7 @@ enum class Action : uint8_t {
     Sprint,     // noclip sprint
     Noclip,
     ToggleHUD,
+    ToggleFullscreen,
     COUNT
 };
 
@@ -41,8 +42,9 @@ inline const char* action_name(Action a) {
         case Action::Descend:     return "Descend";
         case Action::Sprint:      return "Sprint";
         case Action::Noclip:      return "Noclip";
-        case Action::ToggleHUD:   return "Toggle HUD";
-        default:                  return "???";
+        case Action::ToggleHUD:        return "Toggle HUD";
+        case Action::ToggleFullscreen: return "Toggle Fullscreen";
+        default:                       return "???";
     }
 }
 
@@ -107,7 +109,8 @@ struct Keybinds {
         binds[static_cast<int>(Action::Reload)][0]      = SDL_SCANCODE_R;
         binds[static_cast<int>(Action::ADS)][0]         = INPUT_MOUSE_RIGHT;
         binds[static_cast<int>(Action::Noclip)][0]      = SDL_SCANCODE_V;
-        binds[static_cast<int>(Action::ToggleHUD)][0]   = SDL_SCANCODE_H;
+        binds[static_cast<int>(Action::ToggleHUD)][0]        = SDL_SCANCODE_H;
+        binds[static_cast<int>(Action::ToggleFullscreen)][0] = SDL_SCANCODE_F11;
     }
 
     InputCode get(Action a, int slot) const {
