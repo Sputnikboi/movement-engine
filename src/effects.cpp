@@ -1,178 +1,43 @@
 #include "effects.h"
-#include "drone.h"   // for randf
 #include <cmath>
 #include <cstring>
 
 void EffectSystem::init() {
-    memset(particles, 0, sizeof(particles));
+    memset(death_effects, 0, sizeof(death_effects));
 }
-
-int EffectSystem::find_free() const {
-    for (int i = 0; i < MAX_PARTICLES; i++)
-        if (!particles[i].alive) return i;
-    return -1;
-}
-
-void EffectSystem::spawn(HMM_Vec3 pos, HMM_Vec3 vel, HMM_Vec3 color,
-                         float size_start, float size_end,
-                         float lifetime, float type)
-{
-    int idx = find_free();
-    if (idx < 0) return;
-
-    Particle& p = particles[idx];
-    p.position   = pos;
-    p.velocity   = vel;
-    p.color      = color;
-    p.alpha      = 1.0f;
-    p.size       = size_start;
-    p.size_start = size_start;
-    p.size_end   = size_end;
-    p.lifetime   = lifetime;
-    p.age        = 0.0f;
-    p.type       = type;
-    p.alive      = true;
-}
-
-// ============================================================
-//  Drone explosion: ring + scattered particles
-// ============================================================
-
-void EffectSystem::spawn_drone_explosion(HMM_Vec3 pos) {
-    // --- Central fire sphere: multiple overlapping particles expanding outward ---
-    // Simulates a 3D fireball by spawning particles in all directions
-    for (int i = 0; i < 20; i++) {
-        // Uniform sphere distribution
-        float theta = randf(0, 6.283f);
-        float phi   = randf(-1.0f, 1.0f);
-        float r     = sqrtf(1.0f - phi * phi);
-        float speed = randf(2.0f, 5.0f);
-
-        HMM_Vec3 dir = HMM_V3(r * cosf(theta), phi, r * sinf(theta));
-        HMM_Vec3 vel = HMM_MulV3F(dir, speed);
-
-        // Color: hot core (white/yellow) to outer fire (orange/red)
-        float heat = randf(0.0f, 1.0f);
-        HMM_Vec3 col = HMM_V3(
-            1.0f,
-            0.3f + heat * 0.6f,    // yellow at high heat, orange at low
-            heat * 0.3f             // slight white at high heat
-        );
-
-        float sz = randf(0.4f, 0.8f);
-        spawn(pos, vel, col, sz, sz * 2.0f, randf(0.3f, 0.7f), 1.0f);
-    }
-
-    // --- Bright core flash ---
-    spawn(pos, HMM_V3(0, 0, 0),
-          HMM_V3(1.0f, 0.95f, 0.8f),  // near-white hot
-          1.0f, 0.1f,                   // big start, shrink fast
-          0.25f,                        // very short
-          1.0f);
-
-    // --- Expanding ground ring (horizontal) ---
-    // Multiple ring particles at slightly different sizes for thickness
-    for (int i = 0; i < 3; i++) {
-        float delay_size = 0.2f + i * 0.15f;
-        spawn(pos, HMM_V3(0, 0, 0),
-              HMM_V3(1.0f, 0.4f + i * 0.1f, 0.05f),  // orange, slightly varied
-              delay_size, 4.0f + i * 0.5f,              // expand to ~4-5m
-              0.6f + i * 0.15f,                          // staggered lifetime
-              0.0f);                                     // type = ring
-    }
-
-    // --- Upward fire column ---
-    for (int i = 0; i < 6; i++) {
-        float theta = randf(0, 6.283f);
-        float spread = randf(0.0f, 0.8f);
-        HMM_Vec3 vel = HMM_V3(
-            cosf(theta) * spread,
-            randf(4.0f, 10.0f),   // strong upward
-            sinf(theta) * spread
-        );
-        HMM_Vec3 col = HMM_V3(
-            randf(0.9f, 1.0f),
-            randf(0.3f, 0.5f),
-            randf(0.0f, 0.1f)
-        );
-        float sz = randf(0.3f, 0.6f);
-        spawn(pos, vel, col, sz, sz * 0.5f, randf(0.4f, 0.9f), 1.0f);
-    }
-
-    // --- Debris / embers flung outward ---
-    int debris_count = 10 + static_cast<int>(randf(0, 6));
-    for (int i = 0; i < debris_count; i++) {
-        float theta = randf(0, 6.283f);
-        float phi   = randf(-0.3f, 0.8f);
-        float speed = randf(4.0f, 12.0f);
-
-        HMM_Vec3 vel = HMM_V3(
-            cosf(theta) * cosf(phi) * speed,
-            sinf(phi) * speed + 3.0f,
-            sinf(theta) * cosf(phi) * speed
-        );
-        HMM_Vec3 col = HMM_V3(randf(0.8f, 1.0f), randf(0.15f, 0.4f), 0.0f);
-        float sz = randf(0.08f, 0.2f);
-        spawn(pos, vel, col, sz, sz * 0.2f, randf(0.6f, 1.5f), 1.0f);
-    }
-
-    // --- Dark smoke (rises slowly, lasts longer) ---
-    for (int i = 0; i < 5; i++) {
-        float theta = randf(0, 6.283f);
-        HMM_Vec3 vel = HMM_V3(
-            cosf(theta) * randf(0.3f, 1.0f),
-            randf(1.5f, 4.0f),
-            sinf(theta) * randf(0.3f, 1.0f)
-        );
-        HMM_Vec3 col = HMM_V3(0.3f, 0.18f, 0.08f);
-        float sz = randf(0.4f, 0.8f);
-        spawn(pos, vel, col, sz, sz * 2.0f, randf(1.0f, 2.0f), 1.0f);
-    }
-}
-
-// ============================================================
-//  Update all particles
-// ============================================================
 
 void EffectSystem::update(float dt) {
-    for (int i = 0; i < MAX_PARTICLES; i++) {
-        Particle& p = particles[i];
-        if (!p.alive) continue;
+    for (int i = 0; i < MAX_DEATH_EFFECTS; i++) {
+        DeathEffect& e = death_effects[i];
+        if (!e.alive) continue;
 
-        p.age += dt;
-        if (p.age >= p.lifetime) {
-            p.alive = false;
-            continue;
+        e.age += dt;
+        if (e.age >= e.lifetime) {
+            e.alive = false;
         }
+    }
+}
 
-        float t = p.age / p.lifetime;  // 0 to 1
-
-        // Move
-        p.position = HMM_AddV3(p.position, HMM_MulV3F(p.velocity, dt));
-
-        // Gravity on debris particles (not rings)
-        if (p.type > 0.5f) {
-            p.velocity.Y -= 8.0f * dt;
-        }
-
-        // Drag
-        p.velocity = HMM_MulV3F(p.velocity, 1.0f - 1.5f * dt);
-
-        // Interpolate size
-        p.size = p.size_start + (p.size_end - p.size_start) * t;
-
-        // Fade out (quick in last 30%)
-        if (t > 0.7f) {
-            p.alpha = 1.0f - (t - 0.7f) / 0.3f;
-        } else {
-            p.alpha = 1.0f;
+void EffectSystem::spawn_drone_explosion(HMM_Vec3 pos) {
+    for (int i = 0; i < MAX_DEATH_EFFECTS; i++) {
+        if (!death_effects[i].alive) {
+            DeathEffect& e = death_effects[i];
+            e.position       = pos;
+            e.lifetime       = 0.6f;
+            e.age            = 0.0f;
+            e.alive          = true;
+            e.ball_start_size = 1.2f;
+            e.ball_end_size   = 0.0f;
+            e.ring_start_size = 0.3f;
+            e.ring_max_size   = 5.0f;
+            e.ring_thickness  = 0.4f;
+            return;
         }
     }
 }
 
 // ============================================================
-//  Build vertex data for GPU upload
-//  Each particle = 1 quad = 4 vertices + 6 indices
+//  Build vertex data: each effect = 2 quads (ball + ring)
 // ============================================================
 
 int EffectSystem::build_vertices(std::vector<ParticleVertex>& out_verts,
@@ -186,37 +51,79 @@ int EffectSystem::build_vertices(std::vector<ParticleVertex>& out_verts,
     };
 
     int count = 0;
-    for (int i = 0; i < MAX_PARTICLES; i++) {
-        const Particle& p = particles[i];
-        if (!p.alive) continue;
+    for (int i = 0; i < MAX_DEATH_EFFECTS; i++) {
+        const DeathEffect& e = death_effects[i];
+        if (!e.alive) continue;
 
-        uint32_t base = static_cast<uint32_t>(out_verts.size());
+        float t = e.age / e.lifetime; // 0..1
 
-        for (int c = 0; c < 4; c++) {
-            ParticleVertex v;
-            v.center[0] = p.position.X;
-            v.center[1] = p.position.Y;
-            v.center[2] = p.position.Z;
-            v.corner[0] = corners[c][0];
-            v.corner[1] = corners[c][1];
-            v.color[0]  = p.color.X;
-            v.color[1]  = p.color.Y;
-            v.color[2]  = p.color.Z;
-            v.color[3]  = p.alpha;
-            v.params[0] = p.size;
-            v.params[1] = p.type;
-            out_verts.push_back(v);
+        // --- Yellow ball: collapses from ball_start_size to 0 ---
+        // Quick collapse with ease-in (accelerates into nothing)
+        float ball_t = t * t;  // ease-in
+        float ball_size = e.ball_start_size * (1.0f - ball_t);
+        // Fade to white-hot then vanish
+        float ball_alpha = 1.0f - t * t;
+
+        if (ball_size > 0.01f) {
+            uint32_t base = static_cast<uint32_t>(out_verts.size());
+            for (int c = 0; c < 4; c++) {
+                ParticleVertex v;
+                v.center[0] = e.position.X;
+                v.center[1] = e.position.Y;
+                v.center[2] = e.position.Z;
+                v.corner[0] = corners[c][0];
+                v.corner[1] = corners[c][1];
+                // Yellow → white as it collapses
+                float white = t * 0.5f;
+                v.color[0]  = 1.0f;
+                v.color[1]  = 0.85f + white * 0.15f;
+                v.color[2]  = 0.15f + white * 0.85f;
+                v.color[3]  = ball_alpha;
+                v.params[0] = ball_size;
+                v.params[1] = 1.0f;  // type = particle/blob
+                out_verts.push_back(v);
+            }
+            out_indices.push_back(base + 0);
+            out_indices.push_back(base + 1);
+            out_indices.push_back(base + 2);
+            out_indices.push_back(base + 0);
+            out_indices.push_back(base + 2);
+            out_indices.push_back(base + 3);
+            count++;
         }
 
-        // Two triangles per quad
-        out_indices.push_back(base + 0);
-        out_indices.push_back(base + 1);
-        out_indices.push_back(base + 2);
-        out_indices.push_back(base + 0);
-        out_indices.push_back(base + 2);
-        out_indices.push_back(base + 3);
+        // --- Expanding donut ring ---
+        // Expands outward, fades out toward end
+        float ring_t = sqrtf(t);  // ease-out (fast start, slow end)
+        float ring_size = e.ring_start_size + (e.ring_max_size - e.ring_start_size) * ring_t;
+        float ring_alpha = 1.0f - t; // linear fade
 
-        count++;
+        if (ring_alpha > 0.01f) {
+            uint32_t base = static_cast<uint32_t>(out_verts.size());
+            for (int c = 0; c < 4; c++) {
+                ParticleVertex v;
+                v.center[0] = e.position.X;
+                v.center[1] = e.position.Y;
+                v.center[2] = e.position.Z;
+                v.corner[0] = corners[c][0];
+                v.corner[1] = corners[c][1];
+                // Solid yellow-orange ring
+                v.color[0]  = 1.0f;
+                v.color[1]  = 0.75f;
+                v.color[2]  = 0.1f;
+                v.color[3]  = ring_alpha;
+                v.params[0] = ring_size;
+                v.params[1] = 0.0f;  // type = ring
+                out_verts.push_back(v);
+            }
+            out_indices.push_back(base + 0);
+            out_indices.push_back(base + 1);
+            out_indices.push_back(base + 2);
+            out_indices.push_back(base + 0);
+            out_indices.push_back(base + 2);
+            out_indices.push_back(base + 3);
+            count++;
+        }
     }
 
     return count;

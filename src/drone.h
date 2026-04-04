@@ -38,8 +38,8 @@ struct DroneConfig {
     float chase_speed_max    = 11.0f;
     float circle_speed_min   = 4.0f;
     float circle_speed_max   = 6.0f;
-    float hover_height_min   = 1.8f;
-    float hover_height_max   = 2.2f;
+    float hover_height_min   = 4.0f;
+    float hover_height_max   = 5.0f;
     float bob_amp_min        = 0.4f;
     float bob_amp_max        = 0.6f;
     float bob_freq_min       = 0.9f;

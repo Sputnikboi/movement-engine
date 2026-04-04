@@ -16,46 +16,41 @@ struct ParticleVertex {
 };
 
 // ============================================================
-//  Single particle
+//  Death effect: collapsing yellow ball + expanding solid donut ring
 // ============================================================
 
-struct Particle {
+struct DeathEffect {
     HMM_Vec3 position;
-    HMM_Vec3 velocity;
-    HMM_Vec3 color;         // RGB
-    float    alpha;
-    float    size;
-    float    size_start;
-    float    size_end;
-    float    lifetime;       // total lifetime
+    float    lifetime;       // total duration
     float    age;            // current age
-    float    type;           // 0 = ring, 1 = particle blob
     bool     alive;
+
+    // Ball params
+    float    ball_start_size;
+    float    ball_end_size;   // 0 = fully collapsed
+
+    // Ring params
+    float    ring_start_size;
+    float    ring_max_size;
+    float    ring_thickness;  // visual thickness of the donut
 };
 
 // ============================================================
 //  Effect system
 // ============================================================
 
-static constexpr int MAX_PARTICLES = 1024;
+static constexpr int MAX_DEATH_EFFECTS = 32;
 
 struct EffectSystem {
-    Particle particles[MAX_PARTICLES];
+    DeathEffect death_effects[MAX_DEATH_EFFECTS];
 
     void init();
     void update(float dt);
 
-    // Spawn a drone explosion at position
+    // Spawn death effect at position
     void spawn_drone_explosion(HMM_Vec3 pos);
 
     // Build vertex data for rendering
-    // Returns number of vertices (always multiple of 4, each particle = 4 verts)
     int build_vertices(std::vector<ParticleVertex>& out_verts,
                        std::vector<uint32_t>& out_indices) const;
-
-private:
-    int find_free() const;
-    void spawn(HMM_Vec3 pos, HMM_Vec3 vel, HMM_Vec3 color,
-               float size_start, float size_end,
-               float lifetime, float type);
 };

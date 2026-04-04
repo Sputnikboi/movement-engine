@@ -8,54 +8,45 @@ layout(location = 3) in float frag_time;
 layout(location = 0) out vec4 out_color;
 
 // ============================================================
-//  Ring effect: glowing expanding ring
-//  (port of DroneExplosionRingSimple.shader)
+//  Ring effect: solid donut ring
 // ============================================================
 
 vec4 ring_effect(vec2 uv, vec4 tint) {
     float dist = length(uv - 0.5) * 2.0;
 
-    // Ring shape: bright at a specific radius, falls off
-    float ring_radius = 0.7;
-    float ring_width  = 0.25;
-    float ring = 1.0 - smoothstep(0.0, ring_width, abs(dist - ring_radius));
+    // Solid donut: hard inner and outer edges with slight softness
+    float ring_radius = 0.65;
+    float ring_half_width = 0.18;
+    float inner = smoothstep(ring_radius - ring_half_width - 0.05,
+                             ring_radius - ring_half_width, dist);
+    float outer = 1.0 - smoothstep(ring_radius + ring_half_width,
+                                    ring_radius + ring_half_width + 0.05, dist);
+    float ring = inner * outer;
 
-    // Glow falloff from center
-    float glow = exp(-dist * 2.0) * 0.5;
-
-    float intensity = (ring + glow) * tint.a;
-    vec3 color = tint.rgb * 2.0 * intensity;
+    float intensity = ring * tint.a;
+    vec3 color = tint.rgb * 1.5 * intensity;
 
     return vec4(color, intensity);
 }
 
 // ============================================================
-//  Particle effect: glowing blob with UV distortion
-//  (port of DroneExplosionParticle.shader)
+//  Ball effect: solid glowing ball that collapses
 // ============================================================
 
 vec4 particle_effect(vec2 uv, vec4 tint, float time) {
-    // UV distortion
-    float distortion_speed = 3.0;
-    float distortion_amount = 0.08;
-    vec2 distorted_uv = uv + vec2(
-        sin(uv.y * 10.0 + time * distortion_speed) * distortion_amount,
-        cos(uv.x * 10.0 + time * distortion_speed) * distortion_amount
-    );
+    float dist = length(uv - 0.5) * 2.0;
 
-    // Soft circle
-    float dist = length(distorted_uv - 0.5) * 2.0;
-    float alpha = 1.0 - smoothstep(0.0, 1.0, dist);
-    alpha *= alpha; // sharper falloff
+    // Solid ball with soft edge
+    float alpha = 1.0 - smoothstep(0.6, 1.0, dist);
 
-    // Edge glow (brighter near edges of the circle)
-    float edge_power = 1.0 - dist;
-    edge_power = clamp(edge_power * 2.0, 0.0, 1.0);
+    // Bright core
+    float core = exp(-dist * 3.0) * 0.5;
+    alpha = clamp(alpha + core, 0.0, 1.0);
 
-    vec3 glow_color = tint.rgb * (1.0 + edge_power) * 2.0;
+    vec3 color = tint.rgb * (1.0 + core) * 1.5;
     float final_alpha = alpha * tint.a;
 
-    return vec4(glow_color * final_alpha, final_alpha);
+    return vec4(color * final_alpha, final_alpha);
 }
 
 // ============================================================
@@ -69,7 +60,6 @@ void main() {
         result = particle_effect(frag_uv, frag_color, frag_time);
     }
 
-    // Discard nearly invisible fragments
     if (result.a < 0.01) discard;
 
     out_color = result;

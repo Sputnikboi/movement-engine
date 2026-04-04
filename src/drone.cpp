@@ -160,12 +160,18 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
         drone.tumble_z += drone.angular_vel.Z * dt;
 
         // Move with world collision
-        float prev_vy = drone.velocity.Y;
+        HMM_Vec3 vel_before = drone.velocity;
+        float speed_before = HMM_LenV3(vel_before);
         drone.position = world.slide_move(drone.position, drone.radius,
                                           drone.velocity, dt);
+        float speed_after = HMM_LenV3(drone.velocity);
 
-        // If was falling and velocity got clipped → hit ground
-        if (prev_vy < -1.0f && fabsf(drone.velocity.Y) < 0.5f) {
+        // Detect ground/slope impact: was falling (negative Y) and
+        // slide_move absorbed significant speed (works on slopes too,
+        // where Y doesn't go to zero but speed gets redirected/lost)
+        bool was_falling = vel_before.Y < -1.0f;
+        float speed_lost = speed_before - speed_after;
+        if (was_falling && speed_lost > speed_before * 0.4f) {
             drone.ai_state = DRONE_DEAD;
             drone.alive = false;
             return;
