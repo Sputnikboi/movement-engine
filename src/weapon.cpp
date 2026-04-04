@@ -190,12 +190,12 @@ bool Weapon::try_fire() {
 //  Helper: base viewmodel transform (shared by body + mag)
 // ============================================================
 
-HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
+HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 local_offset,
                                         float extra_tilt_deg) const {
-    // Lerp between hip and ADS offset
+    // Lerp between hip and ADS offset (camera-relative)
     HMM_Vec3 offset = HMM_LerpV3(config.hip_offset, ads_blend, config.ads_offset);
 
-    // Apply recoil displacement
+    // Apply recoil displacement (camera-relative)
     offset.Z -= recoil_offset;        // kick backward
     offset.X += recoil_side;          // sideways shift
 
@@ -208,17 +208,14 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
         float p2 = config.reload_phase2;
 
         if (t < p1) {
-            // Phase 1 (MAG_OUT): gun drops down, 0→1 ease-in
             float local_t = t / p1;
             float ease = local_t * local_t;
             drop_blend = ease;
             tilt_blend = ease;
         } else if (t < p2) {
-            // Phase 2 (MAG_SWAP): gun stays fully dropped
             drop_blend = 1.0f;
             tilt_blend = 1.0f;
         } else {
-            // Phase 3 (GUN_UP): gun returns to idle, 1→0 ease-out
             float local_t = (t - p2) / (1.0f - p2);
             float ease = 1.0f - local_t * local_t;
             drop_blend = ease;
@@ -227,10 +224,7 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
     }
     offset.Y -= config.reload_drop_dist * drop_blend;
 
-    // Add extra offset (for mag separation — in camera-relative space)
-    offset = HMM_AddV3(offset, extra_offset);
-
-    // Build camera-relative position
+    // Build camera-relative world position (no local_offset here)
     HMM_Vec3 fwd   = cam.forward();
     HMM_Vec3 right = cam.right();
     HMM_Vec3 up    = HMM_Cross(right, fwd);
@@ -240,7 +234,7 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
             HMM_AddV3(HMM_MulV3F(up, offset.Y),
                        HMM_MulV3F(fwd, offset.Z))));
 
-    // Build rotation from camera orientation
+    // Camera orientation matrix
     HMM_Mat4 rot = HMM_M4D(1.0f);
     rot.Columns[0] = HMM_V4(right.X, right.Y, right.Z, 0.0f);
     rot.Columns[1] = HMM_V4(up.X,    up.Y,    up.Z,    0.0f);
@@ -250,7 +244,7 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
     HMM_Mat4 trans = HMM_Translate(world_pos);
     HMM_Mat4 scale = HMM_Scale(HMM_V3(config.model_scale, config.model_scale, config.model_scale));
 
-    // Model rotation correction
+    // Model rotation correction (Blender export fix)
     HMM_Mat4 fix = HMM_MulM4(
         HMM_Rotate_RH(HMM_AngleDeg(config.model_rotation.Z), HMM_V3(0, 0, 1)),
         HMM_MulM4(
@@ -258,6 +252,15 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
             HMM_Rotate_RH(HMM_AngleDeg(config.model_rotation.X), HMM_V3(1, 0, 0))
         )
     );
+
+    // Local-space translation: applied after scale*fix so the offset is
+    // relative to the mag's actual position on the gun model, not the
+    // gun's origin / camera position.
+    HMM_Mat4 local_trans = HMM_M4D(1.0f);
+    if (fabsf(local_offset.X) > 0.0001f || fabsf(local_offset.Y) > 0.0001f ||
+        fabsf(local_offset.Z) > 0.0001f) {
+        local_trans = HMM_Translate(local_offset);
+    }
 
     // Recoil rotation: pitch + roll tilt
     HMM_Mat4 recoil_rot = HMM_MulM4(
@@ -272,8 +275,11 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
         reload_rot = HMM_Rotate_RH(HMM_AngleDeg(total_tilt), HMM_V3(0, 0, 1));
     }
 
+    // Vertex transform order (rightmost first):
+    //   fix -> scale -> local_translate -> reload_rot -> recoil_rot -> rot -> trans
     return HMM_MulM4(trans, HMM_MulM4(rot, HMM_MulM4(recoil_rot,
-                      HMM_MulM4(reload_rot, HMM_MulM4(scale, fix)))));
+                      HMM_MulM4(reload_rot, HMM_MulM4(local_trans,
+                      HMM_MulM4(scale, fix))))));
 }
 
 // ============================================================
@@ -297,25 +303,27 @@ HMM_Mat4 Weapon::get_mag_matrix(const Camera& cam) const {
     float t = reload_progress;
     float p1 = config.reload_phase1;
     float p2 = config.reload_phase2;
-    HMM_Vec3 mag_extra = HMM_V3(0, 0, 0);
+
+    // Offsets in model local space (after fix rotation):
+    //   Y = gun's up axis, so -Y drops the mag straight down from its
+    //   attachment point, not from the gun's origin.
+    HMM_Vec3 local_off = HMM_V3(0, 0, 0);
 
     if (t < p1) {
-        // Phase 1: mag detaching — drops downward
+        // Phase 1: mag detaches and drops straight down
         float local_t = t / p1;
         float ease = local_t * local_t;
-        mag_extra.Y = -config.mag_drop_dist * ease;
+        local_off.Y = -config.mag_drop_dist * ease;
     } else if (t < p2) {
-        // Phase 2: new mag slides in from the gun's forward direction (below + behind)
+        // Phase 2: new mag slides up from directly below the mag well
         float local_t = (t - p1) / (p2 - p1);
         float ease = 1.0f - (1.0f - local_t) * (1.0f - local_t); // ease-out
         float remain = 1.0f - ease;
-        // Come from below (-Y) and from behind the gun (-Z in camera space = forward in world)
-        mag_extra.Y = -config.mag_insert_dist * remain * 0.5f;
-        mag_extra.Z = -config.mag_insert_dist * remain;
+        local_off.Y = -config.mag_insert_dist * remain;
     }
-    // Phase 3: mag attached, no extra offset
+    // Phase 3: mag attached, no offset
 
-    return build_base_transform(cam, mag_extra, 0.0f);
+    return build_base_transform(cam, local_off, 0.0f);
 }
 
 // ============================================================

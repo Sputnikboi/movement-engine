@@ -117,7 +117,9 @@ struct Weapon {
     float get_effective_fov(float base_fov) const;
 
 private:
-    // Build the common base transform (position, orientation, scale, model correction)
-    HMM_Mat4 build_base_transform(const Camera& cam, HMM_Vec3 extra_offset,
+    // Build the common base transform. local_offset is in model space
+    // (after scale*fix) so it moves geometry relative to its attachment
+    // point on the gun, not relative to the camera/gun origin.
+    HMM_Mat4 build_base_transform(const Camera& cam, HMM_Vec3 local_offset,
                                    float extra_tilt_deg) const;
 };
