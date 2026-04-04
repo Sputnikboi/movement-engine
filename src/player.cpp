@@ -437,11 +437,15 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
             wish_speed = air_wish_speed;
     }
 
-    // Accumulate air strafe time (used to gradually weaken lurch)
+    // Only count as air strafing if the input would actually add speed
+    // (same condition as accelerate: dot(vel, wish_dir) < wish_speed)
     if (wish_len > 0.001f) {
-        lurch_strafe_accum += dt;
-        if (lurch_strafe_accum > lurch_strafe_full_time)
-            lurch_strafe_accum = lurch_strafe_full_time;
+        float current_speed = HMM_DotV3(velocity, wish_dir);
+        if (current_speed < wish_speed) {
+            lurch_strafe_accum += dt;
+            if (lurch_strafe_accum > lurch_strafe_full_time)
+                lurch_strafe_accum = lurch_strafe_full_time;
+        }
     }
 
     accelerate(wish_dir, wish_speed, air_accel, dt);
