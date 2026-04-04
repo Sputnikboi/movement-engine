@@ -45,10 +45,10 @@ struct WeaponConfig {
     HMM_Vec3 ads_offset   = {0.0f, -0.125f, 0.3f};  // centered for ADS
 
     // Recoil
-    float recoil_kick       = 0.03f;    // backward displacement per shot
-    float recoil_pitch      = -30.0f;   // degrees per shot (negative = down in view)
-    float recoil_roll       = 5.0f;     // degrees tilt per shot
-    float recoil_side       = 0.01f;    // sideways displacement per shot
+    float recoil_kick       = 0.06f;    // backward displacement per shot
+    float recoil_pitch      = -20.0f;   // degrees per shot (negative = down in view)
+    float recoil_roll       = 8.0f;     // degrees tilt per shot
+    float recoil_side       = 0.045f;    // sideways displacement per shot
     float recoil_recovery   = 10.0f;    // recovery speed (1/s)
     float recoil_tilt_dir   = 1.0f;     // +1 = right tilt, -1 = left tilt
 
@@ -61,15 +61,15 @@ struct WeaponConfig {
 
     // Reload animation — 3 phases (fractions of reload_time)
     float reload_phase1 = 0.25f;   // mag_out end (0..0.25)
-    float reload_phase2 = 0.55f;   // mag_swap end (0.25..0.55)
+    float reload_phase2 = 0.80f;   // mag_swap end (0.25..0.55)
     // phase3 is remainder:          gun_up (0.55..1.0)
 
-    float reload_drop_dist  = 0.15f;   // how far gun drops during reload
+    float reload_drop_dist  = 0.140f;   // how far gun drops during reload
     float reload_tilt       = 25.0f;   // degrees of tilt during reload
 
     // Mag animation
-    float mag_drop_dist     = 0.4f;    // how far mag falls after detach
-    float mag_insert_dist   = 0.15f;   // how far new mag slides up from below
+    float mag_drop_dist     = 0.850f;    // how far mag falls after detach
+    float mag_insert_dist   = 0.6f;   // how far new mag slides up from below
 };
 
 // ============================================================
