@@ -5,7 +5,7 @@
 #include "vendor/HandmadeMath.h"
 
 // ============================================================
-//  Drone AI states (matches your Unity DroneEnemy)
+//  Drone AI states (matches Unity DroneEnemy)
 // ============================================================
 
 enum DroneState : uint8_t {
@@ -44,24 +44,30 @@ struct DroneConfig {
     float bob_amp_max        = 0.6f;
     float bob_freq_min       = 0.9f;
     float bob_freq_max       = 1.1f;
+
+    // Death ragdoll
+    float death_gravity      = 15.0f;
+    float death_drag         = 2.0f;
+    float death_tumble_speed = 8.0f;
+    float death_timeout      = 5.0f;  // max time before forced despawn
+
+    // Hit feedback
+    float hit_flash_time     = 0.15f; // seconds the drone flashes white on hit
 };
 
 // ============================================================
 //  Drone functions
 // ============================================================
 
-// Spawn a drone at a position. Returns the entity index, or -1 on failure.
 int drone_spawn(Entity entities[], int max_entities,
                 HMM_Vec3 position, const DroneConfig& config);
 
-// Update a single drone entity. May spawn a projectile.
+// Update a single drone entity. Uses CollisionWorld for world collision.
 void drone_update(Entity& drone, Entity entities[], int max_entities,
                   HMM_Vec3 player_pos, const CollisionWorld& world,
                   const DroneConfig& config, float dt, float total_time);
 
-// Update all projectiles.
 void projectiles_update(Entity entities[], int max_entities,
                         const CollisionWorld& world, float dt);
 
-// Simple random float in [lo, hi]
 float randf(float lo, float hi);

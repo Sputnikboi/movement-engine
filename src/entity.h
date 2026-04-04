@@ -47,6 +47,12 @@ struct Entity {
 
     // Death ragdoll
     float    death_timer  = 0.0f;
+    HMM_Vec3 angular_vel  = {};   // tumble spin during ragdoll
+    float    tumble_x     = 0.0f; // accumulated tumble angles
+    float    tumble_z     = 0.0f;
+
+    // Hit feedback
+    float    hit_flash    = 0.0f; // > 0 means flashing white
 };
 
 static constexpr int MAX_ENTITIES = 256;

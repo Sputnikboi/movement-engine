@@ -94,21 +94,40 @@ Mesh create_icosphere(int subdivisions) {
 //  Build entity mesh for rendering
 // ============================================================
 
-// Append a scaled/translated copy of the base sphere into out
+// Append a sphere with optional rotation (for tumbling ragdolls)
 static void append_sphere(Mesh& out, const Mesh& sphere,
                           HMM_Vec3 pos, float scale,
-                          float r, float g, float b)
+                          float r, float g, float b,
+                          float rot_x = 0.0f, float rot_z = 0.0f)
 {
     uint32_t base = static_cast<uint32_t>(out.vertices.size());
 
+    // Build rotation matrix if needed
+    bool has_rot = (fabsf(rot_x) > 0.001f || fabsf(rot_z) > 0.001f);
+    HMM_Mat4 rot_mat = HMM_M4D(1.0f);
+    if (has_rot) {
+        rot_mat = HMM_MulM4(
+            HMM_Rotate_RH(HMM_AngleDeg(rot_x), HMM_V3(1, 0, 0)),
+            HMM_Rotate_RH(HMM_AngleDeg(rot_z), HMM_V3(0, 0, 1))
+        );
+    }
+
     for (auto& sv : sphere.vertices) {
         Vertex3D v;
-        v.pos[0] = sv.pos[0] * scale + pos.X;
-        v.pos[1] = sv.pos[1] * scale + pos.Y;
-        v.pos[2] = sv.pos[2] * scale + pos.Z;
-        v.normal[0] = sv.normal[0];
-        v.normal[1] = sv.normal[1];
-        v.normal[2] = sv.normal[2];
+        HMM_Vec3 lp = HMM_V3(sv.pos[0] * scale, sv.pos[1] * scale, sv.pos[2] * scale);
+        HMM_Vec3 ln = HMM_V3(sv.normal[0], sv.normal[1], sv.normal[2]);
+        if (has_rot) {
+            HMM_Vec4 rp = HMM_MulM4V4(rot_mat, HMM_V4(lp.X, lp.Y, lp.Z, 1.0f));
+            lp = HMM_V3(rp.X, rp.Y, rp.Z);
+            HMM_Vec4 rn = HMM_MulM4V4(rot_mat, HMM_V4(ln.X, ln.Y, ln.Z, 0.0f));
+            ln = HMM_V3(rn.X, rn.Y, rn.Z);
+        }
+        v.pos[0] = lp.X + pos.X;
+        v.pos[1] = lp.Y + pos.Y;
+        v.pos[2] = lp.Z + pos.Z;
+        v.normal[0] = ln.X;
+        v.normal[1] = ln.Y;
+        v.normal[2] = ln.Z;
         v.color[0] = r;
         v.color[1] = g;
         v.color[2] = b;
@@ -136,7 +155,17 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities) {
             float r = 1.0f - hp_frac;
             float g = hp_frac * 0.5f + 0.2f;
             float b = 0.3f;
-            append_sphere(out, sphere, e.position, e.radius, r, g, b);
+
+            // Hit flash: lerp towards white
+            if (e.hit_flash > 0.0f) {
+                float flash = fminf(e.hit_flash * 6.0f, 1.0f); // quick in, fade out
+                r = r + (1.0f - r) * flash;
+                g = g + (1.0f - g) * flash;
+                b = b + (1.0f - b) * flash;
+            }
+
+            append_sphere(out, sphere, e.position, e.radius, r, g, b,
+                          e.tumble_x, e.tumble_z);
         } break;
 
         case EntityType::Projectile: {

@@ -537,12 +537,21 @@ int main(int argc, char* argv[]) {
                 if (best_idx >= 0) {
                     Entity& hit_ent = entities[best_idx];
                     hit_ent.health -= weapon.config.damage;
+                    hit_ent.hit_flash = drone_cfg.hit_flash_time;
+
                     if (hit_ent.health <= 0 && hit_ent.ai_state != DRONE_DYING) {
                         hit_ent.ai_state = DRONE_DYING;
-                        hit_ent.death_timer = 3.0f;
-                        hit_ent.velocity.Y = 2.0f;
+                        hit_ent.death_timer = 0.0f;
+                        // Pop upward + knockback from shot direction
+                        hit_ent.velocity.Y += 3.0f;
                         HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
                         hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
+                        // Random tumble spin
+                        hit_ent.angular_vel = HMM_V3(
+                            randf(-1.0f, 1.0f) * drone_cfg.death_tumble_speed * 57.3f,
+                            0.0f,
+                            randf(-1.0f, 1.0f) * drone_cfg.death_tumble_speed * 57.3f
+                        );
                     }
                 }
             }
@@ -811,10 +820,50 @@ int main(int argc, char* argv[]) {
                     for (int i = 0; i < MAX_ENTITIES; i++)
                         entities[i].alive = false;
                 }
-                ImGui::SliderFloat("Drone Health", &drone_cfg.drone_health, 1.0f, 100.0f);
-                ImGui::SliderFloat("Attack Range", &drone_cfg.attack_range, 5.0f, 50.0f);
-                ImGui::SliderFloat("Projectile Speed", &drone_cfg.projectile_speed, 5.0f, 50.0f);
-                ImGui::SliderFloat("Projectile Damage", &drone_cfg.projectile_damage, 1.0f, 20.0f);
+
+                // Count alive entities
+                int drone_count = 0, proj_count = 0;
+                for (int i = 0; i < MAX_ENTITIES; i++) {
+                    if (!entities[i].alive) continue;
+                    if (entities[i].type == EntityType::Drone) drone_count++;
+                    if (entities[i].type == EntityType::Projectile) proj_count++;
+                }
+                ImGui::Text("Drones: %d  Projectiles: %d", drone_count, proj_count);
+
+                ImGui::Separator();
+                ImGui::Text("Stats");
+                ImGui::SliderFloat("Drone Health",     &drone_cfg.drone_health,     1.0f, 200.0f);
+                ImGui::SliderFloat("Drone Radius",     &drone_cfg.drone_radius,     0.2f, 2.0f);
+                ImGui::SliderFloat("Attack Range",     &drone_cfg.attack_range,     5.0f, 50.0f);
+                ImGui::SliderFloat("Circle Distance",  &drone_cfg.circle_distance,  3.0f, 20.0f);
+                ImGui::SliderFloat("Attack Windup",    &drone_cfg.attack_windup,    0.1f, 3.0f, "%.2fs");
+
+                ImGui::Separator();
+                ImGui::Text("Movement");
+                ImGui::SliderFloat("Acceleration",     &drone_cfg.acceleration,     1.0f, 20.0f);
+                ImGui::SliderFloat("Chase Speed Min",  &drone_cfg.chase_speed_min,  1.0f, 20.0f);
+                ImGui::SliderFloat("Chase Speed Max",  &drone_cfg.chase_speed_max,  1.0f, 20.0f);
+                ImGui::SliderFloat("Circle Speed Min", &drone_cfg.circle_speed_min, 1.0f, 20.0f);
+                ImGui::SliderFloat("Circle Speed Max", &drone_cfg.circle_speed_max, 1.0f, 20.0f);
+
+                ImGui::Separator();
+                ImGui::Text("Hover");
+                ImGui::SliderFloat("Hover Force",      &drone_cfg.hover_force,      1.0f, 30.0f);
+                ImGui::SliderFloat("Hover Height Min", &drone_cfg.hover_height_min, 0.5f, 5.0f);
+                ImGui::SliderFloat("Hover Height Max", &drone_cfg.hover_height_max, 0.5f, 5.0f);
+                ImGui::SliderFloat("Bob Amplitude",    &drone_cfg.bob_amp_min,      0.0f, 2.0f);
+                ImGui::SliderFloat("Bob Frequency",    &drone_cfg.bob_freq_min,     0.1f, 3.0f);
+
+                ImGui::Separator();
+                ImGui::Text("Projectile");
+                ImGui::SliderFloat("Proj Speed",       &drone_cfg.projectile_speed,  5.0f, 50.0f);
+                ImGui::SliderFloat("Proj Damage",      &drone_cfg.projectile_damage, 1.0f, 50.0f);
+
+                ImGui::Separator();
+                ImGui::Text("Death");
+                ImGui::SliderFloat("Death Gravity",    &drone_cfg.death_gravity,     5.0f, 30.0f);
+                ImGui::SliderFloat("Tumble Speed",     &drone_cfg.death_tumble_speed,1.0f, 20.0f);
+                ImGui::SliderFloat("Hit Flash Time",   &drone_cfg.hit_flash_time,    0.05f, 0.5f, "%.2fs");
             }
 
             // --- Mouse ---
