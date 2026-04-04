@@ -245,11 +245,9 @@ void Player::try_slide(const InputState& input) {
 
 void Player::perform_lurch(const InputState& input) {
     if (lurch_timer <= 0.0f) return;
-    if (lurch_cooldown > 0.0f) return;  // suppressed by recent air strafing
     if (input.forward == 0.0f && input.right == 0.0f) return;
 
-    // Only fire on input CHANGE — but don't consume the timer,
-    // so every direction change during the window gets a lurch.
+    // Only fire on input CHANGE
     bool input_changed = (input.forward != prev_forward || input.right != prev_right);
     if (!input_changed) return;
 
@@ -264,10 +262,20 @@ void Player::perform_lurch(const InputState& input) {
 
     HMM_Vec3 cur_dir = HMM_MulV3F(hvel, 1.0f / hspeed);
 
-    // Lerp: at strength 0.5, redirects 50% toward input direction
+    // Scale lurch strength based on recent air strafe time.
+    // At 0 accumulated strafe: full power.
+    // At lurch_strafe_full_time accumulated: lurch_strafe_min_power fraction.
+    float strafe_frac = (lurch_strafe_full_time > 0.0f)
+        ? (lurch_strafe_accum / lurch_strafe_full_time)
+        : 0.0f;
+    if (strafe_frac > 1.0f) strafe_frac = 1.0f;
+    // Lerp from 1.0 (full power) down to min_power
+    float power = 1.0f - strafe_frac * (1.0f - lurch_strafe_min_power);
+    float effective_strength = lurch_strength * power;
+
     HMM_Vec3 new_dir = HMM_AddV3(
-        HMM_MulV3F(cur_dir, 1.0f - lurch_strength),
-        HMM_MulV3F(lurch_dir, lurch_strength)
+        HMM_MulV3F(cur_dir, 1.0f - effective_strength),
+        HMM_MulV3F(lurch_dir, effective_strength)
     );
     float new_len = HMM_LenV3(new_dir);
     if (new_len > 0.001f)
@@ -275,7 +283,6 @@ void Player::perform_lurch(const InputState& input) {
 
     velocity.X = new_dir.X * hspeed;
     velocity.Z = new_dir.Z * hspeed;
-    // Timer NOT consumed — unlimited lurches during the window
 }
 
 // ============================================================
@@ -430,9 +437,11 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
             wish_speed = air_wish_speed;
     }
 
-    // If there's air strafe input, suppress lurch for a duration
+    // Accumulate air strafe time (used to gradually weaken lurch)
     if (wish_len > 0.001f) {
-        lurch_cooldown = lurch_cooldown_after_strafe;
+        lurch_strafe_accum += dt;
+        if (lurch_strafe_accum > lurch_strafe_full_time)
+            lurch_strafe_accum = lurch_strafe_full_time;
     }
 
     accelerate(wish_dir, wish_speed, air_accel, dt);
@@ -450,7 +459,12 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
     // Tick timers
     if (slide_boost_timer > 0.0f) slide_boost_timer -= dt;
     if (lurch_timer > 0.0f) lurch_timer -= dt;
-    if (lurch_cooldown > 0.0f) lurch_cooldown -= dt;
+    // Decay strafe accumulator when not strafing (decays fully over the decay window)
+    if (lurch_strafe_decay_window > 0.0f) {
+        float decay_rate = lurch_strafe_full_time / lurch_strafe_decay_window;
+        lurch_strafe_accum -= decay_rate * dt;
+        if (lurch_strafe_accum < 0.0f) lurch_strafe_accum = 0.0f;
+    }
     if (sliding) slide_timer += dt;
 
     bool was_grounded = grounded;

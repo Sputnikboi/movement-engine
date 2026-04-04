@@ -53,7 +53,9 @@ struct Player {
     // --- Lurch parameters ---
     float lurch_window   = 0.5f;    // seconds after jump where lurch is active
     float lurch_strength = 0.5f;    // 0=no redirect, 1=full snap to input dir
-    float lurch_cooldown_after_strafe = 0.5f; // seconds lurch is disabled after air strafing
+    float lurch_strafe_decay_window = 1.5f;  // accumulator decays over this many seconds
+    float lurch_strafe_full_time   = 1.0f;   // seconds of strafing to reach min power
+    float lurch_strafe_min_power   = 0.1f;   // lurch power floor (fraction of full strength)
 
     // --- Ground check ---
     float ground_check_dist = 0.15f;
@@ -71,10 +73,10 @@ struct Player {
     bool  auto_hop       = false;
 
     // --- Lurch state ---
-    float lurch_timer    = 0.0f;
-    float lurch_cooldown = 0.0f;   // time remaining before lurch is allowed again
-    float prev_forward   = 0.0f;
-    float prev_right     = 0.0f;
+    float lurch_timer          = 0.0f;
+    float lurch_strafe_accum   = 0.0f;  // accumulated air strafe time (0 to lurch_strafe_full_time)
+    float prev_forward         = 0.0f;
+    float prev_right           = 0.0f;
 
     // --- Methods ---
     float current_height() const { return crouched ? height_crouch : height_stand; }
