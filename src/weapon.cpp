@@ -25,7 +25,7 @@ void Weapon::init_wingman() {
     config.recoil_recovery = 10.0f;
 
     config.model_scale     = 1.0f;
-    config.model_rotation  = HMM_V3(0.0f, 0.0f, 90.0f);
+    config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
 
     ammo  = config.mag_size;
     state = WeaponState::IDLE;

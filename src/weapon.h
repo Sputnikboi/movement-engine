@@ -42,7 +42,7 @@ struct WeaponConfig {
 
     // Viewmodel scale + rotation correction (degrees)
     float model_scale     = 1.0f;
-    HMM_Vec3 model_rotation = {0.0f, 0.0f, 90.0f};  // X, Y, Z degrees
+    HMM_Vec3 model_rotation = {0.0f, 90.0f, 0.0f};  // X, Y, Z degrees
 };
 
 // ============================================================
