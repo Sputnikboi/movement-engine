@@ -144,7 +144,10 @@ HMM_Mat4 Weapon::get_viewmodel_matrix(const Camera& cam) const {
     // Scale
     HMM_Mat4 scale = HMM_Scale(HMM_V3(config.model_scale, config.model_scale, config.model_scale));
 
-    return HMM_MulM4(trans, HMM_MulM4(rot, scale));
+    // Model correction: rotate +90 degrees on Z to fix Blender export orientation
+    HMM_Mat4 fix = HMM_Rotate_RH(HMM_AngleDeg(90.0f), HMM_V3(0.0f, 0.0f, 1.0f));
+
+    return HMM_MulM4(trans, HMM_MulM4(rot, HMM_MulM4(scale, fix)));
 }
 
 // ============================================================
