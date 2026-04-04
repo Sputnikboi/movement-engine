@@ -212,6 +212,12 @@ int main(int argc, char* argv[]) {
     bool jump_held = false;
     bool scroll_jump_pulse = false;  // one-frame pulse from scroll wheel
 
+    // Scroll wheel pulses for movement actions (persists for a few ticks)
+    float scroll_forward_pulse = 0.0f;  // +1 or -1 when wheel bound to forward/back
+    float scroll_right_pulse   = 0.0f;  // +1 or -1 when wheel bound to left/right
+    int   scroll_move_ticks    = 0;     // ticks remaining for scroll movement pulse
+    static constexpr int SCROLL_MOVE_TICK_COUNT = 3; // how many ticks a scroll pulse lasts
+
     // --- Key rebind state ---
     // -1 = not rebinding, otherwise action_index * SLOTS + slot
     int rebinding_action = -1;
@@ -315,6 +321,24 @@ int main(int argc, char* argv[]) {
                     InputCode wc = (event.wheel.y > 0) ? INPUT_MOUSE_WHEEL_UP : INPUT_MOUSE_WHEEL_DOWN;
                     if (kb.matches_wheel(Action::Jump, wc))
                         scroll_jump_pulse = true;
+
+                    // Movement actions from scroll wheel
+                    if (kb.matches_wheel(Action::MoveForward, wc)) {
+                        scroll_forward_pulse = 1.0f;
+                        scroll_move_ticks = SCROLL_MOVE_TICK_COUNT;
+                    }
+                    if (kb.matches_wheel(Action::MoveBack, wc)) {
+                        scroll_forward_pulse = -1.0f;
+                        scroll_move_ticks = SCROLL_MOVE_TICK_COUNT;
+                    }
+                    if (kb.matches_wheel(Action::MoveRight, wc)) {
+                        scroll_right_pulse = 1.0f;
+                        scroll_move_ticks = SCROLL_MOVE_TICK_COUNT;
+                    }
+                    if (kb.matches_wheel(Action::MoveLeft, wc)) {
+                        scroll_right_pulse = -1.0f;
+                        scroll_move_ticks = SCROLL_MOVE_TICK_COUNT;
+                    }
                 }
                 break;
 
@@ -378,6 +402,18 @@ int main(int argc, char* argv[]) {
             if (kb.held(Action::MoveBack,    keys)) input.forward -= 1.0f;
             if (kb.held(Action::MoveRight,   keys)) input.right   += 1.0f;
             if (kb.held(Action::MoveLeft,    keys)) input.right   -= 1.0f;
+
+            // Apply scroll wheel movement pulses
+            if (scroll_move_ticks > 0) {
+                input.forward += scroll_forward_pulse;
+                input.right   += scroll_right_pulse;
+                // Clamp to [-1, 1]
+                if (input.forward >  1.0f) input.forward =  1.0f;
+                if (input.forward < -1.0f) input.forward = -1.0f;
+                if (input.right   >  1.0f) input.right   =  1.0f;
+                if (input.right   < -1.0f) input.right   = -1.0f;
+            }
+
             input.jump_held   = jump_held || scroll_jump_pulse;
             input.crouch_held = kb.held(Action::Crouch, keys);
             input.yaw         = camera.yaw;
@@ -389,7 +425,22 @@ int main(int argc, char* argv[]) {
                 // Only clear scroll pulse after a tick actually ran and saw it
                 if (scroll_jump_pulse) {
                     scroll_jump_pulse = false;
-                    input.jump_held = jump_held;  // revert to keyboard-only for remaining ticks
+                    input.jump_held = jump_held;
+                }
+                // Tick down scroll movement pulse
+                if (scroll_move_ticks > 0) {
+                    scroll_move_ticks--;
+                    if (scroll_move_ticks <= 0) {
+                        scroll_forward_pulse = 0.0f;
+                        scroll_right_pulse   = 0.0f;
+                        // Recompute input without scroll pulses for remaining ticks
+                        input.forward = 0.0f;
+                        input.right   = 0.0f;
+                        if (kb.held(Action::MoveForward, keys)) input.forward += 1.0f;
+                        if (kb.held(Action::MoveBack,    keys)) input.forward -= 1.0f;
+                        if (kb.held(Action::MoveRight,   keys)) input.right   += 1.0f;
+                        if (kb.held(Action::MoveLeft,    keys)) input.right   -= 1.0f;
+                    }
                 }
             }
             // DON'T clear scroll_jump_pulse here — if no tick ran this frame,
