@@ -394,8 +394,10 @@ int main(int argc, char* argv[]) {
             fps_timer = 0.0f;
         }
 
-        if (!show_settings)
-            camera.mouse_look(mouse_dx, mouse_dy);
+        if (!show_settings) {
+            float sens_scale = 1.0f - weapon.ads_blend * (1.0f - weapon.config.ads_sens_mult);
+            camera.mouse_look(mouse_dx * sens_scale, mouse_dy * sens_scale);
+        }
 
         // Get keyboard state once per frame (used by movement, weapon, etc.)
         const bool* keys_frame = SDL_GetKeyboardState(nullptr);
@@ -741,8 +743,9 @@ int main(int argc, char* argv[]) {
                 ImGui::Separator();
 
                 ImGui::Text("ADS");
-                ImGui::SliderFloat("ADS FOV Mult", &weapon.config.ads_fov_mult, 0.5f, 1.0f, "%.2f");
-                ImGui::SliderFloat("ADS Speed",    &weapon.config.ads_speed,    1.0f, 20.0f);
+                ImGui::SliderFloat("ADS FOV Mult",  &weapon.config.ads_fov_mult,  0.5f, 1.0f, "%.2f");
+                ImGui::SliderFloat("ADS Sens Mult", &weapon.config.ads_sens_mult, 0.1f, 1.0f, "%.2f");
+                ImGui::SliderFloat("ADS Speed",     &weapon.config.ads_speed,     1.0f, 20.0f);
                 ImGui::Separator();
 
                 ImGui::Text("Recoil");

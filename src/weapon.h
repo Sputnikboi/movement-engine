@@ -29,6 +29,7 @@ struct WeaponConfig {
 
     // ADS
     float ads_fov_mult    = 0.8f;     // FOV multiplied by this when ADS
+    float ads_sens_mult   = 0.7f;     // sensitivity multiplied by this when ADS
     float ads_speed       = 8.0f;     // blend speed (1/s)
 
     // Viewmodel offsets (relative to camera)
