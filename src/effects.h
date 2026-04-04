@@ -49,7 +49,10 @@ struct EffectSystem {
     // Spawn death effect at position
     void spawn_drone_explosion(HMM_Vec3 pos);
 
-    // Append death effect geometry (sphere + torus) into an existing mesh.
-    // Goes through the normal opaque pipeline → proper depth testing.
+    // Append opaque death effect geometry (inner core + ring) into entity mesh.
     void append_to_mesh(Mesh& out) const;
+
+    // Append transparent death effect geometry (outer glow) into separate mesh.
+    // Rendered through the transparent pipeline (alpha blend, no depth write).
+    void append_transparent(Mesh& out) const;
 };

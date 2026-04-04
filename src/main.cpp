@@ -647,9 +647,13 @@ int main(int argc, char* argv[]) {
         // Update effects
         effects.update(dt);
 
-        // Build entity mesh for rendering + append death effect geometry
+        // Build entity mesh + opaque death effects
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES);
         effects.append_to_mesh(entity_mesh);
+
+        // Transparent death effects (outer glow)
+        Mesh transparent_mesh;
+        effects.append_transparent(transparent_mesh);
 
         // Empty — particle pipeline no-ops with 0 indices
         std::vector<ParticleVertex> particle_verts;
@@ -1102,9 +1106,10 @@ int main(int argc, char* argv[]) {
         uint32_t mag_start = weapon.has_mag_submesh ? weapon.mag_index_start : 0;
         uint32_t mag_count = weapon.has_mag_submesh ? weapon.mag_index_count : 0;
 
+        const Mesh* trans_ptr = transparent_mesh.indices.empty() ? nullptr : &transparent_mesh;
         renderer.draw_frame(scene, &entity_mesh, &particle_verts, &particle_indices,
                             total_time, vm_mesh_ptr, &vm_model, &vm_scene,
-                            mag_ptr, mag_start, mag_count);
+                            mag_ptr, mag_start, mag_count, trans_ptr);
     }
 
     config.pull(camera, player);

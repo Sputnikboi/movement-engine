@@ -2,10 +2,6 @@
 #include <cmath>
 #include <cstring>
 
-// ============================================================
-//  Init / update
-// ============================================================
-
 void EffectSystem::init() {
     memset(death_effects, 0, sizeof(death_effects));
 }
@@ -30,31 +26,31 @@ void EffectSystem::spawn_drone_explosion(HMM_Vec3 pos) {
             e.alive             = true;
             e.ball_start_radius = 1.2f;
             e.ring_max_radius   = 4.0f;
-            e.ring_tube_radius  = 0.2f;
+            e.ring_tube_radius  = 0.3f;
             return;
         }
     }
 }
 
 // ============================================================
-//  Geometry: emissive icosphere (normals = 0 → shader skips lighting)
+//  Emissive icosphere (normals encode: X=alpha, length<0.5)
 // ============================================================
 
 static void append_emissive_ball(Mesh& out, HMM_Vec3 center, float radius,
-                                 float r, float g, float b, int subdivisions = 0) {
+                                 float r, float g, float b, float alpha = 0.0f,
+                                 int subdivisions = 0) {
     if (radius < 0.001f) return;
 
     const float t = (1.0f + sqrtf(5.0f)) / 2.0f;
-    auto norm = [](float x, float y, float z) -> HMM_Vec3 {
+    auto vnorm = [](float x, float y, float z) -> HMM_Vec3 {
         float len = sqrtf(x*x + y*y + z*z);
         return HMM_V3(x/len, y/len, z/len);
     };
 
-    // Icosahedron base verts
     HMM_Vec3 base_verts[12] = {
-        norm(-1, t,0), norm(1, t,0), norm(-1,-t,0), norm(1,-t,0),
-        norm(0,-1, t), norm(0, 1, t), norm(0,-1,-t), norm(0, 1,-t),
-        norm( t,0,-1), norm( t,0, 1), norm(-t,0,-1), norm(-t,0, 1),
+        vnorm(-1, t,0), vnorm(1, t,0), vnorm(-1,-t,0), vnorm(1,-t,0),
+        vnorm(0,-1, t), vnorm(0, 1, t), vnorm(0,-1,-t), vnorm(0, 1,-t),
+        vnorm( t,0,-1), vnorm( t,0, 1), vnorm(-t,0,-1), vnorm(-t,0, 1),
     };
     std::vector<HMM_Vec3> verts(base_verts, base_verts + 12);
     std::vector<uint32_t> tris = {
@@ -64,24 +60,21 @@ static void append_emissive_ball(Mesh& out, HMM_Vec3 center, float radius,
         4,9,5, 2,4,11, 6,2,10, 8,6,7, 9,8,1,
     };
 
-    // Subdivide for smoother look
     for (int s = 0; s < subdivisions; s++) {
         std::vector<uint32_t> new_tris;
         new_tris.reserve(tris.size() * 4);
-        // Simple midpoint cache
-        struct PairHash { size_t operator()(uint64_t k) const { return k * 2654435761ULL; } };
-        std::vector<std::pair<uint64_t, uint32_t>> cache_vec;
+        std::vector<std::pair<uint64_t, uint32_t>> cache;
 
         auto get_mid = [&](uint32_t a, uint32_t b) -> uint32_t {
             uint64_t key = (a < b) ? ((uint64_t)a << 32 | b) : ((uint64_t)b << 32 | a);
-            for (auto& p : cache_vec)
+            for (auto& p : cache)
                 if (p.first == key) return p.second;
             HMM_Vec3 mid = HMM_MulV3F(HMM_AddV3(verts[a], verts[b]), 0.5f);
             float len = HMM_LenV3(mid);
             if (len > 0.0001f) mid = HMM_MulV3F(mid, 1.0f / len);
             uint32_t idx = (uint32_t)verts.size();
             verts.push_back(mid);
-            cache_vec.push_back({key, idx});
+            cache.push_back({key, idx});
             return idx;
         };
 
@@ -102,8 +95,10 @@ static void append_emissive_ball(Mesh& out, HMM_Vec3 center, float radius,
         v.pos[0] = verts[i].X * radius + center.X;
         v.pos[1] = verts[i].Y * radius + center.Y;
         v.pos[2] = verts[i].Z * radius + center.Z;
-        // Zero normal = emissive flag (shader skips lighting)
-        v.normal[0] = 0.0f; v.normal[1] = 0.0f; v.normal[2] = 0.0f;
+        // Emissive: normal.x = alpha (0 = opaque), length < 0.5
+        v.normal[0] = alpha;
+        v.normal[1] = 0.0f;
+        v.normal[2] = 0.0f;
         v.color[0] = r; v.color[1] = g; v.color[2] = b;
         out.vertices.push_back(v);
     }
@@ -112,13 +107,13 @@ static void append_emissive_ball(Mesh& out, HMM_Vec3 center, float radius,
 }
 
 // ============================================================
-//  Geometry: emissive torus (normals = 0)
+//  Emissive torus
 // ============================================================
 
 static void append_emissive_torus(Mesh& out, HMM_Vec3 center,
                                    float major_r, float minor_r,
-                                   float r, float g, float b,
-                                   int seg_major = 24, int seg_minor = 8) {
+                                   float r, float g, float b, float alpha = 0.0f,
+                                   int seg_major = 24, int seg_minor = 10) {
     if (major_r < 0.001f || minor_r < 0.001f) return;
 
     uint32_t base = static_cast<uint32_t>(out.vertices.size());
@@ -127,20 +122,17 @@ static void append_emissive_torus(Mesh& out, HMM_Vec3 center,
     for (int i = 0; i <= seg_major; i++) {
         float theta = (float)i / seg_major * PI2;
         float ct = cosf(theta), st = sinf(theta);
-
         for (int j = 0; j <= seg_minor; j++) {
             float phi = (float)j / seg_minor * PI2;
             float cp = cosf(phi), sp = sinf(phi);
 
-            float px = (major_r + minor_r * cp) * ct;
-            float pz = (major_r + minor_r * cp) * st;
-            float py = minor_r * sp;
-
             Vertex3D v;
-            v.pos[0] = px + center.X;
-            v.pos[1] = py + center.Y;
-            v.pos[2] = pz + center.Z;
-            v.normal[0] = 0.0f; v.normal[1] = 0.0f; v.normal[2] = 0.0f;
+            v.pos[0] = (major_r + minor_r * cp) * ct + center.X;
+            v.pos[1] = minor_r * sp + center.Y;
+            v.pos[2] = (major_r + minor_r * cp) * st + center.Z;
+            v.normal[0] = alpha;
+            v.normal[1] = 0.0f;
+            v.normal[2] = 0.0f;
             v.color[0] = r; v.color[1] = g; v.color[2] = b;
             out.vertices.push_back(v);
         }
@@ -164,50 +156,57 @@ static void append_emissive_torus(Mesh& out, HMM_Vec3 center,
 }
 
 // ============================================================
-//  Build death effect geometry
+//  Opaque effect geometry: inner core ball + expanding torus ring
 // ============================================================
 
 void EffectSystem::append_to_mesh(Mesh& out) const {
     for (int i = 0; i < MAX_DEATH_EFFECTS; i++) {
         const DeathEffect& e = death_effects[i];
         if (!e.alive) continue;
+        float t = e.age / e.lifetime;
 
-        float t = e.age / e.lifetime; // 0..1
-
-        // --- Outer glow layer: larger, dimmer, fades faster ---
-        // Gives the "fireball" a soft semi-transparent look via darker color
-        {
-            float outer_t = t * t;
-            // Starts larger than inner, collapses at same rate
-            float outer_r = e.ball_start_radius * 1.6f * (1.0f - outer_t);
-            // Dim orange-red that fades out (simulates transparency via dark color)
-            float fade = (1.0f - t) * 0.4f;
-            append_emissive_ball(out, e.position, outer_r,
-                                0.6f * fade, 0.2f * fade, 0.02f * fade, 1);
-        }
-
-        // --- Inner hot core: bright, collapses ---
+        // Inner hot core (opaque, emissive)
         {
             float ball_t = t * t;
             float ball_r = e.ball_start_radius * (1.0f - ball_t);
-            float white_blend = t * 0.6f;
-            float br = 1.0f;
-            float bg = 0.85f + white_blend * 0.15f;
-            float bb = 0.15f + white_blend * 0.85f;
-            // Boost brightness
-            br *= 1.3f; bg *= 1.3f; bb *= 1.0f;
-            append_emissive_ball(out, e.position, ball_r, br, bg, bb, 1);
+            float white = t * 0.6f;
+            append_emissive_ball(out, e.position, ball_r,
+                                1.3f, 0.85f + white * 0.45f, 0.15f + white * 0.85f,
+                                0.0f, 1); // alpha=0 → shader outputs 1.0 (opaque)
         }
 
-        // --- Expanding solid donut ring ---
+        // Expanding solid torus ring (opaque, emissive)
         {
             float ring_t = 1.0f - (1.0f - t) * (1.0f - t);
             float major_r = e.ring_max_radius * ring_t;
-            float tube_r = e.ring_tube_radius * (1.0f - t * 0.5f);
-            // Bright yellow-orange, fades
+            float tube_r = e.ring_tube_radius * (1.0f - t * 0.3f);
             float fade = 1.0f - t * 0.7f;
             append_emissive_torus(out, e.position, major_r, tube_r,
-                                  1.0f * fade, 0.7f * fade, 0.1f * fade);
+                                  1.0f * fade, 0.7f * fade, 0.1f * fade,
+                                  0.0f); // opaque
+        }
+    }
+}
+
+// ============================================================
+//  Transparent effect geometry: outer glow sphere
+// ============================================================
+
+void EffectSystem::append_transparent(Mesh& out) const {
+    for (int i = 0; i < MAX_DEATH_EFFECTS; i++) {
+        const DeathEffect& e = death_effects[i];
+        if (!e.alive) continue;
+        float t = e.age / e.lifetime;
+
+        // Outer glow layer — larger, transparent, fades out
+        {
+            float outer_t = t * t;
+            float outer_r = e.ball_start_radius * 1.8f * (1.0f - outer_t);
+            float alpha = (1.0f - t) * 0.45f; // starts semi-transparent, fades
+            // Warm orange-red glow
+            append_emissive_ball(out, e.position, outer_r,
+                                1.0f, 0.4f, 0.05f,
+                                alpha, 1);
         }
     }
 }

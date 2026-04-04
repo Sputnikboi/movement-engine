@@ -99,6 +99,7 @@ bool Renderer::init(SDL_Window* window, const Mesh& level_mesh) {
     if (!create_render_pass())           return false;
     if (!create_descriptor_set_layout()) return false;
     if (!create_pipeline())              return false;
+    if (!create_transparent_pipeline())  return false;
     if (!create_particle_pipeline())     return false;
     if (!create_framebuffers())          return false;
     if (!create_command_pool())          return false;
@@ -187,8 +188,13 @@ void Renderer::shutdown() {
 
     vkDestroyPipeline(device_, pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+    vkDestroyPipeline(device_, transparent_pipeline_, nullptr);
     vkDestroyPipeline(device_, particle_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, particle_layout_, nullptr);
+
+    // Transparent mesh buffers
+    if (transparent_vb_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, transparent_vb_, nullptr); vkFreeMemory(device_, transparent_vb_mem_, nullptr); }
+    if (transparent_ib_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, transparent_ib_, nullptr); vkFreeMemory(device_, transparent_ib_mem_, nullptr); }
 
     // Particle buffers
     if (particle_vb_ != VK_NULL_HANDLE) { vkDestroyBuffer(device_, particle_vb_, nullptr); vkFreeMemory(device_, particle_vb_mem_, nullptr); }
@@ -776,6 +782,122 @@ bool Renderer::create_pipeline() {
 // ============================================================
 
 // ============================================================
+//  Transparent mesh pipeline (alpha blend, depth test, no depth write, no cull)
+//  Uses the same shaders and layout as the opaque mesh pipeline.
+// ============================================================
+
+bool Renderer::create_transparent_pipeline() {
+    VkShaderModule vert = load_shader(SHADER_DIR "mesh.vert.spv");
+    VkShaderModule frag = load_shader(SHADER_DIR "mesh.frag.spv");
+    if (!vert || !frag) return false;
+
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = vert;
+    stages[0].pName  = "main";
+    stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = frag;
+    stages[1].pName  = "main";
+
+    // Same vertex layout as opaque mesh
+    VkVertexInputBindingDescription binding{};
+    binding.binding   = 0;
+    binding.stride    = sizeof(Vertex3D);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attrs[3]{};
+    attrs[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex3D, pos)};
+    attrs[1] = {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex3D, normal)};
+    attrs[2] = {2, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex3D, color)};
+
+    VkPipelineVertexInputStateCreateInfo vertex_input{};
+    vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input.vertexBindingDescriptionCount   = 1;
+    vertex_input.pVertexBindingDescriptions      = &binding;
+    vertex_input.vertexAttributeDescriptionCount = 3;
+    vertex_input.pVertexAttributeDescriptions    = attrs;
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+    input_assembly.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkDynamicState dyn_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo dynamic{};
+    dynamic.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic.dynamicStateCount = 2;
+    dynamic.pDynamicStates    = dyn_states;
+
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.scissorCount  = 1;
+
+    VkPipelineRasterizationStateCreateInfo raster{};
+    raster.sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    raster.polygonMode = VK_POLYGON_MODE_FILL;
+    raster.lineWidth   = 1.0f;
+    raster.cullMode    = VK_CULL_MODE_NONE; // no culling for transparent geo
+    raster.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    VkPipelineMultisampleStateCreateInfo ms{};
+    ms.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // Depth test ON, depth write OFF (transparent draws behind opaques but doesn't block)
+    VkPipelineDepthStencilStateCreateInfo depth_stencil{};
+    depth_stencil.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil.depthTestEnable       = VK_TRUE;
+    depth_stencil.depthWriteEnable      = VK_FALSE;
+    depth_stencil.depthCompareOp        = VK_COMPARE_OP_LESS;
+    depth_stencil.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil.stencilTestEnable     = VK_FALSE;
+
+    // Standard alpha blending: src*srcAlpha + dst*(1-srcAlpha)
+    VkPipelineColorBlendAttachmentState blend_att{};
+    blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                             | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_att.blendEnable         = VK_TRUE;
+    blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend_att.colorBlendOp        = VK_BLEND_OP_ADD;
+    blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blend_att.alphaBlendOp        = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo blend{};
+    blend.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blend.attachmentCount = 1;
+    blend.pAttachments    = &blend_att;
+
+    VkGraphicsPipelineCreateInfo pi{};
+    pi.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pi.stageCount          = 2;
+    pi.pStages             = stages;
+    pi.pVertexInputState   = &vertex_input;
+    pi.pInputAssemblyState = &input_assembly;
+    pi.pViewportState      = &viewport_state;
+    pi.pRasterizationState = &raster;
+    pi.pMultisampleState   = &ms;
+    pi.pDepthStencilState  = &depth_stencil;
+    pi.pColorBlendState    = &blend;
+    pi.pDynamicState       = &dynamic;
+    pi.layout              = pipeline_layout_;   // same layout as opaque
+    pi.renderPass          = render_pass_;
+    pi.subpass             = 0;
+
+    if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pi, nullptr, &transparent_pipeline_) != VK_SUCCESS) {
+        fprintf(stderr, "vkCreateGraphicsPipelines (transparent) failed\n");
+        return false;
+    }
+
+    vkDestroyShaderModule(device_, vert, nullptr);
+    vkDestroyShaderModule(device_, frag, nullptr);
+    return true;
+}
+
+// ============================================================
 //  Particle pipeline (additive blend, no depth write, cull off)
 // ============================================================
 
@@ -1294,6 +1416,44 @@ void Renderer::upload_viewmodel_mesh(const Mesh& mesh) {
     viewmodel_uploaded_ = true;
 }
 
+void Renderer::upload_transparent_mesh(const Mesh& mesh) {
+    transparent_idx_count_ = static_cast<uint32_t>(mesh.indices.size());
+    if (transparent_idx_count_ == 0) return;
+
+    VkDeviceSize vb_size = sizeof(Vertex3D) * mesh.vertices.size();
+    VkDeviceSize ib_size = sizeof(uint32_t) * mesh.indices.size();
+
+    if (vb_size > transparent_vb_cap_) {
+        if (transparent_vb_ != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device_, transparent_vb_, nullptr);
+            vkFreeMemory(device_, transparent_vb_mem_, nullptr);
+        }
+        transparent_vb_cap_ = vb_size * 2;
+        create_buffer(transparent_vb_cap_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      transparent_vb_, transparent_vb_mem_);
+    }
+    if (ib_size > transparent_ib_cap_) {
+        if (transparent_ib_ != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device_, transparent_ib_, nullptr);
+            vkFreeMemory(device_, transparent_ib_mem_, nullptr);
+        }
+        transparent_ib_cap_ = ib_size * 2;
+        create_buffer(transparent_ib_cap_, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      transparent_ib_, transparent_ib_mem_);
+    }
+
+    void* data;
+    vkMapMemory(device_, transparent_vb_mem_, 0, vb_size, 0, &data);
+    memcpy(data, mesh.vertices.data(), vb_size);
+    vkUnmapMemory(device_, transparent_vb_mem_);
+
+    vkMapMemory(device_, transparent_ib_mem_, 0, ib_size, 0, &data);
+    memcpy(data, mesh.indices.data(), ib_size);
+    vkUnmapMemory(device_, transparent_ib_mem_);
+}
+
 void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                           const std::vector<ParticleVertex>* particle_verts,
                           const std::vector<uint32_t>* particle_indices,
@@ -1303,7 +1463,8 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                           const SceneData* viewmodel_scene,
                           const HMM_Mat4* viewmodel_mag_model,
                           uint32_t mag_index_start,
-                          uint32_t mag_index_count) {
+                          uint32_t mag_index_count,
+                          const Mesh* transparent_mesh) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
     // Use a separate semaphore per swapchain image to avoid reusing one
@@ -1394,6 +1555,34 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                                sizeof(HMM_Mat4), &model);
 
             vkCmdDrawIndexed(cmd, entity_idx_count_, 1, 0, 0, 0);
+        }
+    }
+
+    // Draw transparent geometry (after all opaques, before viewmodel)
+    if (transparent_mesh && !transparent_mesh->indices.empty()) {
+        upload_transparent_mesh(*transparent_mesh);
+
+        if (transparent_idx_count_ > 0) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparent_pipeline_);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    pipeline_layout_, 0, 1,
+                                    &descriptor_sets_[current_frame_], 0, nullptr);
+
+            VkBuffer     tbufs[] = {transparent_vb_};
+            VkDeviceSize toffs[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, tbufs, toffs);
+            vkCmdBindIndexBuffer(cmd, transparent_ib_, 0, VK_INDEX_TYPE_UINT32);
+
+            vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                               sizeof(HMM_Mat4), &model);
+
+            vkCmdDrawIndexed(cmd, transparent_idx_count_, 1, 0, 0, 0);
+
+            // Re-bind opaque pipeline for viewmodel
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    pipeline_layout_, 0, 1,
+                                    &descriptor_sets_[current_frame_], 0, nullptr);
         }
     }
 

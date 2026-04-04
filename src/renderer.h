@@ -32,7 +32,8 @@ public:
                     const SceneData* viewmodel_scene = nullptr,
                     const HMM_Mat4* viewmodel_mag_model = nullptr,
                     uint32_t mag_index_start = 0,
-                    uint32_t mag_index_count = 0);
+                    uint32_t mag_index_count = 0,
+                    const Mesh* transparent_mesh = nullptr);
     void wait_idle();
     void reload_mesh(const Mesh& new_mesh);
     void on_resize() { resize_requested_ = true; }
@@ -83,6 +84,10 @@ private:
     VkPipelineLayout      pipeline_layout_ = VK_NULL_HANDLE;
     VkPipeline            pipeline_        = VK_NULL_HANDLE;
 
+    // Transparent mesh pipeline (alpha blend, depth test on, depth write off)
+    VkPipeline            transparent_pipeline_ = VK_NULL_HANDLE;
+    // Uses same pipeline_layout_ as opaque mesh pipeline
+
     // Particle pipeline (additive blend, no depth write)
     VkPipelineLayout      particle_layout_   = VK_NULL_HANDLE;
     VkPipeline            particle_pipeline_ = VK_NULL_HANDLE;
@@ -115,6 +120,17 @@ private:
     VkDeviceSize   entity_ib_capacity_ = 0;
 
     void upload_entity_mesh(const Mesh& mesh);
+
+    // --- Transparent mesh buffers (dynamic, same pattern as entity) ---
+    VkBuffer       transparent_vb_        = VK_NULL_HANDLE;
+    VkDeviceMemory transparent_vb_mem_    = VK_NULL_HANDLE;
+    VkBuffer       transparent_ib_        = VK_NULL_HANDLE;
+    VkDeviceMemory transparent_ib_mem_    = VK_NULL_HANDLE;
+    uint32_t       transparent_idx_count_ = 0;
+    VkDeviceSize   transparent_vb_cap_    = 0;
+    VkDeviceSize   transparent_ib_cap_    = 0;
+
+    void upload_transparent_mesh(const Mesh& mesh);
 
     // --- Viewmodel buffers (dynamic, same pattern as entity) ---
     VkBuffer       viewmodel_vb_        = VK_NULL_HANDLE;
@@ -165,6 +181,7 @@ private:
     bool create_render_pass();
     bool create_descriptor_set_layout();
     bool create_pipeline();
+    bool create_transparent_pipeline();
     bool create_particle_pipeline();
     bool create_framebuffers();
     bool create_command_pool();
