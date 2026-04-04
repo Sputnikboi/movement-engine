@@ -647,13 +647,13 @@ int main(int argc, char* argv[]) {
         // Update effects
         effects.update(dt);
 
-        // Build entity mesh for rendering
+        // Build entity mesh for rendering + append death effect geometry
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES);
+        effects.append_to_mesh(entity_mesh);
 
-        // Build particle data
+        // Empty — particle pipeline no-ops with 0 indices
         std::vector<ParticleVertex> particle_verts;
         std::vector<uint32_t> particle_indices;
-        effects.build_vertices(particle_verts, particle_indices);
 
         // --- ImGui frame ---
         ImGui_ImplVulkan_NewFrame();
