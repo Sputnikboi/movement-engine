@@ -39,62 +39,94 @@ void EffectSystem::spawn(HMM_Vec3 pos, HMM_Vec3 vel, HMM_Vec3 color,
 // ============================================================
 
 void EffectSystem::spawn_drone_explosion(HMM_Vec3 pos) {
-    // --- Expanding ring ---
-    spawn(pos, HMM_V3(0, 0, 0),
-          HMM_V3(1.0f, 0.5f, 0.1f),   // orange tint
-          0.3f, 3.0f,                   // start small, expand to 3m
-          0.8f,                         // lifetime
-          0.0f);                        // type = ring
-
-    // --- Core flash ---
-    spawn(pos, HMM_V3(0, 0, 0),
-          HMM_V3(1.0f, 0.9f, 0.6f),   // bright warm white
-          0.5f, 0.1f,                   // start big, shrink
-          0.3f,                         // short lifetime
-          1.0f);                        // type = particle
-
-    // --- Scattered debris particles (8-12) ---
-    int count = 8 + static_cast<int>(randf(0, 4));
-    for (int i = 0; i < count; i++) {
-        // Random direction
+    // --- Central fire sphere: multiple overlapping particles expanding outward ---
+    // Simulates a 3D fireball by spawning particles in all directions
+    for (int i = 0; i < 20; i++) {
+        // Uniform sphere distribution
         float theta = randf(0, 6.283f);
-        float phi   = randf(-0.5f, 1.0f);
-        float speed = randf(3.0f, 8.0f);
+        float phi   = randf(-1.0f, 1.0f);
+        float r     = sqrtf(1.0f - phi * phi);
+        float speed = randf(2.0f, 5.0f);
+
+        HMM_Vec3 dir = HMM_V3(r * cosf(theta), phi, r * sinf(theta));
+        HMM_Vec3 vel = HMM_MulV3F(dir, speed);
+
+        // Color: hot core (white/yellow) to outer fire (orange/red)
+        float heat = randf(0.0f, 1.0f);
+        HMM_Vec3 col = HMM_V3(
+            1.0f,
+            0.3f + heat * 0.6f,    // yellow at high heat, orange at low
+            heat * 0.3f             // slight white at high heat
+        );
+
+        float sz = randf(0.4f, 0.8f);
+        spawn(pos, vel, col, sz, sz * 2.0f, randf(0.3f, 0.7f), 1.0f);
+    }
+
+    // --- Bright core flash ---
+    spawn(pos, HMM_V3(0, 0, 0),
+          HMM_V3(1.0f, 0.95f, 0.8f),  // near-white hot
+          1.0f, 0.1f,                   // big start, shrink fast
+          0.25f,                        // very short
+          1.0f);
+
+    // --- Expanding ground ring (horizontal) ---
+    // Multiple ring particles at slightly different sizes for thickness
+    for (int i = 0; i < 3; i++) {
+        float delay_size = 0.2f + i * 0.15f;
+        spawn(pos, HMM_V3(0, 0, 0),
+              HMM_V3(1.0f, 0.4f + i * 0.1f, 0.05f),  // orange, slightly varied
+              delay_size, 4.0f + i * 0.5f,              // expand to ~4-5m
+              0.6f + i * 0.15f,                          // staggered lifetime
+              0.0f);                                     // type = ring
+    }
+
+    // --- Upward fire column ---
+    for (int i = 0; i < 6; i++) {
+        float theta = randf(0, 6.283f);
+        float spread = randf(0.0f, 0.8f);
+        HMM_Vec3 vel = HMM_V3(
+            cosf(theta) * spread,
+            randf(4.0f, 10.0f),   // strong upward
+            sinf(theta) * spread
+        );
+        HMM_Vec3 col = HMM_V3(
+            randf(0.9f, 1.0f),
+            randf(0.3f, 0.5f),
+            randf(0.0f, 0.1f)
+        );
+        float sz = randf(0.3f, 0.6f);
+        spawn(pos, vel, col, sz, sz * 0.5f, randf(0.4f, 0.9f), 1.0f);
+    }
+
+    // --- Debris / embers flung outward ---
+    int debris_count = 10 + static_cast<int>(randf(0, 6));
+    for (int i = 0; i < debris_count; i++) {
+        float theta = randf(0, 6.283f);
+        float phi   = randf(-0.3f, 0.8f);
+        float speed = randf(4.0f, 12.0f);
 
         HMM_Vec3 vel = HMM_V3(
             cosf(theta) * cosf(phi) * speed,
-            sinf(phi) * speed * 0.5f + 2.0f,  // bias upward
+            sinf(phi) * speed + 3.0f,
             sinf(theta) * cosf(phi) * speed
         );
-
-        // Color variation: orange to red
-        HMM_Vec3 col = HMM_V3(
-            randf(0.8f, 1.0f),
-            randf(0.2f, 0.6f),
-            randf(0.0f, 0.15f)
-        );
-
-        float sz = randf(0.15f, 0.4f);
-        float life = randf(0.5f, 1.2f);
-
-        spawn(pos, vel, col, sz, sz * 0.3f, life, 1.0f);
+        HMM_Vec3 col = HMM_V3(randf(0.8f, 1.0f), randf(0.15f, 0.4f), 0.0f);
+        float sz = randf(0.08f, 0.2f);
+        spawn(pos, vel, col, sz, sz * 0.2f, randf(0.6f, 1.5f), 1.0f);
     }
 
-    // --- Smoke-ish particles (slower, darker, longer lived) ---
-    for (int i = 0; i < 4; i++) {
+    // --- Dark smoke (rises slowly, lasts longer) ---
+    for (int i = 0; i < 5; i++) {
         float theta = randf(0, 6.283f);
-        float speed = randf(0.5f, 2.0f);
-
         HMM_Vec3 vel = HMM_V3(
-            cosf(theta) * speed,
-            randf(1.0f, 3.0f),
-            sinf(theta) * speed
+            cosf(theta) * randf(0.3f, 1.0f),
+            randf(1.5f, 4.0f),
+            sinf(theta) * randf(0.3f, 1.0f)
         );
-
-        HMM_Vec3 col = HMM_V3(0.4f, 0.25f, 0.1f);  // dark orange/brown
-        float sz = randf(0.3f, 0.6f);
-
-        spawn(pos, vel, col, sz, sz * 1.5f, randf(0.8f, 1.5f), 1.0f);
+        HMM_Vec3 col = HMM_V3(0.3f, 0.18f, 0.08f);
+        float sz = randf(0.4f, 0.8f);
+        spawn(pos, vel, col, sz, sz * 2.0f, randf(1.0f, 2.0f), 1.0f);
     }
 }
 

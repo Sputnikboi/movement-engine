@@ -12,7 +12,8 @@ enum DroneState : uint8_t {
     DRONE_CHASING   = 0,
     DRONE_CIRCLING  = 1,
     DRONE_ATTACKING = 2,
-    DRONE_DEAD      = 3,
+    DRONE_DYING     = 3,
+    DRONE_DEAD      = 4,
 };
 
 // ============================================================

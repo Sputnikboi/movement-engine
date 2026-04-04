@@ -44,6 +44,9 @@ struct Entity {
     float    bob_amp      = 0.5f;
     float    bob_freq     = 1.0f;
     float    bob_seed     = 0.0f;
+
+    // Death ragdoll
+    float    death_timer  = 0.0f;
 };
 
 static constexpr int MAX_ENTITIES = 256;

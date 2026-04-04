@@ -437,24 +437,47 @@ int main(int argc, char* argv[]) {
             if (best_idx >= 0) {
                 Entity& hit_ent = entities[best_idx];
                 hit_ent.health -= 10.0f;  // hitscan damage
-                if (hit_ent.health <= 0) {
-                    effects.spawn_drone_explosion(hit_ent.position);
-                    hit_ent.alive = false;
-                    printf("Drone killed!\n");
+                if (hit_ent.health <= 0 && hit_ent.ai_state != DRONE_DYING) {
+                    // Enter dying state — ragdoll fall before explosion
+                    hit_ent.ai_state = DRONE_DYING;
+                    hit_ent.death_timer = 3.0f;  // max fall time before forced explode
+                    hit_ent.velocity.Y = 2.0f;   // slight upward pop
+                    // Add knockback from shot direction
+                    HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
+                    hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
                 }
             }
         }
         shoot_pressed = false;  // consume
 
         // --- Update entities ---
+        // Track dying drones to spawn explosions when they hit ground
+        struct DyingDrone { int idx; HMM_Vec3 pos; bool was_alive; };
+        DyingDrone dying[MAX_ENTITIES];
+        int dying_count = 0;
+
         for (int i = 0; i < MAX_ENTITIES; i++) {
             Entity& e = entities[i];
             if (!e.alive) continue;
             if (e.type == EntityType::Drone) {
+                if (e.ai_state == DRONE_DYING) {
+                    dying[dying_count++] = {i, e.position, true};
+                }
                 drone_update(e, entities, MAX_ENTITIES,
                              player.position, collision, drone_cfg, dt, total_time);
             }
         }
+
+        // Check which dying drones just expired
+        for (int d = 0; d < dying_count; d++) {
+            Entity& e = entities[dying[d].idx];
+            if (!e.alive && dying[d].was_alive) {
+                // Drone just died — spawn explosion at final position
+                effects.spawn_drone_explosion(dying[d].pos);
+                printf("Drone exploded!\n");
+            }
+        }
+
         projectiles_update(entities, MAX_ENTITIES, collision, dt);
 
         // Check projectile-player collision

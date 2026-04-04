@@ -235,11 +235,33 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
         }
     } break;
 
+    case DRONE_DYING: {
+        // Ragdoll: gravity + some tumble, no AI
+        drone.velocity.Y -= 15.0f * dt;  // gravity
+        drone.velocity.X *= (1.0f - 2.0f * dt);  // drag
+        drone.velocity.Z *= (1.0f - 2.0f * dt);
+        drone.yaw += 8.0f * dt;  // spin
+
+        drone.position = HMM_AddV3(drone.position, HMM_MulV3F(drone.velocity, dt));
+
+        // Check ground hit
+        HitResult ground_hit = world.raycast(drone.position, HMM_V3(0, -1, 0), 0.5f);
+        drone.death_timer -= dt;
+
+        if (ground_hit.hit || drone.death_timer <= 0.0f) {
+            drone.ai_state = DRONE_DEAD;
+            drone.alive = false;
+            // Return -1 sentinel that main.cpp checks for explosion spawn
+            // (handled externally — we just mark it dead at this position)
+        }
+        return;  // skip hover/bob
+    } break;
+
     case DRONE_DEAD:
         break;
     }
 
-    // Apply hover and bob
+    // Apply hover and bob (only for alive states)
     apply_hover_bob(drone, world, cfg, total_time);
 
     // Move
