@@ -318,28 +318,69 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     // --- Sliding ---
     if (sliding) {
-        // Low friction, no acceleration (you're sliding on momentum)
+        bool on_slope = (ground_normal.Y < 0.99f && ground_normal.Y > 0.7f);
+
+        // Downhill slope boost: project gravity onto slope surface.
+        // This gives a tangential acceleration vector pointing downhill.
+        if (on_slope) {
+            // Gravity vector projected onto slope: g - n*(g·n)
+            float gn = -gravity * ground_normal.Y;  // dot(gravity_vec, normal), gravity_vec = (0,-g,0)
+            HMM_Vec3 slope_accel = HMM_V3(
+                -ground_normal.X * gn,
+                -(-gravity) - (-ground_normal.Y * gn),
+                -ground_normal.Z * gn
+            );
+            // Simpler: tangential component of gravity along the slope
+            // slope_dir = normalize(gravity - normal * dot(gravity, normal))
+            HMM_Vec3 grav = HMM_V3(0.0f, -gravity, 0.0f);
+            float d = HMM_DotV3(grav, ground_normal);
+            HMM_Vec3 slope_gravity = HMM_SubV3(grav, HMM_MulV3F(ground_normal, d));
+            // slope_gravity points downhill with magnitude proportional to slope steepness
+
+            // Only apply if actually going downhill (velocity aligns with slope direction)
+            float downhill_dot = HMM_DotV3(HMM_V3(velocity.X, 0.0f, velocity.Z),
+                                           HMM_V3(slope_gravity.X, 0.0f, slope_gravity.Z));
+            if (downhill_dot > 0.0f || HMM_LenV3(HMM_V3(velocity.X, 0.0f, velocity.Z)) < 1.0f) {
+                velocity.X += slope_gravity.X * dt;
+                velocity.Z += slope_gravity.Z * dt;
+            }
+        }
+
+        // Low friction while sliding
         if (!just_landed)
-            apply_friction(dt, slide_friction);
+            apply_friction(dt, on_slope ? slide_friction * 0.5f : slide_friction);
 
         // Allow slight steering while sliding
         HMM_Vec3 wish_dir_raw = build_wish_dir(input);
         float wish_len = HMM_LenV3(wish_dir_raw);
         if (wish_len > 0.001f) {
             HMM_Vec3 wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
-            // Very limited acceleration while sliding (just for steering)
             accelerate(wish_dir, crouch_speed * 0.5f, ground_accel * 0.3f, dt);
         }
 
-        // Auto-cancel when too slow
+        // Auto-cancel when too slow (higher threshold on flat ground)
         float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
-        if (hspeed < slide_stop_speed) {
+        if (hspeed < (on_slope ? slide_stop_speed * 0.5f : slide_stop_speed)) {
             sliding = false;
             power_sliding = false;
         }
 
         if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+
+        // Move, then snap to slope surface to stay grounded
         do_collide_and_move(dt, world);
+
+        if (on_slope) {
+            HMM_Vec3 ray_origin = HMM_AddV3(position, HMM_V3(0.0f, radius + 0.1f, 0.0f));
+            HitResult hit = world.raycast(ray_origin, HMM_V3(0.0f, -1.0f, 0.0f), step_height + 0.2f);
+            if (hit.hit && hit.normal.Y > 0.7f) {
+                float ground_y = hit.point.Y;
+                if (position.Y > ground_y && position.Y - ground_y < step_height) {
+                    position.Y = ground_y;
+                }
+            }
+        }
+
         return;
     }
 
