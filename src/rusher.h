@@ -23,7 +23,7 @@ enum RusherState : uint8_t {
 
 struct RusherConfig {
     // Movement
-    float chase_speed       = 15.0f;
+    float chase_speed       = 10.0f;
     float acceleration      = 8.0f;
     float hover_height      = 2.0f;
     float hover_force       = 10.0f;
@@ -34,10 +34,10 @@ struct RusherConfig {
     float radius            = 0.5f;
 
     // Lunge attack
-    float attack_range      = 5.0f;
-    float charge_up_time    = 0.75f;  // seconds of windup before dash
+    float attack_range      = 8.0f;
+    float charge_up_time    = 1.25f;  // seconds of windup before dash
     float braking_force     = 15.0f;  // deceleration during charge
-    float dash_force        = 50.0f;  // impulse on dash start
+    float dash_force        = 30.0f;  // impulse on dash start
     float dash_duration     = 0.5f;   // max dash time
     float dash_cooldown     = 1.5f;   // recovery after dash
 
