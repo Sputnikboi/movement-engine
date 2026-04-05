@@ -212,7 +212,9 @@ static void process_node(const cgltf_node* node, LevelData& out) {
             // After prefix: must be end of string or '.'
             return name[i] == '\0' || name[i] == '.';
         };
-        bool is_vladder = exact_or_dot(node->name, "vladder");
+        // VLadder: prefix match (any name starting with "vladder")
+        // Ladder: strict match ("Ladder" or "Ladder.XXX", not "Ladderbase")
+        bool is_vladder = name_starts_with(node->name, "vladder");
         bool is_ladder  = !is_vladder && exact_or_dot(node->name, "ladder");
 
         Mesh& target = is_ladder  ? out.ladder_mesh
