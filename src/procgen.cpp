@@ -313,11 +313,11 @@ LevelData generate_level(const ProcGenConfig& config,
                 add_ramp_from_corners(m, low_out, low_in, high_out, high_in, config.ramp_color);
 
                 // --- Outer wall: from outer ramp edge down to floor ---
-                HMM_Vec3 inward = rot_dir(-sd.ox, -sd.oz);
+                HMM_Vec3 outward = rot_dir(sd.ox, sd.oz);
                 HMM_Vec3 low_out_floor  = low_out;  low_out_floor.Y  = 0;
                 HMM_Vec3 high_out_floor = high_out; high_out_floor.Y = 0;
                 add_quad(m, low_out_floor, high_out_floor, high_out, low_out,
-                         inward, config.ramp_color);
+                         outward, config.ramp_color);
 
                 // --- Start endcap wall (first segment only) ---
                 if (seg == 0) {
@@ -344,14 +344,14 @@ LevelData generate_level(const ProcGenConfig& config,
                              {0, 1, 0}, config.ramp_color);
 
                     // Landing outer walls down to floor (two edges)
-                    HMM_Vec3 inward0 = rot_dir(-sd.ox, -sd.oz);
+                    HMM_Vec3 outward0 = rot_dir(sd.ox, sd.oz);
                     add_quad(m, rot(o0x, o0z, 0), rot(odx, odz, 0),
                              rot(odx, odz, h_hi), rot(o0x, o0z, h_hi),
-                             inward0, config.ramp_color);
-                    HMM_Vec3 inward1 = rot_dir(-nd.ox, -nd.oz);
+                             outward0, config.ramp_color);
+                    HMM_Vec3 outward1 = rot_dir(nd.ox, nd.oz);
                     add_quad(m, rot(odx, odz, 0), rot(o1x, o1z, 0),
                              rot(o1x, o1z, h_hi), rot(odx, odz, h_hi),
-                             inward1, config.ramp_color);
+                             outward1, config.ramp_color);
                 }
 
                 // --- End endcap wall (last segment only) ---
