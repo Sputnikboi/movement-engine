@@ -1179,6 +1179,10 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Slide Stop Speed",    &player.slide_stop_speed,       0.0f, 10.0f);
                 ImGui::SliderFloat("Slide Boost Cooldown",&player.slide_boost_cooldown,   0.0f, 5.0f);
                 ImGui::SliderFloat("Slide Jump Boost",    &player.slide_jump_boost,       0.0f, 10.0f);
+                ImGui::Separator();
+                ImGui::Text("Speed Cap");
+                ImGui::SliderFloat("Soft Speed Cap",     &player.soft_speed_cap,     0.0f, 30.0f);
+                ImGui::SliderFloat("Soft Cap Drag",      &player.soft_cap_drag,      0.0f, 10.0f);
                 ImGui::SliderFloat("Slope Land Convert",  &player.slope_landing_conversion, 0.0f, 1.0f, "%.2f");
                 ImGui::SliderFloat("Crouch Speed",        &player.crouch_speed,           1.0f, 10.0f);
 

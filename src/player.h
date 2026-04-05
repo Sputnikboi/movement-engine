@@ -48,6 +48,10 @@ struct Player {
     float slide_min_time_for_jump = 0.3f;  // must slide this long for jump boost
     float slide_min_speed_for_jump = 5.0f; // must be this fast for slide-jump boost
 
+    // Soft speed cap
+    float soft_speed_cap    = 15.0f;  // above this, apply gentle drag
+    float soft_cap_drag     = 2.0f;   // drag rate (units/s²) above cap
+
     // --- Slope landing ---
     float slope_landing_conversion = 0.5f; // fraction of fall speed converted to downhill speed
 

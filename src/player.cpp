@@ -220,10 +220,14 @@ void Player::try_slide(const InputState& input) {
     sliding = true;
     slide_timer = 0.0f;
 
-    // Power slide: boost if cooldown is ready
-    if (slide_boost_timer <= 0.0f) {
+    // Every slide attempt resets the cooldown — prevents stacking boosts
+    // by rapidly crouching. You only get the boost if the cooldown was
+    // already expired when you initiated the slide.
+    bool can_boost = (slide_boost_timer <= 0.0f);
+    slide_boost_timer = slide_boost_cooldown;
+
+    if (can_boost) {
         power_sliding = true;
-        slide_boost_timer = slide_boost_cooldown;
 
         // Boost in current movement direction
         HMM_Vec3 hvel = HMM_V3(velocity.X, 0.0f, velocity.Z);
@@ -391,7 +395,6 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         velocity.Y = jump_speed;
         grounded = false;
         sliding = false;
-        slide_boost_timer = slide_boost_cooldown; // reset power slide cooldown
 
         // Start lurch window
         lurch_timer = lurch_window;
@@ -487,6 +490,18 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     }
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
+
+    // Soft speed cap: gently bleed off excess horizontal speed
+    if (soft_speed_cap > 0.0f) {
+        float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+        if (hspeed > soft_speed_cap) {
+            float excess = hspeed - soft_speed_cap;
+            float drag = fminf(soft_cap_drag * dt, excess);
+            float scale = (hspeed - drag) / hspeed;
+            velocity.X *= scale;
+            velocity.Z *= scale;
+        }
+    }
 
     if (velocity.Y < 0.0f) velocity.Y = 0.0f;
     do_collide_and_move(dt, world);
