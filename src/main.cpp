@@ -74,10 +74,7 @@ static bool load_level(const std::string& path,
     // Upload to renderer (now includes visual-only geometry)
     renderer.reload_mesh(ld.mesh);
 
-    // Add ladder geometry to collision (solid surface, just not rendered)
-    collision.add_mesh_triangles(ld.ladder_mesh);
-
-    // Extract ladder volumes from ladder-specific geometry
+    // Extract ladder volumes from ladder-specific geometry (no collision surface)
     for (const auto& sub : ld.ladder_submeshes) {
         collision.add_ladder_volume(ld.ladder_mesh, sub.index_start, sub.index_count);
     }
