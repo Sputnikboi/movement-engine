@@ -71,8 +71,8 @@ struct Player {
     int      ladder_volume_idx = -1;    // which volume we're on
     HMM_Vec3 ladder_normal     = {};    // face normal of the ladder surface
     HMM_Vec3 ladder_center     = {};    // center of the ladder volume
-    float    ladder_speed      = 6.0f;
-    float    ladder_jump_off   = 5.0f;  // push-off when jumping off ladder
+    float    ladder_speed_mult  = 1.0f;   // climb speed = max_speed * this
+    float    ladder_jump_mult  = 1.2f;  // jump-off speed = max_speed * this
     int      ladder_cooldown_idx = -1;  // volume index to ignore after jump-off
     float    ladder_cooldown     = 0.0f; // seconds remaining before re-grab allowed
 

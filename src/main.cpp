@@ -1266,8 +1266,11 @@ int main(int argc, char* argv[]) {
             }
 
             if (ImGui::CollapsingHeader("Ladder")) {
-                ImGui::SliderFloat("Ladder Speed",    &player.ladder_speed,    1.0f, 15.0f);
-                ImGui::SliderFloat("Ladder Jump Off", &player.ladder_jump_off, 1.0f, 15.0f);
+                ImGui::SliderFloat("Climb Speed Mult",  &player.ladder_speed_mult, 0.1f, 2.0f, "%.2fx");
+                ImGui::SliderFloat("Jump Off Mult",    &player.ladder_jump_mult,  0.5f, 3.0f, "%.2fx");
+                ImGui::Text("Climb: %.1f u/s  Jump-off: %.1f u/s",
+                            player.max_speed * player.ladder_speed_mult,
+                            player.max_speed * player.ladder_jump_mult);
                 ImGui::SliderFloat("Ladder Inflate",  &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
                 ImGui::Checkbox("Show Ladder Volumes", &show_ladder_debug);
                 ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());

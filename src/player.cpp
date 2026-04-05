@@ -327,7 +327,7 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
 
         // Push away from ladder + upward — apply position nudge immediately
         // so we clear the collision surface this frame
-        velocity = HMM_AddV3(HMM_MulV3F(ladder_normal, ladder_jump_off),
+        velocity = HMM_AddV3(HMM_MulV3F(ladder_normal, max_speed * ladder_jump_mult),
                              HMM_V3(0, jump_speed * 0.5f, 0));
         position = HMM_AddV3(position, HMM_MulV3F(ladder_normal, 0.3f));
         grounded = false;
@@ -352,15 +352,15 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
     float horiz_fwd = 0.0f;
     if (fabsf(input.forward) > 0.01f) {
         // sin(pitch) gives vertical component (-1 looking straight down, +1 looking up)
-        vert = sinf(pitch) * input.forward * ladder_speed;
+        vert = sinf(pitch) * input.forward * max_speed * ladder_speed_mult;
         // Horizontal component diminishes as you look more vertical
-        horiz_fwd = cosf(pitch) * input.forward * ladder_speed * 0.3f;
+        horiz_fwd = cosf(pitch) * input.forward * max_speed * ladder_speed_mult * 0.3f;
     }
 
     // Strafe along the ladder surface (horizontal, perpendicular to ladder normal)
     float right_x =  forward_z;
     float right_z = -forward_x;
-    float horiz_strafe = input.right * ladder_speed * 0.5f;
+    float horiz_strafe = input.right * max_speed * ladder_speed_mult * 0.5f;
 
     velocity.Y = vert;
     velocity.X = right_x * horiz_strafe + forward_x * horiz_fwd;
