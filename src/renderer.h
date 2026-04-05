@@ -164,7 +164,7 @@ private:
     std::vector<VkSemaphore> image_available_;   // sized to swapchain image count
     std::vector<VkSemaphore> render_finished_;   // sized to MAX_FRAMES_IN_FLIGHT
     std::vector<VkFence>     in_flight_;         // sized to MAX_FRAMES_IN_FLIGHT
-    uint32_t                 next_semaphore_idx_ = 0; // which image_available_ semaphore to use next
+    uint32_t                 image_avail_idx_ = 0; // cycles through image_available_
     uint32_t current_frame_ = 0;
 
     bool resize_requested_ = false;

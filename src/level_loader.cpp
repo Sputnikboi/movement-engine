@@ -298,7 +298,7 @@ LevelData load_level_gltf(const std::string& path) {
     if (result.mesh.vertices.empty()) {
         fprintf(stderr, "Warning: no mesh data found in %s\n", path.c_str());
     } else {
-        fprintf(stdout, "Loaded mesh: %s (%zu vertices, %zu indices, %zu triangles)\n",
+        fprintf(stdout, "Loaded level: %s (%zu vertices, %zu indices, %zu triangles)\n",
                 path.c_str(),
                 result.mesh.vertices.size(),
                 result.mesh.indices.size(),

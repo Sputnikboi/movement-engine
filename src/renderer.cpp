@@ -1272,7 +1272,7 @@ bool Renderer::create_sync_objects() {
     image_available_.resize(sc_count);
     render_finished_.resize(MAX_FRAMES_IN_FLIGHT);
     in_flight_.resize(MAX_FRAMES_IN_FLIGHT);
-    next_semaphore_idx_ = 0;
+    image_avail_idx_ = 0;
 
     VkSemaphoreCreateInfo sem{};
     sem.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1467,24 +1467,16 @@ void Renderer::draw_frame(const SceneData& scene, const Mesh* entity_mesh,
                           const Mesh* transparent_mesh) {
     vkWaitForFences(device_, 1, &in_flight_[current_frame_], VK_TRUE, UINT64_MAX);
 
-    // Per the Vulkan spec on swapchain semaphore reuse:
-    // Index semaphores by the *previously acquired* image index.
-    // On the first frame we use index 0, then after each acquire we
-    // set next_semaphore_idx_ = acquired image index so the semaphore
-    // is only reused after that image is re-acquired (meaning the
-    // presentation engine is done with it).
-    uint32_t sem_idx = next_semaphore_idx_;
+    // Use a separate semaphore per swapchain image to avoid reusing one
+    // the presentation engine still holds.
+    uint32_t sem_idx = image_avail_idx_;
+    image_avail_idx_ = (image_avail_idx_ + 1) % static_cast<uint32_t>(image_available_.size());
 
     uint32_t image_index;
     VkResult result = vkAcquireNextImageKHR(
         device_, swapchain_, UINT64_MAX,
         image_available_[sem_idx], VK_NULL_HANDLE, &image_index
     );
-
-    // Next acquire will use the semaphore slot of the image we just acquired.
-    // This guarantees it won't be reused until this image is presented and
-    // re-acquired.
-    next_semaphore_idx_ = image_index;
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || resize_requested_) {
         recreate_swapchain();
