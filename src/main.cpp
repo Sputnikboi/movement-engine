@@ -144,39 +144,58 @@ int main(int argc, char* argv[]) {
     std::vector<EnemySpawn> initial_enemy_spawns;
 
     // Determine level path: command line arg, or default to Room1
-    const char* level_path = (argc > 1) ? argv[1] : nullptr;
-    if (!level_path) {
-        // Try common paths for Room1
-        static const char* defaults[] = {
-            "levels/Room1.glb", "../levels/Room1.glb", "../../levels/Room1.glb",
-            "levels/room1.glb", "../levels/room1.glb", "../../levels/room1.glb",
-        };
-        for (const char* p : defaults) {
-            LevelData test = load_level_gltf(p);
-            if (!test.mesh.vertices.empty()) { level_path = p; break; }
-        }
-    }
+    const char* level_arg = (argc > 1) ? argv[1] : nullptr;
+    static const char* default_paths[] = {
+        "levels/Room1.glb", "../levels/Room1.glb", "../../levels/Room1.glb",
+        "levels/room1.glb", "../levels/room1.glb", "../../levels/room1.glb",
+    };
 
-    if (level_path) {
-        LevelData ld = load_level_gltf(level_path);
-        if (ld.mesh.vertices.empty()) {
-            fprintf(stderr, "Failed to load level '%s', falling back to test level\n", level_path);
-            level = create_test_level();
-        } else {
-            level = std::move(ld.mesh);
-            spawn_pos = ld.spawn_pos;
-            has_spawn = ld.has_spawn;
-            initial_enemy_spawns = std::move(ld.enemy_spawns);
-            custom_level = true;
-            printf("Loaded level: %s\n", level_path);
+    LevelData ld;
+    if (level_arg) {
+        ld = load_level_gltf(level_arg);
+        if (ld.mesh.vertices.empty())
+            fprintf(stderr, "Failed to load level '%s'\n", level_arg);
+    }
+    if (ld.mesh.vertices.empty() && !level_arg) {
+        for (const char* p : default_paths) {
+            ld = load_level_gltf(p);
+            if (!ld.mesh.vertices.empty()) {
+                printf("Loaded default level: %s\n", p);
+                break;
+            }
         }
-    } else {
-        printf("No level file given and Room1 not found, using built-in test level\n");
-        level = create_test_level();
     }
 
     CollisionWorld collision;
-    collision.build_from_mesh(level);
+
+    if (!ld.mesh.vertices.empty()) {
+        spawn_pos = ld.spawn_pos;
+        has_spawn = ld.has_spawn;
+        initial_enemy_spawns = std::move(ld.enemy_spawns);
+        custom_level = true;
+
+        // Build collision from mesh BEFORE merging visual-only geo
+        collision.build_from_mesh(ld.mesh);
+
+        // Extract ladder volumes
+        for (const auto& sub : ld.ladder_submeshes)
+            collision.add_ladder_volume(ld.ladder_mesh, sub.index_start, sub.index_count);
+
+        // Merge visual-only geometry into render mesh
+        if (!ld.visual_only_mesh.vertices.empty()) {
+            uint32_t base = (uint32_t)ld.mesh.vertices.size();
+            ld.mesh.vertices.insert(ld.mesh.vertices.end(),
+                ld.visual_only_mesh.vertices.begin(), ld.visual_only_mesh.vertices.end());
+            for (uint32_t idx : ld.visual_only_mesh.indices)
+                ld.mesh.indices.push_back(base + idx);
+        }
+
+        level = std::move(ld.mesh);
+    } else {
+        printf("No level found, using built-in test level\n");
+        level = create_test_level();
+        collision.build_from_mesh(level);
+    }
 
     // --- Init renderer ---
     Renderer renderer;
