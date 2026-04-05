@@ -140,7 +140,7 @@ static void append_sphere(Mesh& out, const Mesh& sphere,
 
 Mesh build_entity_mesh(const Entity entities[], int max_entities) {
     // Create sphere once (static)
-    static Mesh sphere = create_icosphere(2);
+    static Mesh sphere = create_icosphere(0);
 
     Mesh out;
 
