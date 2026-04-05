@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mesh.h"
+#include "entity.h"
 #include "vendor/HandmadeMath.h"
 #include <string>
 #include <vector>
@@ -10,6 +11,12 @@ struct SubMeshRange {
     char     name[64]     = {};
     uint32_t index_start  = 0;
     uint32_t index_count  = 0;
+};
+
+// Enemy spawn point from Blender empties
+struct EnemySpawn {
+    HMM_Vec3 position;
+    EntityType type;  // Drone or Rusher
 };
 
 struct LevelData {
@@ -22,6 +29,9 @@ struct LevelData {
     // Named sub-mesh ranges (reference mesh or ladder_mesh)
     std::vector<SubMeshRange> submeshes;
     std::vector<SubMeshRange> ladder_submeshes; // ranges into ladder_mesh
+
+    // Enemy spawn points
+    std::vector<EnemySpawn> enemy_spawns;
 };
 
 // Load a .glb/.gltf file and extract all mesh geometry.

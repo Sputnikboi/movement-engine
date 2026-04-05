@@ -176,7 +176,7 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities) {
             float b = 0.4f + hp_frac * 0.2f;
 
             // Charging/dashing: glow brighter
-            if (e.ai_state == 1 || e.ai_state == 2) { // RUSHER_CHARGING or DASHING
+            if (e.ai_state == 2 || e.ai_state == 3) { // RUSHER_CHARGING or DASHING
                 r = 1.0f; g = 0.3f; b = 0.1f; // angry orange
             }
 

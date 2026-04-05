@@ -49,7 +49,10 @@ static std::vector<std::string> scan_levels(const std::string& dir) {
 static bool load_level(const std::string& path,
                        Renderer& renderer, CollisionWorld& collision,
                        Player& player, Camera& camera,
-                       bool& noclip, std::string& current_level_name)
+                       bool& noclip, std::string& current_level_name,
+                       Entity entities[] = nullptr, int max_entities = 0,
+                       const DroneConfig* drone_cfg = nullptr,
+                       const RusherConfig* rusher_cfg = nullptr)
 {
     LevelData ld = load_level_gltf(path);
     if (ld.mesh.vertices.empty()) {
@@ -93,6 +96,21 @@ static bool load_level(const std::string& path,
         printf("No spawn point — starting in noclip.\n");
     }
 
+    // Spawn preplaced enemies
+    if (entities && max_entities > 0) {
+        // Clear existing entities
+        for (int i = 0; i < max_entities; i++)
+            entities[i].alive = false;
+        for (const auto& es : ld.enemy_spawns) {
+            if (es.type == EntityType::Drone && drone_cfg)
+                drone_spawn(entities, max_entities, es.position, *drone_cfg);
+            else if (es.type == EntityType::Rusher && rusher_cfg)
+                rusher_spawn(entities, max_entities, es.position, *rusher_cfg);
+        }
+        if (!ld.enemy_spawns.empty())
+            printf("Spawned %zu preplaced enemies\n", ld.enemy_spawns.size());
+    }
+
     // Extract filename for display
     current_level_name = fs::path(path).filename().string();
     return true;
@@ -123,6 +141,7 @@ int main(int argc, char* argv[]) {
     HMM_Vec3 spawn_pos = HMM_V3(0.0f, 1.0f, 15.0f);
     bool custom_level = false;
     bool has_spawn = false;
+    std::vector<EnemySpawn> initial_enemy_spawns;
 
     if (argc > 1) {
         LevelData ld = load_level_gltf(argv[1]);
@@ -133,6 +152,7 @@ int main(int argc, char* argv[]) {
             level = std::move(ld.mesh);
             spawn_pos = ld.spawn_pos;
             has_spawn = ld.has_spawn;
+            initial_enemy_spawns = std::move(ld.enemy_spawns);
             custom_level = true;
         }
     } else {
@@ -220,6 +240,16 @@ int main(int argc, char* argv[]) {
     EffectSystem effects;
     effects.init();
     float total_time = 0.0f;
+
+    // Spawn preplaced enemies from level data
+    for (const auto& es : initial_enemy_spawns) {
+        if (es.type == EntityType::Drone)
+            drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
+        else if (es.type == EntityType::Rusher)
+            rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+    }
+    if (!initial_enemy_spawns.empty())
+        printf("Spawned %zu preplaced enemies\n", initial_enemy_spawns.size());
 
     // --- Weapon ---
     Weapon weapon;
@@ -559,6 +589,12 @@ int main(int argc, char* argv[]) {
                     hit_ent.health -= weapon.config.damage;
                     hit_ent.hit_flash = drone_cfg.hit_flash_time;
 
+                    // Wake up idle enemies on hit
+                    if (hit_ent.type == EntityType::Drone && hit_ent.ai_state == DRONE_IDLE)
+                        hit_ent.ai_state = DRONE_CHASING;
+                    if (hit_ent.type == EntityType::Rusher && hit_ent.ai_state == RUSHER_IDLE)
+                        hit_ent.ai_state = RUSHER_CHASING;
+
                     // Determine dying state for this entity type
                     uint8_t dying_state = (hit_ent.type == EntityType::Rusher)
                                           ? (uint8_t)RUSHER_DYING : (uint8_t)DRONE_DYING;
@@ -622,8 +658,8 @@ int main(int argc, char* argv[]) {
             // Helper: is entity a live (non-dying) enemy?
             auto is_live_enemy = [](const Entity& e) -> bool {
                 if (!e.alive) return false;
-                if (e.type == EntityType::Drone)  return e.ai_state != DRONE_DYING;
-                if (e.type == EntityType::Rusher) return e.ai_state != RUSHER_DYING;
+                if (e.type == EntityType::Drone)  return e.ai_state != DRONE_DYING && e.ai_state != DRONE_DEAD;
+                if (e.type == EntityType::Rusher) return e.ai_state != RUSHER_DYING && e.ai_state != RUSHER_DEAD;
                 return false;
             };
 
@@ -853,7 +889,8 @@ int main(int argc, char* argv[]) {
                         std::string name = fs::path(path).filename().string();
                         if (ImGui::Selectable(name.c_str())) {
                             load_level(path, renderer, collision, player, camera,
-                                       noclip, current_level_name);
+                                       noclip, current_level_name,
+                                       entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg);
                         }
                     }
                     ImGui::EndChild();
@@ -868,7 +905,8 @@ int main(int argc, char* argv[]) {
                 ImGui::SameLine();
                 if (ImGui::Button("Load") && level_path_buf[0]) {
                     load_level(level_path_buf, renderer, collision, player, camera,
-                               noclip, current_level_name);
+                               noclip, current_level_name,
+                               entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg);
                 }
             }
 
@@ -937,7 +975,8 @@ int main(int argc, char* argv[]) {
                     HMM_Vec3 fwd = camera.forward_flat();
                     HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
                     spawn.Y += 3.0f;
-                    drone_spawn(entities, MAX_ENTITIES, spawn, drone_cfg);
+                    int idx = drone_spawn(entities, MAX_ENTITIES, spawn, drone_cfg);
+                    if (idx >= 0) entities[idx].ai_state = DRONE_CHASING; // immediate aggro
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Kill All")) {
@@ -958,6 +997,7 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Stats");
                 ImGui::SliderFloat("Drone Health",     &drone_cfg.drone_health,     1.0f, 200.0f);
                 ImGui::SliderFloat("Drone Radius",     &drone_cfg.drone_radius,     0.2f, 2.0f);
+                ImGui::SliderFloat("Detection Range",  &drone_cfg.detection_range,  5.0f, 100.0f);
                 ImGui::SliderFloat("Attack Range",     &drone_cfg.attack_range,     5.0f, 50.0f);
                 ImGui::SliderFloat("Circle Distance",  &drone_cfg.circle_distance,  3.0f, 20.0f);
                 ImGui::SliderFloat("Attack Windup",    &drone_cfg.attack_windup,    0.1f, 3.0f, "%.2fs");
@@ -979,6 +1019,13 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Bob Frequency",    &drone_cfg.bob_freq_min,     0.1f, 3.0f);
 
                 ImGui::Separator();
+                ImGui::Text("Wander (idle)");
+                ImGui::SliderFloat("Wander Radius",    &drone_cfg.wander_radius,    2.0f, 20.0f);
+                ImGui::SliderFloat("Wander Speed",     &drone_cfg.wander_speed,     0.5f, 10.0f);
+                ImGui::SliderFloat("Wall Avoid Dist",  &drone_cfg.wall_avoid_dist,  0.5f, 5.0f);
+                ImGui::SliderFloat("Wall Avoid Force", &drone_cfg.wall_avoid_force, 1.0f, 20.0f);
+
+                ImGui::Separator();
                 ImGui::Text("Projectile");
                 ImGui::SliderFloat("Proj Speed",       &drone_cfg.projectile_speed,  5.0f, 50.0f);
                 ImGui::SliderFloat("Proj Damage",      &drone_cfg.projectile_damage, 1.0f, 50.0f);
@@ -996,7 +1043,8 @@ int main(int argc, char* argv[]) {
                     HMM_Vec3 fwd = camera.forward_flat();
                     HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
                     spawn.Y += 3.0f;
-                    rusher_spawn(entities, MAX_ENTITIES, spawn, rusher_cfg);
+                    int idx = rusher_spawn(entities, MAX_ENTITIES, spawn, rusher_cfg);
+                    if (idx >= 0) entities[idx].ai_state = RUSHER_CHASING;
                 }
 
                 int rusher_count = 0;
@@ -1008,6 +1056,7 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Stats");
                 ImGui::SliderFloat("Rusher Health",      &rusher_cfg.health,         1.0f, 100.0f);
                 ImGui::SliderFloat("Rusher Radius",      &rusher_cfg.radius,         0.2f, 2.0f);
+                ImGui::SliderFloat("R Detection Range",  &rusher_cfg.detection_range, 5.0f, 100.0f);
                 ImGui::SliderFloat("Melee Damage",       &rusher_cfg.melee_damage,   1.0f, 100.0f);
 
                 ImGui::Separator();

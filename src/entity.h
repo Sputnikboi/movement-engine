@@ -38,6 +38,11 @@ struct Entity {
     float    damage = 0.0f;
     float    lifetime = 0.0f;
 
+    // Spawn / wander
+    HMM_Vec3 spawn_pos    = {};     // original spawn position (wander home)
+    HMM_Vec3 wander_target = {};    // current wander destination
+    float    wander_timer  = 0.0f;  // time until picking new wander target
+
     // Randomized per-drone
     float    chase_speed  = 10.0f;
     float    circle_speed = 5.0f;

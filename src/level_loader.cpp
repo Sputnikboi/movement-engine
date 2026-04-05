@@ -168,12 +168,31 @@ static void process_node(const cgltf_node* node, LevelData& out) {
     }
 
     // Check for spawn point (Empty named "spawn" or "Spawn" etc.)
-    if (name_starts_with(node->name, "spawn")) {
-        // Extract world position from the transform matrix (column 3)
+    if (name_starts_with(node->name, "spawn") &&
+        !name_starts_with(node->name, "spawndrone") &&
+        !name_starts_with(node->name, "spawnrusher")) {
         out.spawn_pos = HMM_V3(transform[12], transform[13], transform[14]);
         out.has_spawn = true;
         fprintf(stdout, "  Found spawn point: (%.1f, %.1f, %.1f) [node: %s]\n",
                 out.spawn_pos.X, out.spawn_pos.Y, out.spawn_pos.Z, node->name);
+    }
+
+    // Enemy spawn points (empties named "SpawnDrone" or "SpawnRusher")
+    if (name_starts_with(node->name, "spawndrone")) {
+        EnemySpawn es;
+        es.position = HMM_V3(transform[12], transform[13], transform[14]);
+        es.type = EntityType::Drone;
+        out.enemy_spawns.push_back(es);
+        fprintf(stdout, "  Found drone spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
+                es.position.X, es.position.Y, es.position.Z, node->name);
+    }
+    if (name_starts_with(node->name, "spawnrusher")) {
+        EnemySpawn es;
+        es.position = HMM_V3(transform[12], transform[13], transform[14]);
+        es.type = EntityType::Rusher;
+        out.enemy_spawns.push_back(es);
+        fprintf(stdout, "  Found rusher spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
+                es.position.X, es.position.Y, es.position.Z, node->name);
     }
 
     if (node->mesh) {

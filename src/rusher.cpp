@@ -10,6 +10,40 @@ extern float randf(float lo, float hi);
 //  Spawn
 // ============================================================
 
+static void pick_rusher_wander(Entity& e, float radius) {
+    float angle = randf(0.0f, 6.2831853f);
+    float dist  = randf(1.0f, radius);
+    e.wander_target = HMM_V3(
+        e.spawn_pos.X + cosf(angle) * dist,
+        e.spawn_pos.Y,
+        e.spawn_pos.Z + sinf(angle) * dist
+    );
+}
+
+static HMM_Vec3 rusher_wall_avoid(const Entity& e, HMM_Vec3 desired_dir,
+                                   const CollisionWorld& world,
+                                   float avoid_dist, float avoid_force) {
+    HMM_Vec3 steer = HMM_V3(0, 0, 0);
+    float hlen = sqrtf(desired_dir.X * desired_dir.X + desired_dir.Z * desired_dir.Z);
+    if (hlen < 0.01f) return steer;
+    HMM_Vec3 fwd = HMM_V3(desired_dir.X / hlen, 0, desired_dir.Z / hlen);
+    HMM_Vec3 right = HMM_V3(fwd.Z, 0, -fwd.X);
+
+    HMM_Vec3 dirs[3] = {
+        fwd,
+        HMM_NormV3(HMM_AddV3(fwd, HMM_MulV3F(right, 0.7f))),
+        HMM_NormV3(HMM_SubV3(fwd, HMM_MulV3F(right, 0.7f))),
+    };
+    for (int i = 0; i < 3; i++) {
+        HitResult hit = world.raycast(e.position, dirs[i], avoid_dist);
+        if (hit.hit) {
+            float strength = (1.0f - hit.t / avoid_dist) * avoid_force;
+            steer = HMM_SubV3(steer, HMM_MulV3F(dirs[i], strength));
+        }
+    }
+    return steer;
+}
+
 int rusher_spawn(Entity entities[], int max_entities,
                  HMM_Vec3 position, const RusherConfig& config) {
     for (int i = 0; i < max_entities; i++) {
@@ -23,7 +57,7 @@ int rusher_spawn(Entity entities[], int max_entities,
             e.health     = config.health;
             e.max_health = config.health;
             e.radius     = config.radius;
-            e.ai_state   = RUSHER_CHASING;
+            e.ai_state   = RUSHER_IDLE;
             e.ai_timer   = 0.0f;
             e.ai_timer2  = 0.0f;  // used as "has dealt damage this dash" flag
             e.owner      = -1;
@@ -39,6 +73,10 @@ int rusher_spawn(Entity entities[], int max_entities,
             e.angular_vel  = HMM_V3(0, 0, 0);
             e.tumble_x     = 0.0f;
             e.tumble_z     = 0.0f;
+
+            e.spawn_pos    = position;
+            e.wander_timer = randf(0.5f, 2.0f);
+            pick_rusher_wander(e, config.wander_radius);
 
             return i;
         }
@@ -123,12 +161,39 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
         ? HMM_MulV3F(to_player, 1.0f / dist)
         : HMM_V3(0, 0, 1);
 
-    // Face player
-    rusher.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
+    HMM_Vec3 desired_hvel = HMM_V3(0, 0, 0);
 
     switch (rusher.ai_state) {
+    case RUSHER_IDLE: {
+        apply_rusher_hover(rusher, world, config, dt, total_time);
+
+        HMM_Vec3 to_target = HMM_SubV3(rusher.wander_target, rusher.position);
+        float tdist = sqrtf(to_target.X * to_target.X + to_target.Z * to_target.Z);
+
+        if (tdist < 1.0f) {
+            rusher.wander_timer -= dt;
+            if (rusher.wander_timer <= 0.0f) {
+                pick_rusher_wander(rusher, config.wander_radius);
+                rusher.wander_timer = randf(config.wander_pause_min, config.wander_pause_max);
+            }
+        } else {
+            float hlen = sqrtf(to_target.X * to_target.X + to_target.Z * to_target.Z);
+            if (hlen > 0.01f) {
+                desired_hvel = HMM_V3(to_target.X / hlen * config.wander_speed,
+                                      0,
+                                      to_target.Z / hlen * config.wander_speed);
+            }
+            rusher.yaw = atan2f(to_target.X, to_target.Z);
+        }
+
+        if (dist <= config.detection_range) {
+            rusher.ai_state = RUSHER_CHASING;
+        }
+        break;
+    }
+
     case RUSHER_CHASING: {
-        // Hover while chasing
+        rusher.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
         apply_rusher_hover(rusher, world, config, dt, total_time);
 
         if (dist <= config.attack_range) {
@@ -138,23 +203,20 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
             break;
         }
 
-        // Accelerate toward player (horizontal)
-        float hlen = sqrtf(dir_to_player.X * dir_to_player.X +
-                           dir_to_player.Z * dir_to_player.Z);
-        if (hlen > 0.01f) {
-            HMM_Vec3 desired = HMM_V3(dir_to_player.X / hlen * config.chase_speed,
+        {
+            float hlen = sqrtf(dir_to_player.X * dir_to_player.X +
+                               dir_to_player.Z * dir_to_player.Z);
+            if (hlen > 0.01f) {
+                desired_hvel = HMM_V3(dir_to_player.X / hlen * config.chase_speed,
                                        0,
                                        dir_to_player.Z / hlen * config.chase_speed);
-            HMM_Vec3 diff = HMM_SubV3(desired,
-                                       HMM_V3(rusher.velocity.X, 0, rusher.velocity.Z));
-            float accel = fminf(config.acceleration * dt, 1.0f);
-            rusher.velocity.X += diff.X * accel;
-            rusher.velocity.Z += diff.Z * accel;
+            }
         }
         break;
     }
 
     case RUSHER_CHARGING: {
+        rusher.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
         // Hover + brake to near-stop during windup
         apply_rusher_hover(rusher, world, config, dt, total_time);
 
@@ -213,6 +275,22 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
         }
         break;
     }
+    }
+
+    // Wall avoidance (not during dash)
+    if (rusher.ai_state != RUSHER_DASHING && HMM_LenV3(desired_hvel) > 0.1f) {
+        HMM_Vec3 avoid = rusher_wall_avoid(rusher, desired_hvel, world,
+                                            config.wall_avoid_dist, config.wall_avoid_force);
+        desired_hvel = HMM_AddV3(desired_hvel, HMM_MulV3F(avoid, dt));
+    }
+
+    // Apply acceleration (not during dash/charge which handle velocity directly)
+    if (rusher.ai_state == RUSHER_IDLE || rusher.ai_state == RUSHER_CHASING) {
+        HMM_Vec3 diff = HMM_SubV3(desired_hvel,
+                                    HMM_V3(rusher.velocity.X, 0, rusher.velocity.Z));
+        float accel = fminf(config.acceleration * dt, 1.0f);
+        rusher.velocity.X += diff.X * accel;
+        rusher.velocity.Z += diff.Z * accel;
     }
 
     // Move with world collision

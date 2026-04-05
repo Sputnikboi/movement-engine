@@ -9,11 +9,12 @@
 // ============================================================
 
 enum DroneState : uint8_t {
-    DRONE_CHASING   = 0,
-    DRONE_CIRCLING  = 1,
-    DRONE_ATTACKING = 2,
-    DRONE_DYING     = 3,
-    DRONE_DEAD      = 4,
+    DRONE_IDLE      = 0,  // wandering, not alerted
+    DRONE_CHASING   = 1,
+    DRONE_CIRCLING  = 2,
+    DRONE_ATTACKING = 3,
+    DRONE_DYING     = 4,
+    DRONE_DEAD      = 5,
 };
 
 // ============================================================
@@ -21,6 +22,7 @@ enum DroneState : uint8_t {
 // ============================================================
 
 struct DroneConfig {
+    float detection_range    = 30.0f;  // player must be within this to alert
     float attack_range       = 10.0f;
     float circle_distance    = 8.0f;
     float acceleration       = 5.0f;
@@ -32,6 +34,14 @@ struct DroneConfig {
     float projectile_damage  = 5.0f;
     float drone_health       = 20.0f;
     float drone_radius       = 0.6f;
+
+    // Wander (idle state)
+    float wander_radius      = 8.0f;   // max distance from spawn to pick wander targets
+    float wander_speed       = 3.0f;
+    float wander_pause_min   = 1.0f;   // seconds to wait at each point
+    float wander_pause_max   = 3.0f;
+    float wall_avoid_dist    = 2.0f;   // raycast distance for wall avoidance
+    float wall_avoid_force   = 8.0f;   // steering force away from walls
 
     // Randomization ranges
     float chase_speed_min    = 9.0f;

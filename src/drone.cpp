@@ -15,6 +15,47 @@ float randf(float lo, float hi) {
 //  Spawn
 // ============================================================
 
+// Pick a random wander target within radius of home position
+static void pick_wander_target(Entity& e, float radius) {
+    float angle = randf(0.0f, 6.2831853f);
+    float dist  = randf(1.0f, radius);
+    e.wander_target = HMM_V3(
+        e.spawn_pos.X + cosf(angle) * dist,
+        e.spawn_pos.Y,
+        e.spawn_pos.Z + sinf(angle) * dist
+    );
+}
+
+// Horizontal wall avoidance: cast rays in movement direction + sides,
+// steer away from walls. Returns a steering force to add to velocity.
+static HMM_Vec3 wall_avoidance(const Entity& e, HMM_Vec3 desired_dir,
+                                const CollisionWorld& world,
+                                float avoid_dist, float avoid_force) {
+    HMM_Vec3 steer = HMM_V3(0, 0, 0);
+    // Normalize desired direction on XZ
+    float hlen = sqrtf(desired_dir.X * desired_dir.X + desired_dir.Z * desired_dir.Z);
+    if (hlen < 0.01f) return steer;
+    HMM_Vec3 fwd = HMM_V3(desired_dir.X / hlen, 0, desired_dir.Z / hlen);
+    HMM_Vec3 right = HMM_V3(fwd.Z, 0, -fwd.X);
+
+    // Cast forward + 45 degree left/right
+    HMM_Vec3 dirs[3] = {
+        fwd,
+        HMM_NormV3(HMM_AddV3(fwd, HMM_MulV3F(right, 0.7f))),
+        HMM_NormV3(HMM_SubV3(fwd, HMM_MulV3F(right, 0.7f))),
+    };
+
+    for (int i = 0; i < 3; i++) {
+        HitResult hit = world.raycast(e.position, dirs[i], avoid_dist);
+        if (hit.hit) {
+            // Push away from wall, stronger the closer we are
+            float strength = (1.0f - hit.t / avoid_dist) * avoid_force;
+            steer = HMM_SubV3(steer, HMM_MulV3F(dirs[i], strength));
+        }
+    }
+    return steer;
+}
+
 int drone_spawn(Entity entities[], int max_entities,
                 HMM_Vec3 position, const DroneConfig& config) {
     for (int i = 0; i < max_entities; i++) {
@@ -28,7 +69,7 @@ int drone_spawn(Entity entities[], int max_entities,
             e.health     = config.drone_health;
             e.max_health = config.drone_health;
             e.radius     = config.drone_radius;
-            e.ai_state   = DRONE_CHASING;
+            e.ai_state   = DRONE_IDLE;
             e.ai_timer   = 0.0f;
             e.ai_timer2  = 0.0f;
             e.ai_dir     = (rand() % 2) ? 1 : -1;
@@ -48,6 +89,10 @@ int drone_spawn(Entity entities[], int max_entities,
             e.tumble_x     = 0.0f;
             e.tumble_z     = 0.0f;
 
+            e.spawn_pos     = position;
+            e.wander_timer  = randf(0.5f, 2.0f);
+            pick_wander_target(e, config.wander_radius);
+
             return i;
         }
     }
@@ -61,6 +106,9 @@ int drone_spawn(Entity entities[], int max_entities,
 static void switch_state(Entity& d, uint8_t new_state, const DroneConfig& config) {
     d.ai_state = new_state;
     switch (new_state) {
+    case DRONE_IDLE:
+        d.wander_timer = randf(config.wander_pause_min, config.wander_pause_max);
+        break;
     case DRONE_CIRCLING:
         d.ai_timer = randf(config.circle_dur_min, config.circle_dur_max);
         d.ai_dir   = (rand() % 2) ? 1 : -1;
@@ -192,18 +240,48 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
         ? HMM_MulV3F(to_player, 1.0f / dist)
         : HMM_V3(0, 0, 1);
 
-    // Face player (yaw only)
-    drone.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
-
     // Horizontal desired velocity (set per-state)
     HMM_Vec3 desired_hvel = HMM_V3(0, 0, 0);
 
     switch (drone.ai_state) {
+    case DRONE_IDLE: {
+        // Wander around spawn point
+        HMM_Vec3 to_target = HMM_SubV3(drone.wander_target, drone.position);
+        float target_dist = sqrtf(to_target.X * to_target.X + to_target.Z * to_target.Z);
+
+        if (target_dist < 1.0f) {
+            // Reached target — pause then pick new one
+            drone.wander_timer -= dt;
+            if (drone.wander_timer <= 0.0f) {
+                pick_wander_target(drone, config.wander_radius);
+                drone.wander_timer = randf(config.wander_pause_min, config.wander_pause_max);
+            }
+        } else {
+            // Move toward wander target
+            float hlen = sqrtf(to_target.X * to_target.X + to_target.Z * to_target.Z);
+            if (hlen > 0.01f) {
+                desired_hvel = HMM_V3(to_target.X / hlen * config.wander_speed,
+                                      0,
+                                      to_target.Z / hlen * config.wander_speed);
+            }
+            // Face movement direction
+            drone.yaw = atan2f(to_target.X, to_target.Z);
+        }
+
+        // Detect player
+        if (dist <= config.detection_range) {
+            switch_state(drone, DRONE_CHASING, config);
+        }
+        break;
+    }
+
     case DRONE_CHASING:
+        // Face player
+        drone.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
+
         if (dist <= config.attack_range) {
             switch_state(drone, DRONE_CIRCLING, config);
         } else {
-            // Normalize horizontal direction
             float hlen = sqrtf(dir_to_player.X * dir_to_player.X +
                                dir_to_player.Z * dir_to_player.Z);
             if (hlen > 0.01f) {
@@ -215,6 +293,7 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
         break;
 
     case DRONE_CIRCLING: {
+        drone.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
         if (dist > config.attack_range) {
             switch_state(drone, DRONE_CHASING, config);
             break;
@@ -240,6 +319,7 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
     }
 
     case DRONE_ATTACKING: {
+        drone.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
         // Decelerate during windup
         desired_hvel = HMM_V3(0, 0, 0);
         drone.ai_timer -= dt;
@@ -253,6 +333,13 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
         }
         break;
     }
+    }
+
+    // Wall avoidance: steer away from nearby geometry
+    if (drone.ai_state != DRONE_IDLE || HMM_LenV3(desired_hvel) > 0.1f) {
+        HMM_Vec3 avoid = wall_avoidance(drone, desired_hvel, world,
+                                         config.wall_avoid_dist, config.wall_avoid_force);
+        desired_hvel = HMM_AddV3(desired_hvel, HMM_MulV3F(avoid, dt));
     }
 
     // Apply horizontal acceleration toward desired velocity

@@ -9,12 +9,13 @@
 // ============================================================
 
 enum RusherState : uint8_t {
-    RUSHER_CHASING    = 0,
-    RUSHER_CHARGING   = 1,  // braking, winding up for dash
-    RUSHER_DASHING    = 2,  // lunging at player
-    RUSHER_COOLDOWN   = 3,  // recovering after dash
-    RUSHER_DYING      = 4,
-    RUSHER_DEAD       = 5,
+    RUSHER_IDLE       = 0,  // wandering, not alerted
+    RUSHER_CHASING    = 1,
+    RUSHER_CHARGING   = 2,  // braking, winding up for dash
+    RUSHER_DASHING    = 3,  // lunging at player
+    RUSHER_COOLDOWN   = 4,  // recovering after dash
+    RUSHER_DYING      = 5,
+    RUSHER_DEAD       = 6,
 };
 
 // ============================================================
@@ -22,6 +23,9 @@ enum RusherState : uint8_t {
 // ============================================================
 
 struct RusherConfig {
+    // Detection
+    float detection_range   = 25.0f;
+
     // Movement
     float chase_speed       = 10.0f;
     float acceleration      = 8.0f;
@@ -49,6 +53,14 @@ struct RusherConfig {
 
     // Hit feedback
     float hit_flash_time    = 0.15f;
+
+    // Wander
+    float wander_radius     = 6.0f;
+    float wander_speed      = 2.5f;
+    float wander_pause_min  = 1.0f;
+    float wander_pause_max  = 3.0f;
+    float wall_avoid_dist   = 2.0f;
+    float wall_avoid_force  = 8.0f;
 
     // Bob (subtle)
     float bob_amp           = 0.2f;
