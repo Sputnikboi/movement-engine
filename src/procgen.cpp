@@ -171,28 +171,35 @@ LevelData generate_level(const ProcGenConfig& config) {
 
     printf("ProcGen: room %.0f x %.0f x %.0f\n", rw, rd, rh);
 
-    // --- Floor ---
-    add_quad(m, {-hw, 0, -hd}, {hw, 0, -hd}, {hw, 0, hd}, {-hw, 0, hd},
-             {0, 1, 0}, config.floor_color);
+    // --- Floor (normal +Y, facing up) ---
+    add_quad(m, {-hw,0,-hd}, {-hw,0,hd}, {hw,0,hd}, {hw,0,-hd},
+             {0,1,0}, config.floor_color);
 
-    // --- Ceiling ---
-    add_quad(m, {-hw, rh, hd}, {hw, rh, hd}, {hw, rh, -hd}, {-hw, rh, -hd},
-             {0, -1, 0}, config.ceiling_color);
+    // --- Ceiling (normal -Y, facing down) ---
+    add_quad(m, {-hw,rh,-hd}, {hw,rh,-hd}, {hw,rh,hd}, {-hw,rh,hd},
+             {0,-1,0}, config.ceiling_color);
 
-    // --- Walls ---
-    // +Z wall
-    add_box(m, {0, 0, hd}, rw + wt * 2, rh, wt, config.wall_color);
-    // -Z wall
-    add_box(m, {0, 0, -hd - wt}, rw + wt * 2, rh, wt, config.wall_color);
-    // +X wall
-    add_box(m, {hw, 0, 0}, wt, rh, rd, config.wall_color);
-    // -X wall
-    add_box(m, {-hw - wt, 0, 0}, wt, rh, rd, config.wall_color);
+    // --- Walls (single quads, normals pointing INWARD) ---
+    // +Z wall (inner face normal = -Z)
+    add_quad(m, {-hw,0,hd}, {-hw,rh,hd}, {hw,rh,hd}, {hw,0,hd},
+             {0,0,-1}, config.wall_color);
+    // -Z wall (inner face normal = +Z)
+    add_quad(m, {hw,0,-hd}, {hw,rh,-hd}, {-hw,rh,-hd}, {-hw,0,-hd},
+             {0,0,1}, config.wall_color);
+    // +X wall (inner face normal = -X)
+    add_quad(m, {hw,0,hd}, {hw,rh,hd}, {hw,rh,-hd}, {hw,0,-hd},
+             {-1,0,0}, config.wall_color);
+    // -X wall (inner face normal = +X)
+    add_quad(m, {-hw,0,-hd}, {-hw,rh,-hd}, {-hw,rh,hd}, {-hw,0,hd},
+             {1,0,0}, config.wall_color);
 
     // --- Track placed objects for overlap avoidance ---
     const int MAX_PLACED = 64;
     PlacedBox placed[MAX_PLACED];
     int placed_count = 0;
+
+    // Reserve spawn area so player doesn't start inside a box
+    placed[placed_count++] = {0, 0, 5.0f, 5.0f};
 
     // --- Platforms ---
     for (int i = 0; i < config.platform_count && placed_count < MAX_PLACED; i++) {
