@@ -349,17 +349,6 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
     velocity.X -= ladder_normal.X * 1.0f;
     velocity.Z -= ladder_normal.Z * 1.0f;
 
-    // Centering force: pull toward ladder center on the horizontal axis
-    // perpendicular to the face normal (so you slide toward the middle)
-    HMM_Vec3 to_center = HMM_SubV3(ladder_center, position);
-    // Remove the component along the face normal (don't pull in/out)
-    float along_normal = HMM_DotV3(to_center, ladder_normal);
-    to_center = HMM_SubV3(to_center, HMM_MulV3F(ladder_normal, along_normal));
-    // Remove Y component (centering is horizontal only)
-    to_center.Y = 0.0f;
-    velocity.X += to_center.X * ladder_centering;
-    velocity.Z += to_center.Z * ladder_centering;
-
     // No gravity on ladder
     do_collide_and_move(dt, world);
 

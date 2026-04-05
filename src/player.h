@@ -68,7 +68,6 @@ struct Player {
     HMM_Vec3 ladder_center   = {};     // center of the ladder volume
     float    ladder_speed    = 6.0f;
     float    ladder_jump_off = 5.0f;   // push-off when jumping off ladder
-    float    ladder_centering = 3.0f;  // horizontal pull toward ladder center
 
     // --- Crouch/slide state ---
     bool  crouched          = false;

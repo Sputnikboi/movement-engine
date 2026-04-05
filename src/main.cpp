@@ -198,6 +198,7 @@ int main(int argc, char* argv[]) {
     }
     bool show_settings = false;
     bool show_hud = true;
+    bool show_ladder_debug = false;
     float fly_speed = 15.0f;
 
     // Level browser state
@@ -685,6 +686,42 @@ int main(int argc, char* argv[]) {
         Mesh transparent_mesh;
         effects.append_transparent(transparent_mesh);
 
+        // Debug: visualize ladder volumes as transparent green boxes
+        if (show_ladder_debug) {
+            for (const auto& vol : collision.ladder_volumes) {
+                HMM_Vec3 mn = vol.mins, mx = vol.maxs;
+                // 8 corners
+                HMM_Vec3 c[8] = {
+                    {mn.X,mn.Y,mn.Z}, {mx.X,mn.Y,mn.Z}, {mx.X,mx.Y,mn.Z}, {mn.X,mx.Y,mn.Z},
+                    {mn.X,mn.Y,mx.Z}, {mx.X,mn.Y,mx.Z}, {mx.X,mx.Y,mx.Z}, {mn.X,mx.Y,mx.Z},
+                };
+                // 6 faces as 2 tris each (emissive: normal.x = alpha)
+                uint32_t faces[6][4] = {
+                    {0,1,2,3}, {4,5,6,7}, // -Z, +Z
+                    {0,1,5,4}, {2,3,7,6}, // -Y, +Y
+                    {0,3,7,4}, {1,2,6,5}, // -X, +X
+                };
+                uint32_t base = (uint32_t)transparent_mesh.vertices.size();
+                for (int i = 0; i < 8; i++) {
+                    Vertex3D v;
+                    v.pos[0] = c[i].X; v.pos[1] = c[i].Y; v.pos[2] = c[i].Z;
+                    v.normal[0] = 0.25f; v.normal[1] = 0.0f; v.normal[2] = 0.0f; // alpha
+                    v.color[0] = 0.1f; v.color[1] = 1.0f; v.color[2] = 0.2f; // green
+                    transparent_mesh.vertices.push_back(v);
+                }
+                for (int f = 0; f < 6; f++) {
+                    uint32_t a = base+faces[f][0], b = base+faces[f][1];
+                    uint32_t cc = base+faces[f][2], d = base+faces[f][3];
+                    transparent_mesh.indices.push_back(a);
+                    transparent_mesh.indices.push_back(b);
+                    transparent_mesh.indices.push_back(cc);
+                    transparent_mesh.indices.push_back(a);
+                    transparent_mesh.indices.push_back(cc);
+                    transparent_mesh.indices.push_back(d);
+                }
+            }
+        }
+
         // Empty — particle pipeline no-ops with 0 indices
         std::vector<ParticleVertex> particle_verts;
         std::vector<uint32_t> particle_indices;
@@ -1088,8 +1125,8 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Ladder");
                 ImGui::SliderFloat("Ladder Speed",     &player.ladder_speed,     1.0f, 15.0f);
                 ImGui::SliderFloat("Ladder Jump Off",  &player.ladder_jump_off,  1.0f, 15.0f);
-                ImGui::SliderFloat("Ladder Centering", &player.ladder_centering, 0.0f, 10.0f);
                 ImGui::SliderFloat("Ladder Inflate",   &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
+                ImGui::Checkbox("Show Ladder Volumes",  &show_ladder_debug);
                 ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());
                 if (player.on_ladder)
                     ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
