@@ -87,69 +87,18 @@ static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d,
 }
 
 // Add a ramp from 4 corner points (low0, low1 at bottom, high0, high1 at top).
-// Builds top slope face, underside, two side triangles, and a back wall.
+// Only the top slope face — no underside/back wall/sides, which all fight
+// the sphere collision and block the player from walking smoothly.
 static void add_ramp_from_corners(Mesh& m,
                                   HMM_Vec3 low0, HMM_Vec3 low1,   // bottom edge (floor_y)
                                   HMM_Vec3 high0, HMM_Vec3 high1, // top edge (top_y)
                                   HMM_Vec3 color) {
-    // Slope surface normal — cross two edges and ensure it points upward
     HMM_Vec3 edge1 = HMM_SubV3(high1, low1);
     HMM_Vec3 edge2 = HMM_SubV3(low0, low1);
     HMM_Vec3 normal = HMM_NormV3(HMM_Cross(edge1, edge2));
     if (normal.Y < 0) normal = HMM_MulV3F(normal, -1.0f);
 
-    // Top slope face
     add_quad(m, low0, high0, high1, low1, normal, color);
-    // Underside
-    add_quad(m, low0, low1, high1, high0, HMM_MulV3F(normal, -1.0f), color);
-
-    // Back wall (vertical face at the high end)
-    HMM_Vec3 high0_floor = high0; high0_floor.Y = low0.Y;
-    HMM_Vec3 high1_floor = high1; high1_floor.Y = low1.Y;
-    // Normal points away from the ramp slope
-    HMM_Vec3 back_dir = HMM_SubV3(high0, low0);
-    back_dir.Y = 0;
-    HMM_Vec3 back_normal = HMM_NormV3(back_dir);
-    add_quad(m, high1_floor, high1, high0, high0_floor, back_normal, color);
-
-    // Side triangles
-    auto add_tri = [&](HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 n) {
-        uint32_t base = (uint32_t)m.vertices.size();
-        auto push = [&](HMM_Vec3 pos) {
-            Vertex3D v;
-            v.pos[0] = pos.X; v.pos[1] = pos.Y; v.pos[2] = pos.Z;
-            v.normal[0] = n.X; v.normal[1] = n.Y; v.normal[2] = n.Z;
-            v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
-            m.vertices.push_back(v);
-        };
-        push(a); push(b); push(c);
-        // Auto-correct winding
-        HMM_Vec3 e1 = HMM_SubV3(b, a);
-        HMM_Vec3 e2 = HMM_SubV3(c, a);
-        HMM_Vec3 cr = HMM_Cross(e1, e2);
-        if (HMM_DotV3(cr, n) >= 0.0f) {
-            m.indices.push_back(base + 0);
-            m.indices.push_back(base + 1);
-            m.indices.push_back(base + 2);
-        } else {
-            m.indices.push_back(base + 0);
-            m.indices.push_back(base + 2);
-            m.indices.push_back(base + 1);
-        }
-    };
-
-    // Left side: low0, high0_floor, high0 (side normal perpendicular to ramp direction)
-    HMM_Vec3 ramp_dir = HMM_SubV3(high0, low0);
-    HMM_Vec3 left_normal = HMM_NormV3(HMM_Cross(ramp_dir, {0,1,0}));
-    // Make sure left_normal points toward the low0 side
-    HMM_Vec3 center_to_low0 = HMM_SubV3(low0, HMM_MulV3F(HMM_AddV3(low0, low1), 0.5f));
-    if (HMM_DotV3(left_normal, center_to_low0) < 0) left_normal = HMM_MulV3F(left_normal, -1.0f);
-
-    add_tri(low0, high0_floor, high0, left_normal);
-
-    // Right side
-    HMM_Vec3 right_normal = HMM_MulV3F(left_normal, -1.0f);
-    add_tri(low1, high1_floor, high1, right_normal);
 }
 
 // ============================================================
