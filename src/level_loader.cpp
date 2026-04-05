@@ -167,10 +167,6 @@ static void process_node(const cgltf_node* node, LevelData& out) {
                 (!node->mesh && !node->children_count) ? " [empty]" : "");
     }
 
-    // Debug: print all node names
-    if (node->name)
-        fprintf(stdout, "  Node: '%s'\n", node->name);
-
     // Check for spawn point (Empty named "spawn" or "Spawn" etc.)
     if (name_starts_with(node->name, "spawn") &&
         !name_starts_with(node->name, "spawndrone") &&
@@ -200,11 +196,24 @@ static void process_node(const cgltf_node* node, LevelData& out) {
     }
 
     if (node->mesh) {
-        // "Ladder" → trigger volume (invisible, collision only).
-        // "VLadder" → visual only (rendered, no collision).
-        // Everything else → normal (rendered + collision).
-        bool is_vladder = name_starts_with(node->name, "vladder");
-        bool is_ladder  = !is_vladder && name_starts_with(node->name, "ladder");
+        // "Ladder" or "Ladder.001" → trigger volume (invisible, collision only).
+        // "VLadder" or "VLadder.001" → visual only (rendered, no collision).
+        // "Ladderbase", "LadderRails" etc → normal geometry.
+        // Match: name equals prefix exactly, or prefix followed by '.'
+        auto exact_or_dot = [](const char* name, const char* prefix) -> bool {
+            if (!name) return false;
+            int i = 0;
+            for (; prefix[i]; i++) {
+                char a = name[i], b = prefix[i];
+                if (a >= 'A' && a <= 'Z') a += 32;
+                if (b >= 'A' && b <= 'Z') b += 32;
+                if (a != b) return false;
+            }
+            // After prefix: must be end of string or '.'
+            return name[i] == '\0' || name[i] == '.';
+        };
+        bool is_vladder = exact_or_dot(node->name, "vladder");
+        bool is_ladder  = !is_vladder && exact_or_dot(node->name, "ladder");
 
         Mesh& target = is_ladder  ? out.ladder_mesh
                      : is_vladder ? out.visual_only_mesh
