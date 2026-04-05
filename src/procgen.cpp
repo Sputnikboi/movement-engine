@@ -273,23 +273,23 @@ LevelData generate_level(const ProcGenConfig& config,
         add_box(m, {px, 0, pz}, pw, ph, pd, config.platform_color, yaw);
         placed[placed_count++] = {px, pz, total_radius};
 
-        // Wrap-around ramp: 3 segments along 3 sides of the platform
+        // Wrap-around ramp: 3 slope segments along 3 sides with
+        // connecting landings at corners and side walls
         if (config.gen_ramps) {
             float rw = config.ramp_width;
+            float wall_h = 0.8f; // side wall height above ramp surface
             float phw = pw * 0.5f, phd = pd * 0.5f;
             float c = cosf(yaw), s = sinf(yaw);
             auto rot = [&](float lx, float lz, float ly) -> HMM_Vec3 {
                 return {px + lx * c + lz * s, ly, pz - lx * s + lz * c};
             };
+            auto rot_dir = [&](float lx, float lz) -> HMM_Vec3 {
+                return {lx * c + lz * s, 0, -lx * s + lz * c};
+            };
 
-            // 4 sides in local space (clockwise from above):
-            //   0: -Z edge (-hw,-hd) → (+hw,-hd)  outward (0,-1)
-            //   1: +X edge (+hw,-hd) → (+hw,+hd)  outward (+1,0)
-            //   2: +Z edge (+hw,+hd) → (-hw,+hd)  outward (0,+1)
-            //   3: -X edge (-hw,+hd) → (-hw,-hd)  outward (-1,0)
             struct Side {
-                float sx, sz, ex, ez; // start/end corners (local XZ)
-                float ox, oz;         // outward direction
+                float sx, sz, ex, ez;
+                float ox, oz;
             };
             Side sides[4] = {
                 {-phw, -phd,  phw, -phd,  0, -1},
@@ -301,16 +301,52 @@ LevelData generate_level(const ProcGenConfig& config,
             int start_side = rand() % 4;
             int num_segs = 3;
             for (int seg = 0; seg < num_segs; seg++) {
-                const Side& sd = sides[(start_side + seg) % 4];
+                int si = (start_side + seg) % 4;
+                const Side& sd = sides[si];
                 float h_lo = ph * (float)seg / (float)num_segs;
                 float h_hi = ph * (float)(seg + 1) / (float)num_segs;
 
-                // Inner edge hugs the platform, outer edge extends outward
-                HMM_Vec3 low0  = rot(sd.sx + sd.ox * rw, sd.sz + sd.oz * rw, h_lo);
-                HMM_Vec3 low1  = rot(sd.sx,              sd.sz,              h_lo);
-                HMM_Vec3 high0 = rot(sd.ex + sd.ox * rw, sd.ez + sd.oz * rw, h_hi);
-                HMM_Vec3 high1 = rot(sd.ex,              sd.ez,              h_hi);
-                add_ramp_from_corners(m, low0, low1, high0, high1, config.ramp_color);
+                // --- Slope surface ---
+                HMM_Vec3 low_out  = rot(sd.sx + sd.ox * rw, sd.sz + sd.oz * rw, h_lo);
+                HMM_Vec3 low_in   = rot(sd.sx,              sd.sz,              h_lo);
+                HMM_Vec3 high_out = rot(sd.ex + sd.ox * rw, sd.ez + sd.oz * rw, h_hi);
+                HMM_Vec3 high_in  = rot(sd.ex,              sd.ez,              h_hi);
+                add_ramp_from_corners(m, low_out, low_in, high_out, high_in, config.ramp_color);
+
+                // --- Outer side wall ---
+                HMM_Vec3 inward = rot_dir(-sd.ox, -sd.oz);
+                HMM_Vec3 low_out_top  = low_out;  low_out_top.Y  += wall_h;
+                HMM_Vec3 high_out_top = high_out; high_out_top.Y += wall_h;
+                add_quad(m, low_out, high_out, high_out_top, low_out_top, inward, config.ramp_color);
+
+                // --- Connecting landing at the corner (between this seg and next) ---
+                if (seg < num_segs - 1) {
+                    int ni = (start_side + seg + 1) % 4;
+                    const Side& nd = sides[ni];
+                    // Inner corner (shared by both sides)
+                    float ix = sd.ex, iz = sd.ez;
+                    // Outer edge endpoints of each side at this corner
+                    float o0x = sd.ex + sd.ox * rw, o0z = sd.ez + sd.oz * rw;
+                    float o1x = nd.sx + nd.ox * rw, o1z = nd.sz + nd.oz * rw;
+                    // Diagonal outer corner
+                    float odx = ix + sd.ox * rw + nd.ox * rw;
+                    float odz = iz + sd.oz * rw + nd.oz * rw;
+
+                    // Flat landing quad at h_hi
+                    add_quad(m, rot(ix, iz, h_hi), rot(o0x, o0z, h_hi),
+                             rot(odx, odz, h_hi), rot(o1x, o1z, h_hi),
+                             {0, 1, 0}, config.ramp_color);
+
+                    // Landing outer walls (two edges of the corner)
+                    HMM_Vec3 inward0 = rot_dir(-sd.ox, -sd.oz);
+                    add_quad(m, rot(o0x, o0z, h_hi), rot(odx, odz, h_hi),
+                             rot(odx, odz, h_hi + wall_h), rot(o0x, o0z, h_hi + wall_h),
+                             inward0, config.ramp_color);
+                    HMM_Vec3 inward1 = rot_dir(-nd.ox, -nd.oz);
+                    add_quad(m, rot(odx, odz, h_hi), rot(o1x, o1z, h_hi),
+                             rot(o1x, o1z, h_hi + wall_h), rot(odx, odz, h_hi + wall_h),
+                             inward1, config.ramp_color);
+                }
             }
         }
     }
