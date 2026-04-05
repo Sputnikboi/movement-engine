@@ -274,10 +274,9 @@ LevelData generate_level(const ProcGenConfig& config,
         placed[placed_count++] = {px, pz, total_radius};
 
         // Wrap-around ramp: 3 slope segments along 3 sides with
-        // connecting landings at corners and side walls
+        // connecting landings at corners, and walls down to floor
         if (config.gen_ramps) {
             float rw = config.ramp_width;
-            float wall_h = 0.8f; // side wall height above ramp surface
             float phw = pw * 0.5f, phd = pd * 0.5f;
             float c = cosf(yaw), s = sinf(yaw);
             auto rot = [&](float lx, float lz, float ly) -> HMM_Vec3 {
@@ -313,39 +312,54 @@ LevelData generate_level(const ProcGenConfig& config,
                 HMM_Vec3 high_in  = rot(sd.ex,              sd.ez,              h_hi);
                 add_ramp_from_corners(m, low_out, low_in, high_out, high_in, config.ramp_color);
 
-                // --- Outer side wall ---
+                // --- Outer wall: from outer ramp edge down to floor ---
                 HMM_Vec3 inward = rot_dir(-sd.ox, -sd.oz);
-                HMM_Vec3 low_out_top  = low_out;  low_out_top.Y  += wall_h;
-                HMM_Vec3 high_out_top = high_out; high_out_top.Y += wall_h;
-                add_quad(m, low_out, high_out, high_out_top, low_out_top, inward, config.ramp_color);
+                HMM_Vec3 low_out_floor  = low_out;  low_out_floor.Y  = 0;
+                HMM_Vec3 high_out_floor = high_out; high_out_floor.Y = 0;
+                add_quad(m, low_out_floor, high_out_floor, high_out, low_out,
+                         inward, config.ramp_color);
 
-                // --- Connecting landing at the corner (between this seg and next) ---
+                // --- Start endcap wall (first segment only) ---
+                if (seg == 0) {
+                    HMM_Vec3 low_in_floor = low_in; low_in_floor.Y = 0;
+                    // Normal faces toward the start direction
+                    HMM_Vec3 along = HMM_NormV3(HMM_SubV3(low_in, high_in));
+                    add_quad(m, low_out_floor, low_out, low_in, low_in_floor,
+                             along, config.ramp_color);
+                }
+
+                // --- Connecting landing at corners ---
                 if (seg < num_segs - 1) {
                     int ni = (start_side + seg + 1) % 4;
                     const Side& nd = sides[ni];
-                    // Inner corner (shared by both sides)
                     float ix = sd.ex, iz = sd.ez;
-                    // Outer edge endpoints of each side at this corner
                     float o0x = sd.ex + sd.ox * rw, o0z = sd.ez + sd.oz * rw;
                     float o1x = nd.sx + nd.ox * rw, o1z = nd.sz + nd.oz * rw;
-                    // Diagonal outer corner
                     float odx = ix + sd.ox * rw + nd.ox * rw;
                     float odz = iz + sd.oz * rw + nd.oz * rw;
 
-                    // Flat landing quad at h_hi
+                    // Flat landing surface at h_hi
                     add_quad(m, rot(ix, iz, h_hi), rot(o0x, o0z, h_hi),
                              rot(odx, odz, h_hi), rot(o1x, o1z, h_hi),
                              {0, 1, 0}, config.ramp_color);
 
-                    // Landing outer walls (two edges of the corner)
+                    // Landing outer walls down to floor (two edges)
                     HMM_Vec3 inward0 = rot_dir(-sd.ox, -sd.oz);
-                    add_quad(m, rot(o0x, o0z, h_hi), rot(odx, odz, h_hi),
-                             rot(odx, odz, h_hi + wall_h), rot(o0x, o0z, h_hi + wall_h),
+                    add_quad(m, rot(o0x, o0z, 0), rot(odx, odz, 0),
+                             rot(odx, odz, h_hi), rot(o0x, o0z, h_hi),
                              inward0, config.ramp_color);
                     HMM_Vec3 inward1 = rot_dir(-nd.ox, -nd.oz);
-                    add_quad(m, rot(odx, odz, h_hi), rot(o1x, o1z, h_hi),
-                             rot(o1x, o1z, h_hi + wall_h), rot(odx, odz, h_hi + wall_h),
+                    add_quad(m, rot(odx, odz, 0), rot(o1x, o1z, 0),
+                             rot(o1x, o1z, h_hi), rot(odx, odz, h_hi),
                              inward1, config.ramp_color);
+                }
+
+                // --- End endcap wall (last segment only) ---
+                if (seg == num_segs - 1) {
+                    HMM_Vec3 high_in_floor = high_in; high_in_floor.Y = 0;
+                    HMM_Vec3 along = HMM_NormV3(HMM_SubV3(high_in, low_in));
+                    add_quad(m, high_out, high_out_floor, high_in_floor, high_in,
+                             along, config.ramp_color);
                 }
             }
         }
