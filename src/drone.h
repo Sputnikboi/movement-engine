@@ -23,7 +23,7 @@ enum DroneState : uint8_t {
 
 struct DroneConfig {
     float detection_range    = 30.0f;  // player must be within this to alert
-    float attack_range       = 10.0f;
+    float attack_range       = 17.0f;
     float circle_distance    = 8.0f;
     float acceleration       = 5.0f;
     float hover_force        = 5.0f;
