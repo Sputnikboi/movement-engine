@@ -391,6 +391,7 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         velocity.Y = jump_speed;
         grounded = false;
         sliding = false;
+        slide_boost_timer = slide_boost_cooldown; // reset power slide cooldown
 
         // Start lurch window
         lurch_timer = lurch_window;
