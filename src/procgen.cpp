@@ -305,7 +305,7 @@ LevelData generate_level(const ProcGenConfig& config,
         // Ramp up to this platform
         if (config.gen_ramps) {
             int side = rand() % 4;
-            float ramp_len = ph * 2.0f; // gentle slope
+            float ramp_len = ph * 4.0f; // gentle slope (~14°)
             float rw2 = config.ramp_width * 0.5f;
             HMM_Vec3 low0, low1, high0, high1;
             switch (side) {
