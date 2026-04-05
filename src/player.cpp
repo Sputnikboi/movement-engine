@@ -545,6 +545,8 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
 
     accelerate(wish_dir, wish_speed, air_accel, dt);
 
+    apply_soft_speed_cap(dt);
+
     velocity.Y -= gravity * dt;
 
     do_collide_and_move(dt, world);
