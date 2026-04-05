@@ -62,17 +62,16 @@ static bool load_level(const std::string& path,
 
     // Update collision
     collision.triangles.clear();
-    collision.ladder_tris.clear();
+    collision.ladder_volumes.clear();
     collision.build_from_mesh(ld.mesh);
 
-    // Extract ladder geometry from named nodes
+    // Extract ladder volumes from named nodes
     for (const auto& sub : ld.submeshes) {
-        // Case-insensitive check for "ladder" prefix
         char lower[8] = {};
         for (int c = 0; c < 6 && sub.name[c]; c++)
             lower[c] = (sub.name[c] >= 'A' && sub.name[c] <= 'Z') ? sub.name[c] + 32 : sub.name[c];
         if (strncmp(lower, "ladder", 6) == 0) {
-            collision.add_ladder_tris(ld.mesh, sub.index_start, sub.index_count);
+            collision.add_ladder_volume(ld.mesh, sub.index_start, sub.index_count);
         }
     }
 
@@ -1091,6 +1090,8 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Ladder");
                 ImGui::SliderFloat("Ladder Speed",    &player.ladder_speed,    1.0f, 15.0f);
                 ImGui::SliderFloat("Ladder Jump Off", &player.ladder_jump_off, 1.0f, 15.0f);
+                ImGui::SliderFloat("Ladder Inflate",  &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
+                ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());
                 if (player.on_ladder)
                     ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
 

@@ -404,96 +404,80 @@ bool CollisionWorld::step_move(HMM_Vec3 start, float radius, float step_height,
 }
 
 // ============================================================
-//  Ladder support
+//  Ladder support — AABB volumes computed from mesh nodes
 // ============================================================
 
-void CollisionWorld::add_ladder_tris(const Mesh& mesh, uint32_t index_start, uint32_t index_count) {
+void CollisionWorld::add_ladder_volume(const Mesh& mesh, uint32_t index_start, uint32_t index_count) {
+    if (index_count < 3) return;
     auto load = [](const float* p) { return HMM_V3(p[0], p[1], p[2]); };
 
-    for (uint32_t i = index_start; i + 2 < index_start + index_count; i += 3) {
-        Triangle tri;
-        tri.v0 = load(mesh.vertices[mesh.indices[i + 0]].pos);
-        tri.v1 = load(mesh.vertices[mesh.indices[i + 1]].pos);
-        tri.v2 = load(mesh.vertices[mesh.indices[i + 2]].pos);
+    // Compute AABB + average face normal from the node's triangles
+    HMM_Vec3 mins = HMM_V3(1e30f, 1e30f, 1e30f);
+    HMM_Vec3 maxs = HMM_V3(-1e30f, -1e30f, -1e30f);
+    HMM_Vec3 avg_normal = HMM_V3(0, 0, 0);
+    int tri_count = 0;
 
-        HMM_Vec3 e1 = HMM_SubV3(tri.v1, tri.v0);
-        HMM_Vec3 e2 = HMM_SubV3(tri.v2, tri.v0);
+    for (uint32_t i = index_start; i + 2 < index_start + index_count; i += 3) {
+        HMM_Vec3 v0 = load(mesh.vertices[mesh.indices[i + 0]].pos);
+        HMM_Vec3 v1 = load(mesh.vertices[mesh.indices[i + 1]].pos);
+        HMM_Vec3 v2 = load(mesh.vertices[mesh.indices[i + 2]].pos);
+
+        // Expand AABB
+        HMM_Vec3 verts[3] = {v0, v1, v2};
+        for (int j = 0; j < 3; j++) {
+            if (verts[j].X < mins.X) mins.X = verts[j].X;
+            if (verts[j].Y < mins.Y) mins.Y = verts[j].Y;
+            if (verts[j].Z < mins.Z) mins.Z = verts[j].Z;
+            if (verts[j].X > maxs.X) maxs.X = verts[j].X;
+            if (verts[j].Y > maxs.Y) maxs.Y = verts[j].Y;
+            if (verts[j].Z > maxs.Z) maxs.Z = verts[j].Z;
+        }
+
+        // Accumulate face normal
+        HMM_Vec3 e1 = HMM_SubV3(v1, v0);
+        HMM_Vec3 e2 = HMM_SubV3(v2, v0);
         HMM_Vec3 cross = HMM_Cross(e1, e2);
         float len = HMM_LenV3(cross);
-        if (len < 0.0001f) continue;
-        tri.normal = HMM_MulV3F(cross, 1.0f / len);
-
-        ladder_tris.push_back(tri);
-    }
-    fprintf(stdout, "CollisionWorld: added %zu ladder triangles (total %zu)\n",
-            (size_t)index_count / 3, ladder_tris.size());
-}
-
-// Closest point on line segment AB to point P
-static HMM_Vec3 closest_on_segment(HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 p) {
-    HMM_Vec3 ab = HMM_SubV3(b, a);
-    float len_sq = HMM_DotV3(ab, ab);
-    if (len_sq < 1e-10f) return a;
-    float t = HMM_DotV3(HMM_SubV3(p, a), ab) / len_sq;
-    if (t < 0.0f) t = 0.0f;
-    if (t > 1.0f) t = 1.0f;
-    return HMM_AddV3(a, HMM_MulV3F(ab, t));
-}
-
-// True 3D distance from point to triangle (interior, edges, and vertices)
-static float point_tri_dist(HMM_Vec3 p, const Triangle& tri) {
-    float plane_dist = HMM_DotV3(HMM_SubV3(p, tri.v0), tri.normal);
-    HMM_Vec3 proj = HMM_SubV3(p, HMM_MulV3F(tri.normal, plane_dist));
-
-    HMM_Vec3 e0 = HMM_SubV3(tri.v1, tri.v0);
-    HMM_Vec3 e1 = HMM_SubV3(tri.v2, tri.v0);
-    HMM_Vec3 vp = HMM_SubV3(proj, tri.v0);
-
-    float d00 = HMM_DotV3(e0, e0);
-    float d01 = HMM_DotV3(e0, e1);
-    float d02 = HMM_DotV3(e0, vp);
-    float d11 = HMM_DotV3(e1, e1);
-    float d12 = HMM_DotV3(e1, vp);
-
-    float denom = d00 * d11 - d01 * d01;
-    if (fabsf(denom) > 1e-10f) {
-        float u = (d11 * d02 - d01 * d12) / denom;
-        float v = (d00 * d12 - d01 * d02) / denom;
-        if (u >= 0.0f && v >= 0.0f && (u + v) <= 1.0f)
-            return fabsf(plane_dist);
-    }
-
-    // Outside triangle — distance to closest point on the 3 edges
-    HMM_Vec3 c0 = closest_on_segment(tri.v0, tri.v1, p);
-    HMM_Vec3 c1 = closest_on_segment(tri.v1, tri.v2, p);
-    HMM_Vec3 c2 = closest_on_segment(tri.v2, tri.v0, p);
-
-    float dist0 = HMM_LenV3(HMM_SubV3(p, c0));
-    float dist1 = HMM_LenV3(HMM_SubV3(p, c1));
-    float dist2 = HMM_LenV3(HMM_SubV3(p, c2));
-
-    float best = dist0;
-    if (dist1 < best) best = dist1;
-    if (dist2 < best) best = dist2;
-    return best;
-}
-
-bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const {
-    float best_dist = 1e30f;
-    HMM_Vec3 best_normal = HMM_V3(0, 0, 0);
-    float check_radius = radius + 0.15f; // slightly generous
-
-    for (const auto& tri : ladder_tris) {
-        float dist = point_tri_dist(center, tri);
-        if (dist < check_radius && dist < best_dist) {
-            best_dist = dist;
-            best_normal = tri.normal;
+        if (len > 0.0001f) {
+            avg_normal = HMM_AddV3(avg_normal, HMM_MulV3F(cross, 1.0f / len));
+            tri_count++;
         }
     }
 
-    if (best_dist < check_radius) {
-        ladder_normal = best_normal;
-        return true;
+    if (tri_count == 0) return;
+
+    // Normalize the average normal
+    float nlen = HMM_LenV3(avg_normal);
+    if (nlen > 0.001f)
+        avg_normal = HMM_MulV3F(avg_normal, 1.0f / nlen);
+    else
+        avg_normal = HMM_V3(0, 0, 1); // fallback
+
+    // Inflate the AABB
+    mins.X -= ladder_inflate; mins.Y -= ladder_inflate; mins.Z -= ladder_inflate;
+    maxs.X += ladder_inflate; maxs.Y += ladder_inflate; maxs.Z += ladder_inflate;
+
+    LadderVolume vol;
+    vol.mins = mins;
+    vol.maxs = maxs;
+    vol.face_normal = avg_normal;
+    ladder_volumes.push_back(vol);
+
+    fprintf(stdout, "Ladder volume: (%.1f,%.1f,%.1f)-(%.1f,%.1f,%.1f) normal(%.2f,%.2f,%.2f)\n",
+            mins.X, mins.Y, mins.Z, maxs.X, maxs.Y, maxs.Z,
+            avg_normal.X, avg_normal.Y, avg_normal.Z);
+}
+
+bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const {
+    for (const auto& vol : ladder_volumes) {
+        // Sphere-AABB overlap: expand AABB by radius, test point inside
+        if (center.X >= vol.mins.X - radius && center.X <= vol.maxs.X + radius &&
+            center.Y >= vol.mins.Y - radius && center.Y <= vol.maxs.Y + radius &&
+            center.Z >= vol.mins.Z - radius && center.Z <= vol.maxs.Z + radius)
+        {
+            ladder_normal = vol.face_normal;
+            return true;
+        }
     }
     return false;
 }

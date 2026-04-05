@@ -18,17 +18,24 @@ struct CollisionWorld {
     std::vector<Triangle> triangles;
     BVH bvh;
 
-    // Ladder triangles (separate from main collision — used for overlap detection only)
-    std::vector<Triangle> ladder_tris;
+    // Ladder volumes (auto-computed from node geometry)
+    struct LadderVolume {
+        HMM_Vec3 mins;          // AABB min corner (inflated)
+        HMM_Vec3 maxs;          // AABB max corner (inflated)
+        HMM_Vec3 face_normal;   // average face normal (points away from wall)
+    };
+    std::vector<LadderVolume> ladder_volumes;
+    float ladder_inflate = 0.5f;  // how much to inflate the AABB on each side
 
     // Build from a Mesh (extracts triangles from vertex/index data, builds BVH)
     void build_from_mesh(const Mesh& mesh);
 
-    // Add ladder geometry (call after build_from_mesh)
-    void add_ladder_tris(const Mesh& mesh, uint32_t index_start, uint32_t index_count);
+    // Add a ladder volume from a mesh node's geometry. Computes AABB + average normal,
+    // inflates by ladder_inflate.
+    void add_ladder_volume(const Mesh& mesh, uint32_t index_start, uint32_t index_count);
 
-    // Check if sphere overlaps any ladder triangle.
-    // If true, returns the ladder surface normal (face normal pointing away from wall).
+    // Check if a point is inside any ladder volume.
+    // Returns true + the ladder's face normal.
     bool on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const;
 
     // Ray vs all triangles. Returns closest hit.
