@@ -261,7 +261,9 @@ int main(int argc, char* argv[]) {
     float fly_speed = 15.0f;
 
     // Level browser state
-    std::string current_level_name = custom_level ? fs::path(argv[1]).filename().string() : "built-in test level";
+    std::string current_level_name = (custom_level && level_arg) ? fs::path(level_arg).filename().string()
+                                   : custom_level              ? "Room1.glb"
+                                   :                             "built-in test level";
     std::vector<std::string> level_files;
     bool levels_scanned = false;
     char level_path_buf[512] = "";
