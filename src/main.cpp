@@ -358,6 +358,7 @@ int main(int argc, char* argv[]) {
     // --- Input state ---
     InputState input{};
     bool jump_held = false;
+    bool interact_pressed = false;  // single-frame flag, consumed each frame
     bool scroll_jump_pulse = false;  // one-frame pulse from scroll wheel
 
     // Scroll wheel pulses for movement actions (persists for a few ticks)
@@ -436,6 +437,8 @@ int main(int argc, char* argv[]) {
                     }
                     if (kb.matches_scancode(Action::Jump, event.key.scancode))
                         jump_held = true;
+                    if (kb.matches_scancode(Action::Interact, event.key.scancode) && !event.key.repeat)
+                        interact_pressed = true;
                 }
                 break;
 
@@ -801,6 +804,8 @@ int main(int argc, char* argv[]) {
         effects.update(dt);
 
         // Check if all enemies dead → unlock exit door
+        bool near_exit_door = false;
+        bool exit_door_locked = true;
         {
             bool any_alive = false;
             for (int i = 0; i < MAX_ENTITIES; i++) {
@@ -816,8 +821,54 @@ int main(int argc, char* argv[]) {
                     d.locked = false;
                     printf("EXIT UNLOCKED!\n");
                 }
+                // Check proximity to exit door
+                if (d.is_exit) {
+                    exit_door_locked = d.locked;
+                    HMM_Vec3 diff = HMM_SubV3(player.position, d.position);
+                    diff.Y = 0; // horizontal distance only
+                    float dist_sq = HMM_DotV3(diff, diff);
+                    if (dist_sq < 3.0f * 3.0f) // within 3m
+                        near_exit_door = true;
+                }
             }
         }
+
+        // Door interaction: pressing interact near unlocked exit → new room
+        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings) {
+            printf("Entering next room...\n");
+            procgen_cfg.seed = 0; // random seed each time
+
+            LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
+
+            // Clear entities + effects
+            for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
+            effects.init();
+
+            // Build collision
+            collision.triangles.clear();
+            collision.ladder_volumes.clear();
+            collision.build_from_mesh(pld.mesh);
+
+            // Upload to renderer
+            renderer.reload_mesh(pld.mesh);
+
+            // Spawn player
+            player.position = pld.spawn_pos;
+            player.velocity = HMM_V3(0, 0, 0);
+            camera.yaw = 0; camera.pitch = 0;
+            noclip = false;
+
+            // Spawn enemies
+            for (const auto& es : pld.enemy_spawns) {
+                if (es.type == EntityType::Drone)
+                    drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
+                else if (es.type == EntityType::Rusher)
+                    rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+            }
+
+            current_level_name = "Procedural";
+        }
+        interact_pressed = false; // consume
 
         // Build frustum from current camera for culling
         Frustum frustum;
@@ -918,6 +969,9 @@ int main(int argc, char* argv[]) {
                 if (d.is_exit) {
                     if (d.locked)
                         ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", drone_count + rusher_count_hud);
+                    else if (near_exit_door)
+                        ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to enter next room",
+                                           input_code_name(kb.get(Action::Interact, 0)));
                     else
                         ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "EXIT: UNLOCKED");
                 }
@@ -1029,8 +1083,9 @@ int main(int argc, char* argv[]) {
                 if (ImGui::Button("Generate New Level")) {
                     LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
 
-                    // Clear entities
+                    // Clear entities + effects
                     for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
+                    effects.init();
 
                     // Build collision
                     collision.triangles.clear();

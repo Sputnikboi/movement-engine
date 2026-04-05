@@ -206,9 +206,9 @@ LevelData generate_level(const ProcGenConfig& config,
     add_quad(m, {-hw,rh,-hd}, {hw,rh,-hd}, {hw,rh,hd}, {-hw,rh,hd},
              {0,-1,0}, config.ceiling_color);
 
-    // --- Door dimensions ---
-    float door_w = 3.0f;   // width of door gap
-    float door_h = 4.0f;   // height of door gap
+    // --- Door dimensions (sized to match Door.glb: ~1.2m wide x 2.1m tall) ---
+    float door_w = 1.5f;   // width of door gap (model + small margin)
+    float door_h = 2.3f;   // height of door gap (model + small margin)
 
     // Entry door on -Z wall, exit door on +Z wall (opposite sides)
     float entry_x = 0.0f;  // centered
