@@ -57,13 +57,22 @@ static bool load_level(const std::string& path,
         return false;
     }
 
-    // Update renderer
-    renderer.reload_mesh(ld.mesh);
-
-    // Update collision
+    // Build collision BEFORE merging visual-only geometry
     collision.triangles.clear();
     collision.ladder_volumes.clear();
     collision.build_from_mesh(ld.mesh);
+
+    // Merge visual-only geometry (VLadder etc) into render mesh — no collision
+    if (!ld.visual_only_mesh.vertices.empty()) {
+        uint32_t base = (uint32_t)ld.mesh.vertices.size();
+        ld.mesh.vertices.insert(ld.mesh.vertices.end(),
+            ld.visual_only_mesh.vertices.begin(), ld.visual_only_mesh.vertices.end());
+        for (uint32_t idx : ld.visual_only_mesh.indices)
+            ld.mesh.indices.push_back(base + idx);
+    }
+
+    // Upload to renderer (now includes visual-only geometry)
+    renderer.reload_mesh(ld.mesh);
 
     // Add ladder geometry to collision (solid surface, just not rendered)
     collision.add_mesh_triangles(ld.ladder_mesh);

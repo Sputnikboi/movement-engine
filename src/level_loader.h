@@ -15,6 +15,7 @@ struct SubMeshRange {
 struct LevelData {
     Mesh mesh;                // visible + collidable geometry
     Mesh ladder_mesh;         // ladder trigger geometry (invisible, not rendered)
+    Mesh visual_only_mesh;    // VLadder etc: rendered but no collision
     HMM_Vec3 spawn_pos   = HMM_V3(0.0f, 1.0f, 15.0f);
     bool     has_spawn    = false;
 

@@ -177,12 +177,15 @@ static void process_node(const cgltf_node* node, LevelData& out) {
     }
 
     if (node->mesh) {
-        // "Ladder" → trigger volume (invisible). "VLadder" → visual only (rendered normally).
-        bool is_ladder = name_starts_with(node->name, "ladder")
-                      && !name_starts_with(node->name, "vladder");
+        // "Ladder" → trigger volume (invisible, collision only).
+        // "VLadder" → visual only (rendered, no collision).
+        // Everything else → normal (rendered + collision).
+        bool is_vladder = name_starts_with(node->name, "vladder");
+        bool is_ladder  = !is_vladder && name_starts_with(node->name, "ladder");
 
-        // Choose target mesh: ladder nodes go to invisible ladder_mesh
-        Mesh& target = is_ladder ? out.ladder_mesh : out.mesh;
+        Mesh& target = is_ladder  ? out.ladder_mesh
+                     : is_vladder ? out.visual_only_mesh
+                     :              out.mesh;
         uint32_t idx_before = static_cast<uint32_t>(target.indices.size());
 
         for (cgltf_size p = 0; p < node->mesh->primitives_count; p++) {
