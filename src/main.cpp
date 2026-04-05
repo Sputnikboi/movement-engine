@@ -442,6 +442,8 @@ int main(int argc, char* argv[]) {
                         jump_held = true;
                     if (kb.matches_scancode(Action::Interact, event.key.scancode) && !event.key.repeat)
                         interact_pressed = true;
+                    if (kb.matches_scancode(Action::Holster, event.key.scancode) && !event.key.repeat)
+                        player.weapon_holstered = !player.weapon_holstered;
                 }
                 break;
 
@@ -619,6 +621,10 @@ int main(int argc, char* argv[]) {
             bool fire_pressed = !show_settings && !noclip && kb.held(Action::Shoot, keys_frame);
             bool reload_pressed = !show_settings && !noclip && kb.held(Action::Reload, keys_frame);
             bool ads_input = !show_settings && !noclip && kb.held(Action::ADS, keys_frame);
+
+            // Auto-unholster on any weapon action
+            if (player.weapon_holstered && (fire_pressed || reload_pressed || ads_input))
+                player.weapon_holstered = false;
 
             weapon.update(dt, fire_pressed, reload_pressed, ads_input);
 
@@ -1368,9 +1374,13 @@ int main(int argc, char* argv[]) {
             // --- Movement ---
             if (ImGui::CollapsingHeader("Movement")) {
                 ImGui::SliderFloat("Gravity",          &player.gravity,        0.0f, 40.0f);
-                ImGui::SliderFloat("Max Speed",        &player.max_speed,      1.0f, 30.0f);
+                ImGui::SliderFloat("Max Speed (Holstered)", &player.max_speed,    1.0f, 30.0f);
+                ImGui::SliderFloat("Weapon Speed",     &player.weapon_speed,   1.0f, 30.0f);
                 ImGui::SliderFloat("Air Wish Speed",   &player.air_wish_speed, 0.1f, 5.0f, "%.2f");
                 ImGui::SliderFloat("Ground Accel",     &player.ground_accel,   1.0f, 50.0f);
+                ImGui::Text("Holstered: %s (effective: %.1f u/s, accel: %.1f)",
+                            player.weapon_holstered ? "YES" : "NO",
+                            player.effective_max_speed(), player.effective_accel());
                 ImGui::SliderFloat("Air Accel",        &player.air_accel,      1.0f, 200.0f);
                 ImGui::SliderFloat("Friction",         &player.friction,       0.0f, 20.0f);
                 ImGui::SliderFloat("Jump Speed",       &player.jump_speed,     1.0f, 20.0f);
@@ -1491,7 +1501,7 @@ int main(int argc, char* argv[]) {
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
         // Viewmodel scene data — same view, but tighter near plane to prevent clipping
-        const Mesh* vm_mesh_ptr = weapon.mesh_loaded ? &weapon.viewmodel_mesh : nullptr;
+        const Mesh* vm_mesh_ptr = (weapon.mesh_loaded && !player.weapon_holstered) ? &weapon.viewmodel_mesh : nullptr;
         HMM_Mat4 vm_model = weapon.get_viewmodel_matrix(camera);
         HMM_Mat4 vm_mag_model = weapon.get_mag_matrix(camera);
         SceneData vm_scene = scene;

@@ -498,12 +498,12 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
     if (wish_len > 0.001f) {
         wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
 
-        float speed_cap = crouched ? crouch_speed : max_speed;
+        float speed_cap = crouched ? crouch_speed : effective_max_speed();
         wish_speed = wish_len * speed_cap;
         if (wish_speed > speed_cap) wish_speed = speed_cap;
     }
 
-    accelerate(wish_dir, wish_speed, ground_accel, dt);
+    accelerate(wish_dir, wish_speed, effective_accel(), dt);
 
     apply_soft_speed_cap(dt);
 
@@ -527,7 +527,7 @@ void Player::air_move(float dt, const InputState& input, const CollisionWorld& w
     HMM_Vec3 wish_dir = {};
     if (wish_len > 0.001f) {
         wish_dir = HMM_MulV3F(wish_dir_raw, 1.0f / wish_len);
-        wish_speed = wish_len * max_speed;
+        wish_speed = wish_len * effective_max_speed();
         if (wish_speed > air_wish_speed)
             wish_speed = air_wish_speed;
     }

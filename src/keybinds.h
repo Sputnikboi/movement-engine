@@ -23,6 +23,7 @@ enum class Action : uint8_t {
     ToggleHUD,
     ToggleFullscreen,
     Interact,
+    Holster,
     COUNT
 };
 
@@ -46,6 +47,7 @@ inline const char* action_name(Action a) {
         case Action::ToggleHUD:        return "Toggle HUD";
         case Action::ToggleFullscreen: return "Toggle Fullscreen";
         case Action::Interact:         return "Interact";
+        case Action::Holster:          return "Holster Weapon";
         default:                       return "???";
     }
 }
@@ -114,6 +116,7 @@ struct Keybinds {
         binds[static_cast<int>(Action::ToggleHUD)][0]        = SDL_SCANCODE_H;
         binds[static_cast<int>(Action::ToggleFullscreen)][0] = SDL_SCANCODE_F11;
         binds[static_cast<int>(Action::Interact)][0]        = SDL_SCANCODE_E;
+        binds[static_cast<int>(Action::Holster)][0]         = SDL_SCANCODE_3;
     }
 
     InputCode get(Action a, int slot) const {

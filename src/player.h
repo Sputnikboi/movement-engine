@@ -28,7 +28,9 @@ struct Player {
 
     // --- Source/Quake movement parameters ---
     float gravity         = 20.0f;
-    float max_speed       = 8.0f;
+    float max_speed       = 8.0f;       // holstered / base max speed
+    float weapon_speed    = 6.5f;       // max speed with weapon out
+    float holster_accel_scale = 1.0f;   // accel multiplier when holstered (auto-computed)
     float crouch_speed    = 4.0f;     // ground speed while crouched (not sliding)
     float air_wish_speed  = 0.76f;
     float ground_accel    = 10.0f;
@@ -42,10 +44,10 @@ struct Player {
     float slide_friction         = 0.8f;   // much lower than normal friction
     float slide_boost            = 3.0f;   // speed burst on power slide start
     float slide_stop_speed       = 3.0f;   // auto-cancel slide below this speed
-    float slide_boost_cooldown   = 2.0f;   // seconds between power slide boosts
+    float slide_boost_cooldown   = 1.5f;   // seconds between power slide boosts
     float slide_min_speed        = 6.0f;   // minimum speed to start a slide
     float slide_jump_boost       = 4.0f;   // extra speed when jumping out of power slide
-    float slide_min_time_for_jump = 0.3f;  // must slide this long for jump boost
+    float slide_min_time_for_jump = 0.24f; // must slide this long for jump boost
     float slide_min_speed_for_jump = 5.0f; // must be this fast for slide-jump boost
 
     // Soft speed cap
@@ -75,6 +77,11 @@ struct Player {
     float    ladder_jump_mult  = 1.2f;  // jump-off speed = max_speed * this
     int      ladder_cooldown_idx = -1;  // volume index to ignore after jump-off
     float    ladder_cooldown     = 0.0f; // seconds remaining before re-grab allowed
+
+    // --- Weapon holster ---
+    bool weapon_holstered = false;
+    float effective_max_speed() const { return weapon_holstered ? max_speed : weapon_speed; }
+    float effective_accel() const { return weapon_holstered ? ground_accel * (max_speed / weapon_speed) : ground_accel; }
 
     // --- Crouch/slide state ---
     bool  crouched          = false;
