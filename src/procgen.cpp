@@ -250,12 +250,12 @@ LevelData generate_level(const ProcGenConfig& config,
     // Scoot door models slightly into the wall so they sit flush
     float door_offset = 0.05f;
     DoorInfo entry_door, exit_door;
-    entry_door.position = HMM_V3(entry_x, 0, -hd + door_offset);
+    entry_door.position = HMM_V3(entry_x, 0, -hd - door_offset);
     entry_door.yaw = 0;                    // facing +Z (into room)
     entry_door.is_exit = false;
     entry_door.locked = false;
 
-    exit_door.position = HMM_V3(exit_x, 0, hd - door_offset);
+    exit_door.position = HMM_V3(exit_x, 0, hd + door_offset);
     exit_door.yaw = 3.14159265f;            // facing -Z (into room)
     exit_door.is_exit = true;
     exit_door.locked = true;
