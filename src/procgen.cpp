@@ -71,66 +71,70 @@ static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d, HMM_Vec3 c
              {-1,0,0}, color);
 }
 
-// Add a ramp: a triangular prism connecting floor_y to top_y
-// along the Z axis from z0 to z1, centered on x with given width.
-// Ramp from (cx, floor_y, z0) to (cx, top_y, z1) with given width.
-// z0 is the low end, z1 is the high end.
-static void add_ramp(Mesh& m, float cx, float z0, float z1,
-                     float floor_y, float top_y, float width, HMM_Vec3 color) {
-    float hw = width * 0.5f;
-    float x0 = cx - hw, x1 = cx + hw;
-
-    // Slope surface — compute normal explicitly pointing upward
-    HMM_Vec3 a = {x0, floor_y, z0};
-    HMM_Vec3 b = {x1, floor_y, z0};
-    HMM_Vec3 c = {x1, top_y, z1};
-    HMM_Vec3 d = {x0, top_y, z1};
-
-    HMM_Vec3 edge1 = HMM_SubV3(c, b);
-    HMM_Vec3 edge2 = HMM_SubV3(a, b);
+// Add a ramp from 4 corner points (low0, low1 at bottom, high0, high1 at top).
+// Builds top slope face, underside, two side triangles, and a back wall.
+static void add_ramp_from_corners(Mesh& m,
+                                  HMM_Vec3 low0, HMM_Vec3 low1,   // bottom edge (floor_y)
+                                  HMM_Vec3 high0, HMM_Vec3 high1, // top edge (top_y)
+                                  HMM_Vec3 color) {
+    // Slope surface normal — cross two edges and ensure it points upward
+    HMM_Vec3 edge1 = HMM_SubV3(high1, low1);
+    HMM_Vec3 edge2 = HMM_SubV3(low0, low1);
     HMM_Vec3 normal = HMM_NormV3(HMM_Cross(edge1, edge2));
-    // Ensure normal points upward (walkable surface)
     if (normal.Y < 0) normal = HMM_MulV3F(normal, -1.0f);
 
-    add_quad(m, a, d, c, b, normal, color);
-
+    // Top slope face
+    add_quad(m, low0, high0, high1, low1, normal, color);
     // Underside
-    add_quad(m, a, b, c, d, HMM_MulV3F(normal, -1.0f), color);
+    add_quad(m, low0, low1, high1, high0, HMM_MulV3F(normal, -1.0f), color);
 
-    // Left side triangle (normal = -X)
-    {
+    // Back wall (vertical face at the high end)
+    HMM_Vec3 high0_floor = high0; high0_floor.Y = low0.Y;
+    HMM_Vec3 high1_floor = high1; high1_floor.Y = low1.Y;
+    // Normal points away from the ramp slope
+    HMM_Vec3 back_dir = HMM_SubV3(high0, low0);
+    back_dir.Y = 0;
+    HMM_Vec3 back_normal = HMM_NormV3(back_dir);
+    add_quad(m, high1_floor, high1, high0, high0_floor, back_normal, color);
+
+    // Side triangles
+    auto add_tri = [&](HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 n) {
         uint32_t base = (uint32_t)m.vertices.size();
-        auto push = [&](HMM_Vec3 pos, HMM_Vec3 n) {
+        auto push = [&](HMM_Vec3 pos) {
             Vertex3D v;
             v.pos[0] = pos.X; v.pos[1] = pos.Y; v.pos[2] = pos.Z;
             v.normal[0] = n.X; v.normal[1] = n.Y; v.normal[2] = n.Z;
             v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
             m.vertices.push_back(v);
         };
-        push({x0, floor_y, z0}, {-1,0,0});
-        push({x0, floor_y, z1}, {-1,0,0});
-        push({x0, top_y, z1},   {-1,0,0});
-        m.indices.push_back(base + 0);
-        m.indices.push_back(base + 1);
-        m.indices.push_back(base + 2);
-    }
-    // Right side triangle (normal = +X)
-    {
-        uint32_t base = (uint32_t)m.vertices.size();
-        auto push = [&](HMM_Vec3 pos, HMM_Vec3 n) {
-            Vertex3D v;
-            v.pos[0] = pos.X; v.pos[1] = pos.Y; v.pos[2] = pos.Z;
-            v.normal[0] = n.X; v.normal[1] = n.Y; v.normal[2] = n.Z;
-            v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
-            m.vertices.push_back(v);
-        };
-        push({x1, floor_y, z0}, {1,0,0});
-        push({x1, top_y, z1},   {1,0,0});
-        push({x1, floor_y, z1}, {1,0,0});
-        m.indices.push_back(base + 0);
-        m.indices.push_back(base + 1);
-        m.indices.push_back(base + 2);
-    }
+        push(a); push(b); push(c);
+        // Auto-correct winding
+        HMM_Vec3 e1 = HMM_SubV3(b, a);
+        HMM_Vec3 e2 = HMM_SubV3(c, a);
+        HMM_Vec3 cr = HMM_Cross(e1, e2);
+        if (HMM_DotV3(cr, n) >= 0.0f) {
+            m.indices.push_back(base + 0);
+            m.indices.push_back(base + 1);
+            m.indices.push_back(base + 2);
+        } else {
+            m.indices.push_back(base + 0);
+            m.indices.push_back(base + 2);
+            m.indices.push_back(base + 1);
+        }
+    };
+
+    // Left side: low0, high0_floor, high0 (side normal perpendicular to ramp direction)
+    HMM_Vec3 ramp_dir = HMM_SubV3(high0, low0);
+    HMM_Vec3 left_normal = HMM_NormV3(HMM_Cross(ramp_dir, {0,1,0}));
+    // Make sure left_normal points toward the low0 side
+    HMM_Vec3 center_to_low0 = HMM_SubV3(low0, HMM_MulV3F(HMM_AddV3(low0, low1), 0.5f));
+    if (HMM_DotV3(left_normal, center_to_low0) < 0) left_normal = HMM_MulV3F(left_normal, -1.0f);
+
+    add_tri(low0, high0_floor, high0, left_normal);
+
+    // Right side
+    HMM_Vec3 right_normal = HMM_MulV3F(left_normal, -1.0f);
+    add_tri(low1, high1_floor, high1, right_normal);
 }
 
 // ============================================================
@@ -207,8 +211,8 @@ LevelData generate_level(const ProcGenConfig& config,
              {0,-1,0}, config.ceiling_color);
 
     // --- Door dimensions (sized to match Door.glb: ~1.2m wide x 2.1m tall) ---
-    float door_w = 1.5f;   // width of door gap (model + small margin)
-    float door_h = 2.3f;   // height of door gap (model + small margin)
+    float door_w = 1.2f;   // width of door gap (tight to model)
+    float door_h = 2.15f;  // height of door gap (tight to model)
 
     // Entry door on -Z wall, exit door on +Z wall (opposite sides)
     float entry_x = 0.0f;  // centered
@@ -243,13 +247,15 @@ LevelData generate_level(const ProcGenConfig& config,
              {1,0,0}, config.wall_color);
 
     // --- Place door models ---
+    // Scoot door models slightly into the wall so they sit flush
+    float door_offset = 0.05f;
     DoorInfo entry_door, exit_door;
-    entry_door.position = HMM_V3(entry_x, 0, -hd);
+    entry_door.position = HMM_V3(entry_x, 0, -hd + door_offset);
     entry_door.yaw = 0;                    // facing +Z (into room)
     entry_door.is_exit = false;
     entry_door.locked = false;
 
-    exit_door.position = HMM_V3(exit_x, 0, hd);
+    exit_door.position = HMM_V3(exit_x, 0, hd - door_offset);
     exit_door.yaw = 3.14159265f;            // facing -Z (into room)
     exit_door.is_exit = true;
     exit_door.locked = true;
@@ -271,8 +277,8 @@ LevelData generate_level(const ProcGenConfig& config,
     int placed_count = 0;
 
     // Reserve spawn area + door areas so nothing blocks them
-    placed[placed_count++] = {entry_x, -hd + 3.0f, 6.0f, 6.0f}; // entry/spawn
-    placed[placed_count++] = {exit_x,   hd - 3.0f, 6.0f, 6.0f}; // exit door
+    placed[placed_count++] = {entry_x, -hd + 2.0f, 3.0f, 4.0f}; // entry/spawn
+    placed[placed_count++] = {exit_x,   hd - 2.0f, 3.0f, 4.0f}; // exit door
 
     // --- Platforms ---
     for (int i = 0; i < config.platform_count && placed_count < MAX_PLACED; i++) {
@@ -286,7 +292,7 @@ LevelData generate_level(const ProcGenConfig& config,
         for (int attempt = 0; attempt < 30; attempt++) {
             px = randf(-hw + config.box_margin + pw * 0.5f, hw - config.box_margin - pw * 0.5f);
             pz = randf(-hd + config.box_margin + pd * 0.5f, hd - config.box_margin - pd * 0.5f);
-            if (!overlaps(px, pz, pw, pd, placed, placed_count, 2.0f)) {
+            if (!overlaps(px, pz, pw, pd, placed, placed_count, 3.0f)) {
                 ok = true;
                 break;
             }
@@ -298,29 +304,37 @@ LevelData generate_level(const ProcGenConfig& config,
 
         // Ramp up to this platform
         if (config.gen_ramps) {
-            // Pick a side to place the ramp
             int side = rand() % 4;
             float ramp_len = ph * 2.0f; // gentle slope
+            float rw2 = config.ramp_width * 0.5f;
+            HMM_Vec3 low0, low1, high0, high1;
             switch (side) {
-            case 0: // +Z side
-                add_ramp(m, px, pz + pd * 0.5f, pz + pd * 0.5f + ramp_len,
-                         0, ph, config.ramp_width, config.ramp_color);
+            case 0: // +Z side — ramp extends from platform +Z edge outward
+                low0  = {px - rw2, 0,  pz + pd*0.5f + ramp_len};
+                low1  = {px + rw2, 0,  pz + pd*0.5f + ramp_len};
+                high0 = {px - rw2, ph, pz + pd*0.5f};
+                high1 = {px + rw2, ph, pz + pd*0.5f};
                 break;
             case 1: // -Z side
-                add_ramp(m, px, pz - pd * 0.5f - ramp_len, pz - pd * 0.5f,
-                         0, ph, config.ramp_width, config.ramp_color);
+                low0  = {px + rw2, 0,  pz - pd*0.5f - ramp_len};
+                low1  = {px - rw2, 0,  pz - pd*0.5f - ramp_len};
+                high0 = {px + rw2, ph, pz - pd*0.5f};
+                high1 = {px - rw2, ph, pz - pd*0.5f};
                 break;
-            case 2: // +X side (ramp along X, swap coords)
-                add_ramp(m, pz, px + pw * 0.5f, px + pw * 0.5f + ramp_len,
-                         0, ph, config.ramp_width, config.ramp_color);
-                // This won't work right — ramps are Z-aligned. Just use Z.
-                // Fallback to +Z
+            case 2: // +X side
+                low0  = {px + pw*0.5f + ramp_len, 0,  pz + rw2};
+                low1  = {px + pw*0.5f + ramp_len, 0,  pz - rw2};
+                high0 = {px + pw*0.5f, ph, pz + rw2};
+                high1 = {px + pw*0.5f, ph, pz - rw2};
                 break;
-            default: // -Z fallback
-                add_ramp(m, px, pz - pd * 0.5f - ramp_len, pz - pd * 0.5f,
-                         0, ph, config.ramp_width, config.ramp_color);
+            default: // -X side
+                low0  = {px - pw*0.5f - ramp_len, 0,  pz - rw2};
+                low1  = {px - pw*0.5f - ramp_len, 0,  pz + rw2};
+                high0 = {px - pw*0.5f, ph, pz - rw2};
+                high1 = {px - pw*0.5f, ph, pz + rw2};
                 break;
             }
+            add_ramp_from_corners(m, low0, low1, high0, high1, config.ramp_color);
         }
     }
 
@@ -336,7 +350,7 @@ LevelData generate_level(const ProcGenConfig& config,
         for (int attempt = 0; attempt < 30; attempt++) {
             bx = randf(-hw + config.box_margin + bw * 0.5f, hw - config.box_margin - bw * 0.5f);
             bz = randf(-hd + config.box_margin + bd * 0.5f, hd - config.box_margin - bd * 0.5f);
-            if (!overlaps(bx, bz, bw, bd, placed, placed_count, 1.0f)) {
+            if (!overlaps(bx, bz, bw, bd, placed, placed_count, 2.0f)) {
                 ok = true;
                 break;
             }
@@ -356,23 +370,32 @@ LevelData generate_level(const ProcGenConfig& config,
     ld.spawn_pos = HMM_V3(entry_x, 1.0f, -hd + 3.0f);
     ld.has_spawn = true;
 
-    // --- Enemy spawns ---
-    for (int i = 0; i < config.drone_count; i++) {
-        float ex = randf(-hw * 0.7f, hw * 0.7f);
-        float ez = randf(-hd * 0.7f, hd * 0.7f);
+    // --- Enemy spawns (avoid placed objects) ---
+    auto spawn_enemy = [&](EntityType type, float spawn_h) {
+        for (int attempt = 0; attempt < 40; attempt++) {
+            float ex = randf(-hw * 0.7f, hw * 0.7f);
+            float ez = randf(-hd * 0.7f, hd * 0.7f);
+            // Check not inside any placed box/platform/door zone (1m clearance)
+            if (!overlaps(ex, ez, 1.0f, 1.0f, placed, placed_count, 1.0f)) {
+                EnemySpawn es;
+                es.position = HMM_V3(ex, spawn_h, ez);
+                es.type = type;
+                ld.enemy_spawns.push_back(es);
+                return;
+            }
+        }
+        // Fallback: spawn anyway at a random position
+        float ex = randf(-hw * 0.5f, hw * 0.5f);
+        float ez = randf(-hd * 0.5f, hd * 0.5f);
         EnemySpawn es;
-        es.position = HMM_V3(ex, config.enemy_height, ez);
-        es.type = EntityType::Drone;
+        es.position = HMM_V3(ex, spawn_h, ez);
+        es.type = type;
         ld.enemy_spawns.push_back(es);
-    }
-    for (int i = 0; i < config.rusher_count; i++) {
-        float ex = randf(-hw * 0.7f, hw * 0.7f);
-        float ez = randf(-hd * 0.7f, hd * 0.7f);
-        EnemySpawn es;
-        es.position = HMM_V3(ex, config.enemy_height, ez);
-        es.type = EntityType::Rusher;
-        ld.enemy_spawns.push_back(es);
-    }
+    };
+    for (int i = 0; i < config.drone_count; i++)
+        spawn_enemy(EntityType::Drone, config.enemy_height);
+    for (int i = 0; i < config.rusher_count; i++)
+        spawn_enemy(EntityType::Rusher, 1.0f); // rushers on the ground
 
     printf("ProcGen: %zu verts, %zu indices, %d boxes, %d platforms, %d enemies\n",
            m.vertices.size(), m.indices.size(), box_count, config.platform_count,

@@ -160,6 +160,7 @@ int main(int argc, char* argv[]) {
     HMM_Vec3 spawn_pos = HMM_V3(0.0f, 1.0f, 15.0f);
     bool custom_level = false;
     bool has_spawn = false;
+    bool is_procgen = false;
     std::vector<EnemySpawn> initial_enemy_spawns;
 
     // Determine level path: command line arg, or default to Room1
@@ -218,6 +219,7 @@ int main(int argc, char* argv[]) {
         has_spawn = ld.has_spawn;
         initial_enemy_spawns = std::move(ld.enemy_spawns);
         custom_level = true;
+        is_procgen = true;
 
         collision.build_from_mesh(ld.mesh);
         level = std::move(ld.mesh);
@@ -274,6 +276,7 @@ int main(int argc, char* argv[]) {
     Keybinds& kb = config.keybinds;
 
     player.position = spawn_pos;
+    if (is_procgen) camera.yaw = HMM_PI32 / 2.0f; // face +Z (into room)
 
     // Start in noclip if custom level has no spawn point
     bool noclip = (custom_level && !has_spawn);
@@ -852,10 +855,10 @@ int main(int argc, char* argv[]) {
             // Upload to renderer
             renderer.reload_mesh(pld.mesh);
 
-            // Spawn player
+            // Spawn player facing into room (+Z = yaw PI/2)
             player.position = pld.spawn_pos;
             player.velocity = HMM_V3(0, 0, 0);
-            camera.yaw = 0; camera.pitch = 0;
+            camera.yaw = HMM_PI32 / 2.0f; camera.pitch = 0;
             noclip = false;
 
             // Spawn enemies
@@ -1095,10 +1098,10 @@ int main(int argc, char* argv[]) {
                     // Upload to renderer
                     renderer.reload_mesh(pld.mesh);
 
-                    // Spawn player
+                    // Spawn player facing into room (+Z = yaw PI/2)
                     player.position = pld.spawn_pos;
                     player.velocity = HMM_V3(0, 0, 0);
-                    camera.yaw = 0; camera.pitch = 0;
+                    camera.yaw = HMM_PI32 / 2.0f; camera.pitch = 0;
                     noclip = false;
 
                     // Spawn enemies
