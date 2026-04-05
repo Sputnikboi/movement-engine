@@ -167,6 +167,10 @@ static void process_node(const cgltf_node* node, LevelData& out) {
                 (!node->mesh && !node->children_count) ? " [empty]" : "");
     }
 
+    // Debug: print all node names
+    if (node->name)
+        fprintf(stdout, "  Node: '%s'\n", node->name);
+
     // Check for spawn point (Empty named "spawn" or "Spawn" etc.)
     if (name_starts_with(node->name, "spawn") &&
         !name_starts_with(node->name, "spawndrone") &&
