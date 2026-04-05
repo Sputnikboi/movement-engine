@@ -143,10 +143,24 @@ int main(int argc, char* argv[]) {
     bool has_spawn = false;
     std::vector<EnemySpawn> initial_enemy_spawns;
 
-    if (argc > 1) {
-        LevelData ld = load_level_gltf(argv[1]);
+    // Determine level path: command line arg, or default to Room1
+    const char* level_path = (argc > 1) ? argv[1] : nullptr;
+    if (!level_path) {
+        // Try common paths for Room1
+        static const char* defaults[] = {
+            "levels/Room1.glb", "../levels/Room1.glb", "../../levels/Room1.glb",
+            "levels/room1.glb", "../levels/room1.glb", "../../levels/room1.glb",
+        };
+        for (const char* p : defaults) {
+            LevelData test = load_level_gltf(p);
+            if (!test.mesh.vertices.empty()) { level_path = p; break; }
+        }
+    }
+
+    if (level_path) {
+        LevelData ld = load_level_gltf(level_path);
         if (ld.mesh.vertices.empty()) {
-            fprintf(stderr, "Failed to load level '%s', falling back to test level\n", argv[1]);
+            fprintf(stderr, "Failed to load level '%s', falling back to test level\n", level_path);
             level = create_test_level();
         } else {
             level = std::move(ld.mesh);
@@ -154,10 +168,10 @@ int main(int argc, char* argv[]) {
             has_spawn = ld.has_spawn;
             initial_enemy_spawns = std::move(ld.enemy_spawns);
             custom_level = true;
+            printf("Loaded level: %s\n", level_path);
         }
     } else {
-        printf("Usage: %s [level.glb]\n", argv[0]);
-        printf("No level file given, using built-in test level\n");
+        printf("No level file given and Room1 not found, using built-in test level\n");
         level = create_test_level();
     }
 
