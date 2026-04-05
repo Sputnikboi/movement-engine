@@ -45,30 +45,45 @@ static void add_quad(Mesh& m, HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 d,
     }
 }
 
-// Add a box (6 faces) at position with given size. Bottom face at pos.Y.
-static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d, HMM_Vec3 color) {
+// Rotate a point around Y axis at a given center
+static HMM_Vec3 rotate_y(HMM_Vec3 p, float cx, float cz, float cy_cos, float sy_sin) {
+    float lx = p.X - cx, lz = p.Z - cz;
+    return {cx + lx * cy_cos + lz * sy_sin, p.Y, cz - lx * sy_sin + lz * cy_cos};
+}
+static HMM_Vec3 rotate_n(HMM_Vec3 n, float cy_cos, float sy_sin) {
+    return {n.X * cy_cos + n.Z * sy_sin, n.Y, -n.X * sy_sin + n.Z * cy_cos};
+}
+
+// Add a box with random Y rotation. Bottom face at pos.Y.
+static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d,
+                    HMM_Vec3 color, float yaw = 0.0f) {
     float x0 = pos.X - w * 0.5f, x1 = pos.X + w * 0.5f;
     float y0 = pos.Y,            y1 = pos.Y + h;
     float z0 = pos.Z - d * 0.5f, z1 = pos.Z + d * 0.5f;
+    float c = cosf(yaw), s = sinf(yaw);
+    float cx = pos.X, cz = pos.Z;
+
+    auto r = [&](HMM_Vec3 p) { return rotate_y(p, cx, cz, c, s); };
+    auto rn = [&](HMM_Vec3 n) { return rotate_n(n, c, s); };
 
     // Top (+Y)
-    add_quad(m, {x0,y1,z0}, {x1,y1,z0}, {x1,y1,z1}, {x0,y1,z1},
+    add_quad(m, r({x0,y1,z0}), r({x1,y1,z0}), r({x1,y1,z1}), r({x0,y1,z1}),
              {0,1,0}, color);
     // Bottom (-Y)
-    add_quad(m, {x0,y0,z1}, {x1,y0,z1}, {x1,y0,z0}, {x0,y0,z0},
+    add_quad(m, r({x0,y0,z1}), r({x1,y0,z1}), r({x1,y0,z0}), r({x0,y0,z0}),
              {0,-1,0}, color);
     // Front (+Z)
-    add_quad(m, {x0,y0,z1}, {x0,y1,z1}, {x1,y1,z1}, {x1,y0,z1},
-             {0,0,1}, color);
+    add_quad(m, r({x0,y0,z1}), r({x0,y1,z1}), r({x1,y1,z1}), r({x1,y0,z1}),
+             rn({0,0,1}), color);
     // Back (-Z)
-    add_quad(m, {x1,y0,z0}, {x1,y1,z0}, {x0,y1,z0}, {x0,y0,z0},
-             {0,0,-1}, color);
+    add_quad(m, r({x1,y0,z0}), r({x1,y1,z0}), r({x0,y1,z0}), r({x0,y0,z0}),
+             rn({0,0,-1}), color);
     // Right (+X)
-    add_quad(m, {x1,y0,z1}, {x1,y1,z1}, {x1,y1,z0}, {x1,y0,z0},
-             {1,0,0}, color);
+    add_quad(m, r({x1,y0,z1}), r({x1,y1,z1}), r({x1,y1,z0}), r({x1,y0,z0}),
+             rn({1,0,0}), color);
     // Left (-X)
-    add_quad(m, {x0,y0,z0}, {x0,y1,z0}, {x0,y1,z1}, {x0,y0,z1},
-             {-1,0,0}, color);
+    add_quad(m, r({x0,y0,z0}), r({x0,y1,z0}), r({x0,y1,z1}), r({x0,y0,z1}),
+             rn({-1,0,0}), color);
 }
 
 // Add a ramp from 4 corner points (low0, low1 at bottom, high0, high1 at top).
@@ -141,16 +156,17 @@ static void add_ramp_from_corners(Mesh& m,
 //  Overlap check for placed objects
 // ============================================================
 
-struct PlacedBox {
-    float x, z, w, d;
+struct PlacedObj {
+    float x, z, radius; // center + bounding circle radius
 };
 
-static bool overlaps(float x, float z, float w, float d,
-                     const PlacedBox* boxes, int count, float margin) {
+static bool overlaps(float x, float z, float r,
+                     const PlacedObj* objs, int count, float margin) {
     for (int i = 0; i < count; i++) {
-        const auto& b = boxes[i];
-        if (fabsf(x - b.x) < (w + b.w) * 0.5f + margin &&
-            fabsf(z - b.z) < (d + b.d) * 0.5f + margin)
+        const auto& b = objs[i];
+        float dx = x - b.x, dz = z - b.z;
+        float min_dist = r + b.radius + margin;
+        if (dx * dx + dz * dz < min_dist * min_dist)
             return true;
     }
     return false;
@@ -273,67 +289,57 @@ LevelData generate_level(const ProcGenConfig& config,
 
     // --- Track placed objects for overlap avoidance ---
     const int MAX_PLACED = 64;
-    PlacedBox placed[MAX_PLACED];
+    PlacedObj placed[MAX_PLACED];
     int placed_count = 0;
 
     // Reserve spawn area + door areas so nothing blocks them
-    placed[placed_count++] = {entry_x, -hd + 2.0f, 3.0f, 4.0f}; // entry/spawn
-    placed[placed_count++] = {exit_x,   hd - 2.0f, 3.0f, 4.0f}; // exit door
+    placed[placed_count++] = {entry_x, -hd + 2.0f, 2.5f}; // entry/spawn
+    placed[placed_count++] = {exit_x,   hd - 2.0f, 2.5f}; // exit door
 
     // --- Platforms ---
     for (int i = 0; i < config.platform_count && placed_count < MAX_PLACED; i++) {
         float pw = randf(config.platform_size_min, config.platform_size_max);
         float pd = randf(config.platform_size_min, config.platform_size_max);
         float ph = randf(config.platform_height_min, config.platform_height_max);
+        float yaw = randf(0, HMM_PI32 * 2.0f); // random rotation
+
+        // Ramp length determines total footprint
+        float ramp_len = config.gen_ramps ? ph * 4.0f : 0.0f;
+        // Bounding radius: half-diagonal of platform + ramp extent
+        float half_diag = sqrtf(pw * pw + pd * pd) * 0.5f;
+        float total_radius = half_diag + ramp_len + config.ramp_width * 0.5f;
 
         // Try to place without overlap
         float px = 0, pz = 0;
         bool ok = false;
+        float inset = total_radius + config.box_margin;
         for (int attempt = 0; attempt < 30; attempt++) {
-            px = randf(-hw + config.box_margin + pw * 0.5f, hw - config.box_margin - pw * 0.5f);
-            pz = randf(-hd + config.box_margin + pd * 0.5f, hd - config.box_margin - pd * 0.5f);
-            if (!overlaps(px, pz, pw, pd, placed, placed_count, 3.0f)) {
+            px = randf(-hw + inset, hw - inset);
+            pz = randf(-hd + inset, hd - inset);
+            if (!overlaps(px, pz, total_radius, placed, placed_count, 2.0f)) {
                 ok = true;
                 break;
             }
         }
         if (!ok) continue;
 
-        add_box(m, {px, 0, pz}, pw, ph, pd, config.platform_color);
-        placed[placed_count++] = {px, pz, pw, pd};
+        add_box(m, {px, 0, pz}, pw, ph, pd, config.platform_color, yaw);
+        placed[placed_count++] = {px, pz, total_radius};
 
-        // Ramp up to this platform
+        // Ramp up to this platform — always on the local +Z side, rotated by yaw
         if (config.gen_ramps) {
-            int side = rand() % 4;
-            float ramp_len = ph * 4.0f; // gentle slope (~14°)
             float rw2 = config.ramp_width * 0.5f;
-            HMM_Vec3 low0, low1, high0, high1;
-            switch (side) {
-            case 0: // +Z side — ramp extends from platform +Z edge outward
-                low0  = {px - rw2, 0,  pz + pd*0.5f + ramp_len};
-                low1  = {px + rw2, 0,  pz + pd*0.5f + ramp_len};
-                high0 = {px - rw2, ph, pz + pd*0.5f};
-                high1 = {px + rw2, ph, pz + pd*0.5f};
-                break;
-            case 1: // -Z side
-                low0  = {px + rw2, 0,  pz - pd*0.5f - ramp_len};
-                low1  = {px - rw2, 0,  pz - pd*0.5f - ramp_len};
-                high0 = {px + rw2, ph, pz - pd*0.5f};
-                high1 = {px - rw2, ph, pz - pd*0.5f};
-                break;
-            case 2: // +X side
-                low0  = {px + pw*0.5f + ramp_len, 0,  pz + rw2};
-                low1  = {px + pw*0.5f + ramp_len, 0,  pz - rw2};
-                high0 = {px + pw*0.5f, ph, pz + rw2};
-                high1 = {px + pw*0.5f, ph, pz - rw2};
-                break;
-            default: // -X side
-                low0  = {px - pw*0.5f - ramp_len, 0,  pz - rw2};
-                low1  = {px - pw*0.5f - ramp_len, 0,  pz + rw2};
-                high0 = {px - pw*0.5f, ph, pz - rw2};
-                high1 = {px - pw*0.5f, ph, pz + rw2};
-                break;
-            }
+            float c = cosf(yaw), s = sinf(yaw);
+            auto rot = [&](float lx, float lz) -> HMM_Vec3 {
+                return {px + lx * c + lz * s, 0, pz - lx * s + lz * c};
+            };
+            // Local-space ramp: low end at +Z + ramp_len, high end at +Z edge of platform
+            HMM_Vec3 low0 = rot(-rw2, pd * 0.5f + ramp_len);
+            HMM_Vec3 low1 = rot( rw2, pd * 0.5f + ramp_len);
+            HMM_Vec3 high0 = rot(-rw2, pd * 0.5f);
+            HMM_Vec3 high1 = rot( rw2, pd * 0.5f);
+            low0.Y = 0; low1.Y = 0;
+            high0.Y = ph; high1.Y = ph;
             add_ramp_from_corners(m, low0, low1, high0, high1, config.ramp_color);
         }
     }
@@ -344,13 +350,16 @@ LevelData generate_level(const ProcGenConfig& config,
         float bw = randf(config.box_size_min, config.box_size_max);
         float bd = randf(config.box_size_min, config.box_size_max);
         float bh = randf(config.box_height_min, config.box_height_max);
+        float yaw = randf(0, HMM_PI32 * 2.0f);
+        float br = sqrtf(bw * bw + bd * bd) * 0.5f; // bounding radius
 
         float bx = 0, bz = 0;
         bool ok = false;
+        float inset = br + config.box_margin;
         for (int attempt = 0; attempt < 30; attempt++) {
-            bx = randf(-hw + config.box_margin + bw * 0.5f, hw - config.box_margin - bw * 0.5f);
-            bz = randf(-hd + config.box_margin + bd * 0.5f, hd - config.box_margin - bd * 0.5f);
-            if (!overlaps(bx, bz, bw, bd, placed, placed_count, 2.0f)) {
+            bx = randf(-hw + inset, hw - inset);
+            bz = randf(-hd + inset, hd - inset);
+            if (!overlaps(bx, bz, br, placed, placed_count, 1.5f)) {
                 ok = true;
                 break;
             }
@@ -362,8 +371,8 @@ LevelData generate_level(const ProcGenConfig& config,
         float var = randf(-0.05f, 0.05f);
         col.X += var; col.Y += var; col.Z += var;
 
-        add_box(m, {bx, 0, bz}, bw, bh, bd, col);
-        placed[placed_count++] = {bx, bz, bw, bd};
+        add_box(m, {bx, 0, bz}, bw, bh, bd, col, yaw);
+        placed[placed_count++] = {bx, bz, br};
     }
 
     // --- Spawn point (near entry door, facing into room) ---
@@ -376,7 +385,7 @@ LevelData generate_level(const ProcGenConfig& config,
             float ex = randf(-hw * 0.7f, hw * 0.7f);
             float ez = randf(-hd * 0.7f, hd * 0.7f);
             // Check not inside any placed box/platform/door zone (1m clearance)
-            if (!overlaps(ex, ez, 1.0f, 1.0f, placed, placed_count, 1.0f)) {
+            if (!overlaps(ex, ez, 0.5f, placed, placed_count, 1.0f)) {
                 EnemySpawn es;
                 es.position = HMM_V3(ex, spawn_h, ez);
                 es.type = type;
