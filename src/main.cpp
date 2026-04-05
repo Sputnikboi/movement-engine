@@ -258,6 +258,7 @@ int main(int argc, char* argv[]) {
     bool show_settings = false;
     bool show_hud = true;
     bool show_ladder_debug = false;
+    bool ai_enabled = true;
     float fly_speed = 15.0f;
 
     // Level browser state
@@ -677,17 +678,19 @@ int main(int argc, char* argv[]) {
                 if (e.type == EntityType::Drone) {
                     if (e.ai_state == DRONE_DYING)
                         dying[dying_count++] = {i, e.position, true};
-                    drone_update(e, entities, MAX_ENTITIES,
-                                 player.position, collision, drone_cfg, dt, total_time);
+                    if (ai_enabled)
+                        drone_update(e, entities, MAX_ENTITIES,
+                                     player.position, collision, drone_cfg, dt, total_time);
                 }
                 if (e.type == EntityType::Rusher) {
                     if (e.ai_state == RUSHER_DYING)
                         dying[dying_count++] = {i, e.position, true};
-                    rusher_update(e, entities, MAX_ENTITIES,
-                                  player.position, collision, rusher_cfg, dt, total_time);
-                    // Check dash damage to player
-                    if (rusher_check_player_hit(e, player.position, player.radius, rusher_cfg)) {
-                        // TODO: player takes damage (rusher_cfg.melee_damage)
+                    if (ai_enabled) {
+                        rusher_update(e, entities, MAX_ENTITIES,
+                                      player.position, collision, rusher_cfg, dt, total_time);
+                        if (rusher_check_player_hit(e, player.position, player.radius, rusher_cfg)) {
+                            // TODO: player takes damage
+                        }
                     }
                 }
             }
@@ -1026,6 +1029,8 @@ int main(int argc, char* argv[]) {
             }
 
             if (ImGui::CollapsingHeader("Enemies")) {
+                ImGui::Checkbox("AI Enabled", &ai_enabled);
+                ImGui::Separator();
                 if (ImGui::Button("Spawn Drone (in front of player)")) {
                     HMM_Vec3 fwd = camera.forward_flat();
                     HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
