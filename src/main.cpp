@@ -1121,16 +1121,6 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Lurch Window",    &player.lurch_window,   0.0f, 2.0f, "%.2f");
                 ImGui::SliderFloat("Lurch Strength",  &player.lurch_strength, 0.0f, 1.0f, "%.2f");
 
-                ImGui::Separator();
-                ImGui::Text("Ladder");
-                ImGui::SliderFloat("Ladder Speed",     &player.ladder_speed,     1.0f, 15.0f);
-                ImGui::SliderFloat("Ladder Jump Off",  &player.ladder_jump_off,  1.0f, 15.0f);
-                ImGui::SliderFloat("Ladder Inflate",   &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
-                ImGui::Checkbox("Show Ladder Volumes",  &show_ladder_debug);
-                ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());
-                if (player.on_ladder)
-                    ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
-
                 ImGui::Spacing();
                 if (ImGui::Button("Reset to Source defaults")) {
                     player.gravity        = 20.0f;
@@ -1151,6 +1141,16 @@ int main(int argc, char* argv[]) {
                     player.lurch_window   = 0.5f;
                     player.lurch_strength = 0.5f;
                 }
+            }
+
+            if (ImGui::CollapsingHeader("Ladder")) {
+                ImGui::SliderFloat("Ladder Speed",    &player.ladder_speed,    1.0f, 15.0f);
+                ImGui::SliderFloat("Ladder Jump Off", &player.ladder_jump_off, 1.0f, 15.0f);
+                ImGui::SliderFloat("Ladder Inflate",  &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
+                ImGui::Checkbox("Show Ladder Volumes", &show_ladder_debug);
+                ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());
+                if (player.on_ladder)
+                    ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
             }
 
             ImGui::Spacing();
