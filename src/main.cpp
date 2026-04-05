@@ -1127,6 +1127,8 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderInt("Boxes Max", &procgen_cfg.box_count_max, 0, 30);
                 ImGui::SliderInt("Platforms", &procgen_cfg.platform_count, 0, 6);
                 ImGui::Checkbox("Ramps", &procgen_cfg.gen_ramps);
+                ImGui::SliderInt("Tall Min", &procgen_cfg.tall_count_min, 0, 15);
+                ImGui::SliderInt("Tall Max", &procgen_cfg.tall_count_max, 0, 15);
                 ImGui::SliderInt("Drones", &procgen_cfg.drone_count, 0, 20);
                 ImGui::SliderInt("Rushers", &procgen_cfg.rusher_count, 0, 20);
             }

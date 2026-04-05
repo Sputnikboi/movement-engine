@@ -237,7 +237,7 @@ LevelData generate_level(const ProcGenConfig& config,
     }
 
     // --- Track placed objects for overlap avoidance ---
-    const int MAX_PLACED = 64;
+    const int MAX_PLACED = 96;
     PlacedObj placed[MAX_PLACED];
     int placed_count = 0;
 
@@ -394,6 +394,37 @@ LevelData generate_level(const ProcGenConfig& config,
 
         add_box(m, {bx, 0, bz}, bw, bh, bd, col, yaw);
         placed[placed_count++] = {bx, bz, br};
+    }
+
+    // --- Tall structures (pillars, towers) ---
+    int tall_count = (int)randf((float)config.tall_count_min, (float)config.tall_count_max + 0.99f);
+    for (int i = 0; i < tall_count && placed_count < MAX_PLACED; i++) {
+        float tw = randf(config.tall_size_min, config.tall_size_max);
+        float td = randf(config.tall_size_min, config.tall_size_max);
+        float th = randf(config.tall_height_min, config.tall_height_max);
+        float yaw = randf(0, HMM_PI32 * 2.0f);
+        float tr = sqrtf(tw * tw + td * td) * 0.5f;
+
+        float tx = 0, tz = 0;
+        bool ok = false;
+        float inset = tr + config.box_margin;
+        for (int attempt = 0; attempt < 30; attempt++) {
+            tx = randf(-hw + inset, hw - inset);
+            tz = randf(-hd + inset, hd - inset);
+            if (!overlaps(tx, tz, tr, placed, placed_count, 2.0f)) {
+                ok = true;
+                break;
+            }
+        }
+        if (!ok) continue;
+
+        // Slight color variation
+        HMM_Vec3 col = config.tall_color;
+        float var = randf(-0.03f, 0.03f);
+        col.X += var; col.Y += var; col.Z += var;
+
+        add_box(m, {tx, 0, tz}, tw, th, td, col, yaw);
+        placed[placed_count++] = {tx, tz, tr};
     }
 
     // --- Spawn point (near entry door, facing into room) ---

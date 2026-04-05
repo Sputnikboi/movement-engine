@@ -28,6 +28,15 @@ struct ProcGenConfig {
     float platform_size_min   = 5.0f;
     float platform_size_max   = 10.0f;
 
+    // Tall structures (pillars, towers)
+    int   tall_count_min   = 3;
+    int   tall_count_max   = 6;
+    float tall_size_min    = 2.0f;   // footprint
+    float tall_size_max    = 6.0f;
+    float tall_height_min  = 10.0f;
+    float tall_height_max  = 22.0f;
+    HMM_Vec3 tall_color    = {0.28f, 0.28f, 0.33f};
+
     // Ramps (connect floor to platforms)
     bool  gen_ramps        = true;
     float ramp_width       = 3.0f;
