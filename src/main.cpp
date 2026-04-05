@@ -137,6 +137,24 @@ int main(int argc, char* argv[]) {
 
     SDL_SetWindowRelativeMouseMode(window, true);
 
+    // --- Load door model early (needed by procgen) ---
+    Mesh door_mesh;
+    {
+        const char* door_paths[] = {
+            "assets/Door.glb", "../assets/Door.glb", "../../assets/Door.glb",
+        };
+        for (const char* dp : door_paths) {
+            LevelData dm = load_level_gltf(dp);
+            if (!dm.mesh.vertices.empty()) {
+                door_mesh = std::move(dm.mesh);
+                printf("Loaded door model from '%s': %zu verts\n", dp, door_mesh.vertices.size());
+                break;
+            }
+        }
+    }
+    Mesh* door_mesh_ptr = door_mesh.vertices.empty() ? nullptr : &door_mesh;
+    std::vector<DoorInfo> active_doors;
+
     // --- Build level + collision ---
     Mesh level;
     HMM_Vec3 spawn_pos = HMM_V3(0.0f, 1.0f, 15.0f);
@@ -195,7 +213,7 @@ int main(int argc, char* argv[]) {
     } else {
         printf("No level file found, generating procedural level\n");
         ProcGenConfig pg_cfg;
-        ld = generate_level(pg_cfg);
+        ld = generate_level(pg_cfg, door_mesh_ptr, &active_doors);
         spawn_pos = ld.spawn_pos;
         has_spawn = ld.has_spawn;
         initial_enemy_spawns = std::move(ld.enemy_spawns);
@@ -782,6 +800,25 @@ int main(int argc, char* argv[]) {
         // Update effects
         effects.update(dt);
 
+        // Check if all enemies dead → unlock exit door
+        {
+            bool any_alive = false;
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                const Entity& e = entities[i];
+                if (!e.alive) continue;
+                if (e.type == EntityType::Drone || e.type == EntityType::Rusher) {
+                    any_alive = true;
+                    break;
+                }
+            }
+            for (auto& d : active_doors) {
+                if (d.is_exit && d.locked && !any_alive) {
+                    d.locked = false;
+                    printf("EXIT UNLOCKED!\n");
+                }
+            }
+        }
+
         // Build frustum from current camera for culling
         Frustum frustum;
         {
@@ -877,6 +914,14 @@ int main(int argc, char* argv[]) {
             }
             if (drone_count > 0 || rusher_count_hud > 0)
                 ImGui::Text("Enemies: %d", drone_count + rusher_count_hud);
+            for (const auto& d : active_doors) {
+                if (d.is_exit) {
+                    if (d.locked)
+                        ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", drone_count + rusher_count_hud);
+                    else
+                        ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "EXIT: UNLOCKED");
+                }
+            }
 
             // --- Weapon HUD ---
             ImGui::Separator();
@@ -982,7 +1027,7 @@ int main(int argc, char* argv[]) {
                 ImGui::Separator();
                 ImGui::Text("Procedural Generation");
                 if (ImGui::Button("Generate New Level")) {
-                    LevelData pld = generate_level(procgen_cfg);
+                    LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
 
                     // Clear entities
                     for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;

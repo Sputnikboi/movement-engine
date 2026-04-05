@@ -49,6 +49,17 @@ struct ProcGenConfig {
     unsigned int seed      = 0;
 };
 
+// Door placement info (returned with level)
+struct DoorInfo {
+    HMM_Vec3 position;     // bottom center
+    float    yaw;          // rotation to face into room (radians)
+    bool     is_exit;      // false = entry, true = exit
+    bool     locked;       // exit starts locked
+};
+
 // Generate a procedural level. Returns LevelData with mesh,
-// spawn point, and enemy spawn positions.
-LevelData generate_level(const ProcGenConfig& config);
+// spawn point, enemy spawn positions, and door info.
+// door_mesh: if non-null, the door model gets merged into the level mesh.
+LevelData generate_level(const ProcGenConfig& config,
+                         const Mesh* door_mesh = nullptr,
+                         std::vector<DoorInfo>* doors_out = nullptr);

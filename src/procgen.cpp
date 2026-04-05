@@ -73,27 +73,31 @@ static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d, HMM_Vec3 c
 
 // Add a ramp: a triangular prism connecting floor_y to top_y
 // along the Z axis from z0 to z1, centered on x with given width.
+// Ramp from (cx, floor_y, z0) to (cx, top_y, z1) with given width.
+// z0 is the low end, z1 is the high end.
 static void add_ramp(Mesh& m, float cx, float z0, float z1,
                      float floor_y, float top_y, float width, HMM_Vec3 color) {
     float hw = width * 0.5f;
     float x0 = cx - hw, x1 = cx + hw;
 
-    // Slope surface (the ramp face)
+    // Slope surface — compute normal explicitly pointing upward
     HMM_Vec3 a = {x0, floor_y, z0};
     HMM_Vec3 b = {x1, floor_y, z0};
     HMM_Vec3 c = {x1, top_y, z1};
     HMM_Vec3 d = {x0, top_y, z1};
 
-    HMM_Vec3 edge1 = HMM_SubV3(b, a);
-    HMM_Vec3 edge2 = HMM_SubV3(d, a);
+    HMM_Vec3 edge1 = HMM_SubV3(c, b);
+    HMM_Vec3 edge2 = HMM_SubV3(a, b);
     HMM_Vec3 normal = HMM_NormV3(HMM_Cross(edge1, edge2));
-    add_quad(m, a, b, c, d, normal, color);
+    // Ensure normal points upward (walkable surface)
+    if (normal.Y < 0) normal = HMM_MulV3F(normal, -1.0f);
 
-    // Bottom face
-    add_quad(m, {x0, floor_y, z1}, {x1, floor_y, z1}, {x1, floor_y, z0}, {x0, floor_y, z0},
-             {0, -1, 0}, color);
+    add_quad(m, a, d, c, b, normal, color);
 
-    // Left side triangle
+    // Underside
+    add_quad(m, a, b, c, d, HMM_MulV3F(normal, -1.0f), color);
+
+    // Left side triangle (normal = -X)
     {
         uint32_t base = (uint32_t)m.vertices.size();
         auto push = [&](HMM_Vec3 pos, HMM_Vec3 n) {
@@ -103,15 +107,14 @@ static void add_ramp(Mesh& m, float cx, float z0, float z1,
             v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
             m.vertices.push_back(v);
         };
-        HMM_Vec3 n = {-1, 0, 0};
-        push({x0, floor_y, z0}, n);
-        push({x0, top_y, z1}, n);
-        push({x0, floor_y, z1}, n);
+        push({x0, floor_y, z0}, {-1,0,0});
+        push({x0, floor_y, z1}, {-1,0,0});
+        push({x0, top_y, z1},   {-1,0,0});
         m.indices.push_back(base + 0);
         m.indices.push_back(base + 1);
         m.indices.push_back(base + 2);
     }
-    // Right side triangle
+    // Right side triangle (normal = +X)
     {
         uint32_t base = (uint32_t)m.vertices.size();
         auto push = [&](HMM_Vec3 pos, HMM_Vec3 n) {
@@ -121,10 +124,9 @@ static void add_ramp(Mesh& m, float cx, float z0, float z1,
             v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
             m.vertices.push_back(v);
         };
-        HMM_Vec3 n = {1, 0, 0};
-        push({x1, floor_y, z0}, n);
-        push({x1, floor_y, z1}, n);
-        push({x1, top_y, z1}, n);
+        push({x1, floor_y, z0}, {1,0,0});
+        push({x1, top_y, z1},   {1,0,0});
+        push({x1, floor_y, z1}, {1,0,0});
         m.indices.push_back(base + 0);
         m.indices.push_back(base + 1);
         m.indices.push_back(base + 2);
@@ -154,7 +156,32 @@ static bool overlaps(float x, float z, float w, float d,
 //  Generate level
 // ============================================================
 
-LevelData generate_level(const ProcGenConfig& config) {
+// Merge a mesh into another with a transform (position + Y rotation)
+static void merge_mesh(Mesh& dst, const Mesh& src, HMM_Vec3 pos, float yaw) {
+    float cy = cosf(yaw), sy = sinf(yaw);
+    uint32_t base = (uint32_t)dst.vertices.size();
+    for (const auto& sv : src.vertices) {
+        Vertex3D v = sv;
+        // Rotate around Y then translate
+        float rx = sv.pos[0] * cy + sv.pos[2] * sy;
+        float rz = -sv.pos[0] * sy + sv.pos[2] * cy;
+        v.pos[0] = rx + pos.X;
+        v.pos[1] = sv.pos[1] + pos.Y;
+        v.pos[2] = rz + pos.Z;
+        // Rotate normal too
+        float nx = sv.normal[0] * cy + sv.normal[2] * sy;
+        float nz = -sv.normal[0] * sy + sv.normal[2] * cy;
+        v.normal[0] = nx;
+        v.normal[2] = nz;
+        dst.vertices.push_back(v);
+    }
+    for (auto idx : src.indices)
+        dst.indices.push_back(base + idx);
+}
+
+LevelData generate_level(const ProcGenConfig& config,
+                         const Mesh* door_mesh,
+                         std::vector<DoorInfo>* doors_out) {
     if (config.seed != 0)
         srand(config.seed);
     else
@@ -179,27 +206,73 @@ LevelData generate_level(const ProcGenConfig& config) {
     add_quad(m, {-hw,rh,-hd}, {hw,rh,-hd}, {hw,rh,hd}, {-hw,rh,hd},
              {0,-1,0}, config.ceiling_color);
 
-    // --- Walls (single quads, normals pointing INWARD) ---
-    // +Z wall (inner face normal = -Z)
-    add_quad(m, {-hw,0,hd}, {-hw,rh,hd}, {hw,rh,hd}, {hw,0,hd},
-             {0,0,-1}, config.wall_color);
-    // -Z wall (inner face normal = +Z)
-    add_quad(m, {hw,0,-hd}, {hw,rh,-hd}, {-hw,rh,-hd}, {-hw,0,-hd},
-             {0,0,1}, config.wall_color);
-    // +X wall (inner face normal = -X)
+    // --- Door dimensions ---
+    float door_w = 3.0f;   // width of door gap
+    float door_h = 4.0f;   // height of door gap
+
+    // Entry door on -Z wall, exit door on +Z wall (opposite sides)
+    float entry_x = 0.0f;  // centered
+    float exit_x  = 0.0f;
+
+    // Build wall helper: a wall quad with a rectangular hole cut out.
+    // Splits into 5 quads: left, right, top, bottom-left (unused — door at floor), above.
+    auto wall_with_door = [&](float wx0, float wx1, float wy0, float wy1,
+                              float wz, HMM_Vec3 normal,
+                              float gap_center_x, float gap_w, float gap_h) {
+        float gx0 = gap_center_x - gap_w * 0.5f;
+        float gx1 = gap_center_x + gap_w * 0.5f;
+        // Left of gap
+        if (gx0 > wx0)
+            add_quad(m, {wx0,wy0,wz}, {wx0,wy1,wz}, {gx0,wy1,wz}, {gx0,wy0,wz}, normal, config.wall_color);
+        // Right of gap
+        if (gx1 < wx1)
+            add_quad(m, {gx1,wy0,wz}, {gx1,wy1,wz}, {wx1,wy1,wz}, {wx1,wy0,wz}, normal, config.wall_color);
+        // Above gap
+        add_quad(m, {gx0,gap_h,wz}, {gx0,wy1,wz}, {gx1,wy1,wz}, {gx1,gap_h,wz}, normal, config.wall_color);
+    };
+
+    // -Z wall with entry door gap
+    wall_with_door(-hw, hw, 0, rh, -hd, {0,0,1}, entry_x, door_w, door_h);
+    // +Z wall with exit door gap
+    wall_with_door(-hw, hw, 0, rh, hd, {0,0,-1}, exit_x, door_w, door_h);
+    // +X wall (solid)
     add_quad(m, {hw,0,hd}, {hw,rh,hd}, {hw,rh,-hd}, {hw,0,-hd},
              {-1,0,0}, config.wall_color);
-    // -X wall (inner face normal = +X)
+    // -X wall (solid)
     add_quad(m, {-hw,0,-hd}, {-hw,rh,-hd}, {-hw,rh,hd}, {-hw,0,hd},
              {1,0,0}, config.wall_color);
+
+    // --- Place door models ---
+    DoorInfo entry_door, exit_door;
+    entry_door.position = HMM_V3(entry_x, 0, -hd);
+    entry_door.yaw = 0;                    // facing +Z (into room)
+    entry_door.is_exit = false;
+    entry_door.locked = false;
+
+    exit_door.position = HMM_V3(exit_x, 0, hd);
+    exit_door.yaw = 3.14159265f;            // facing -Z (into room)
+    exit_door.is_exit = true;
+    exit_door.locked = true;
+
+    if (door_mesh) {
+        merge_mesh(m, *door_mesh, entry_door.position, entry_door.yaw);
+        merge_mesh(m, *door_mesh, exit_door.position, exit_door.yaw);
+    }
+
+    if (doors_out) {
+        doors_out->clear();
+        doors_out->push_back(entry_door);
+        doors_out->push_back(exit_door);
+    }
 
     // --- Track placed objects for overlap avoidance ---
     const int MAX_PLACED = 64;
     PlacedBox placed[MAX_PLACED];
     int placed_count = 0;
 
-    // Reserve spawn area so player doesn't start inside a box
-    placed[placed_count++] = {0, 0, 5.0f, 5.0f};
+    // Reserve spawn area + door areas so nothing blocks them
+    placed[placed_count++] = {entry_x, -hd + 3.0f, 6.0f, 6.0f}; // entry/spawn
+    placed[placed_count++] = {exit_x,   hd - 3.0f, 6.0f, 6.0f}; // exit door
 
     // --- Platforms ---
     for (int i = 0; i < config.platform_count && placed_count < MAX_PLACED; i++) {
@@ -279,8 +352,8 @@ LevelData generate_level(const ProcGenConfig& config) {
         placed[placed_count++] = {bx, bz, bw, bd};
     }
 
-    // --- Spawn point (center of room) ---
-    ld.spawn_pos = HMM_V3(0, 1.0f, 0);
+    // --- Spawn point (near entry door, facing into room) ---
+    ld.spawn_pos = HMM_V3(entry_x, 1.0f, -hd + 3.0f);
     ld.has_spawn = true;
 
     // --- Enemy spawns ---
