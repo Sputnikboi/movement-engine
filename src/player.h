@@ -111,6 +111,7 @@ private:
     void ground_move(float dt, const InputState& input, const CollisionWorld& world);
     void air_move(float dt, const InputState& input, const CollisionWorld& world);
     void ladder_move(float dt, const InputState& input, const CollisionWorld& world);
+    void apply_soft_speed_cap(float dt);
     void handle_crouch(const InputState& input, const CollisionWorld& world);
     void try_slide(const InputState& input);
     void perform_lurch(const InputState& input);

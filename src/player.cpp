@@ -112,6 +112,18 @@ void Player::check_ground(const CollisionWorld& world) {
 //  Friction
 // ============================================================
 
+void Player::apply_soft_speed_cap(float dt) {
+    if (soft_speed_cap <= 0.0f) return;
+    float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+    if (hspeed > soft_speed_cap) {
+        float excess = hspeed - soft_speed_cap;
+        float drag = fminf(soft_cap_drag * dt, excess);
+        float scale = (hspeed - drag) / hspeed;
+        velocity.X *= scale;
+        velocity.Z *= scale;
+    }
+}
+
 void Player::apply_friction(float dt, float fric) {
     float speed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
     if (speed < 0.001f) {
@@ -452,6 +464,8 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
             power_sliding = false;
         }
 
+        apply_soft_speed_cap(dt);
+
         if (velocity.Y < 0.0f) velocity.Y = 0.0f;
 
         // Move, then snap to slope surface to stay grounded
@@ -491,17 +505,7 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     accelerate(wish_dir, wish_speed, ground_accel, dt);
 
-    // Soft speed cap: gently bleed off excess horizontal speed
-    if (soft_speed_cap > 0.0f) {
-        float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
-        if (hspeed > soft_speed_cap) {
-            float excess = hspeed - soft_speed_cap;
-            float drag = fminf(soft_cap_drag * dt, excess);
-            float scale = (hspeed - drag) / hspeed;
-            velocity.X *= scale;
-            velocity.Z *= scale;
-        }
-    }
+    apply_soft_speed_cap(dt);
 
     if (velocity.Y < 0.0f) velocity.Y = 0.0f;
     do_collide_and_move(dt, world);
