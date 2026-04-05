@@ -80,4 +80,7 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
 void projectiles_update(Entity entities[], int max_entities,
                         const CollisionWorld& world, float dt);
 
+// Call once per frame before drone updates (advances stagger counter)
+void drone_tick_frame();
+
 float randf(float lo, float hi);

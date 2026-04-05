@@ -59,6 +59,12 @@ struct Entity {
 
     // Hit feedback
     float    hit_flash    = 0.0f; // > 0 means flashing white
+
+    // AI throttle
+    uint8_t  ai_frame_id  = 0;     // assigned at spawn, used for staggering
+    HMM_Vec3 cached_avoid = {};     // cached wall avoidance force
+    float    hover_cache_t = 0.0f;  // cached ground distance for hover
+    bool     hover_cache_valid = false;
 };
 
 static constexpr int MAX_ENTITIES = 256;

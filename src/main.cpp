@@ -669,6 +669,9 @@ int main(int argc, char* argv[]) {
         if (!show_settings) {
             // Track dying drones to spawn explosions when they hit ground
             struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
+            drone_tick_frame();
+            rusher_tick_frame();
+
             DyingEnemy dying[MAX_ENTITIES];
             int dying_count = 0;
 

@@ -78,6 +78,11 @@ int rusher_spawn(Entity entities[], int max_entities,
             e.wander_timer = randf(0.5f, 2.0f);
             pick_rusher_wander(e, config.wander_radius);
 
+            static uint8_t next_id = 0;
+            e.ai_frame_id = next_id++;
+            e.cached_avoid = HMM_V3(0, 0, 0);
+            e.hover_cache_valid = false;
+
             return i;
         }
     }
@@ -89,21 +94,30 @@ int rusher_spawn(Entity entities[], int max_entities,
 // ============================================================
 
 static void apply_rusher_hover(Entity& r, const CollisionWorld& world,
-                               const RusherConfig& config, float dt, float total_time) {
-    HMM_Vec3 ray_origin = r.position;
-    HMM_Vec3 ray_dir    = HMM_V3(0, -1, 0);
-    float    max_dist   = r.hover_height * 3.0f;
+                               const RusherConfig& config, float dt, float total_time,
+                               bool do_raycast) {
+    if (do_raycast || !r.hover_cache_valid) {
+        HMM_Vec3 ray_origin = r.position;
+        HMM_Vec3 ray_dir    = HMM_V3(0, -1, 0);
+        float    max_dist   = r.hover_height * 3.0f;
 
-    HitResult hit = world.raycast(ray_origin, ray_dir, max_dist);
-    if (hit.hit) {
-        float height_error = r.hover_height - hit.t;
+        HitResult hit = world.raycast(ray_origin, ray_dir, max_dist);
+        if (hit.hit) {
+            r.hover_cache_t = hit.t;
+            r.hover_cache_valid = true;
+        } else {
+            r.hover_cache_valid = false;
+        }
+    }
+
+    if (r.hover_cache_valid) {
+        float height_error = r.hover_height - r.hover_cache_t;
         float force = height_error * config.hover_force - r.velocity.Y * 2.0f;
         r.velocity.Y += force * dt;
     } else {
         r.velocity.Y -= 3.0f * dt;
     }
 
-    // Subtle bob
     float bob = sinf(total_time * r.bob_freq * 6.28f + r.bob_seed) * r.bob_amp;
     r.velocity.Y += bob * dt * 2.0f;
 }
@@ -111,6 +125,9 @@ static void apply_rusher_hover(Entity& r, const CollisionWorld& world,
 // ============================================================
 //  Rusher AI update
 // ============================================================
+
+static uint32_t s_rusher_frame = 0;
+void rusher_tick_frame() { s_rusher_frame++; }
 
 void rusher_update(Entity& rusher, Entity entities[], int max_entities,
                    HMM_Vec3 player_pos, const CollisionWorld& world,
@@ -120,6 +137,8 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
     // Hit flash decay
     if (rusher.hit_flash > 0.0f)
         rusher.hit_flash -= dt;
+
+    bool do_expensive = ((s_rusher_frame + rusher.ai_frame_id) % 4 == 0);
 
     // ------ DYING state (ragdoll — same as drone) ------
     if (rusher.ai_state == RUSHER_DYING) {
@@ -165,7 +184,7 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
 
     switch (rusher.ai_state) {
     case RUSHER_IDLE: {
-        apply_rusher_hover(rusher, world, config, dt, total_time);
+        apply_rusher_hover(rusher, world, config, dt, total_time, do_expensive);
 
         HMM_Vec3 to_target = HMM_SubV3(rusher.wander_target, rusher.position);
         float tdist = sqrtf(to_target.X * to_target.X + to_target.Z * to_target.Z);
@@ -194,7 +213,7 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
 
     case RUSHER_CHASING: {
         rusher.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
-        apply_rusher_hover(rusher, world, config, dt, total_time);
+        apply_rusher_hover(rusher, world, config, dt, total_time, do_expensive);
 
         if (dist <= config.attack_range) {
             // Start charging
@@ -218,7 +237,7 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
     case RUSHER_CHARGING: {
         rusher.yaw = atan2f(dir_to_player.X, dir_to_player.Z);
         // Hover + brake to near-stop during windup
-        apply_rusher_hover(rusher, world, config, dt, total_time);
+        apply_rusher_hover(rusher, world, config, dt, total_time, do_expensive);
 
         // Braking force: decelerate horizontal velocity
         float hspeed = sqrtf(rusher.velocity.X * rusher.velocity.X +
@@ -258,7 +277,7 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
 
     case RUSHER_COOLDOWN: {
         // Hover + gentle braking
-        apply_rusher_hover(rusher, world, config, dt, total_time);
+        apply_rusher_hover(rusher, world, config, dt, total_time, do_expensive);
 
         float hspeed = sqrtf(rusher.velocity.X * rusher.velocity.X +
                              rusher.velocity.Z * rusher.velocity.Z);
@@ -277,12 +296,20 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
     }
     }
 
-    // Wall avoidance (not during dash)
+    // Wall avoidance (not during dash, throttled)
     if (rusher.ai_state != RUSHER_DASHING && HMM_LenV3(desired_hvel) > 0.1f) {
-        HMM_Vec3 avoid = rusher_wall_avoid(rusher, desired_hvel, world,
-                                            config.wall_avoid_dist, config.wall_avoid_force);
-        desired_hvel = HMM_AddV3(desired_hvel, HMM_MulV3F(avoid, dt));
+        if (do_expensive) {
+            rusher.cached_avoid = rusher_wall_avoid(rusher, desired_hvel, world,
+                                                     config.wall_avoid_dist, config.wall_avoid_force);
+        }
+        desired_hvel = HMM_AddV3(desired_hvel, HMM_MulV3F(rusher.cached_avoid, dt));
     }
+
+
+
+
+
+
 
     // Apply acceleration (not during dash/charge which handle velocity directly)
     if (rusher.ai_state == RUSHER_IDLE || rusher.ai_state == RUSHER_CHASING) {

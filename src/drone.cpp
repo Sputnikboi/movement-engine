@@ -93,6 +93,11 @@ int drone_spawn(Entity entities[], int max_entities,
             e.wander_timer  = randf(0.5f, 2.0f);
             pick_wander_target(e, config.wander_radius);
 
+            static uint8_t next_id = 0;
+            e.ai_frame_id = next_id++;
+            e.cached_avoid = HMM_V3(0, 0, 0);
+            e.hover_cache_valid = false;
+
             return i;
         }
     }
@@ -151,19 +156,28 @@ static void shoot_at_player(Entity& drone, Entity entities[], int max_entities,
 // ============================================================
 
 static void apply_hover(Entity& d, const CollisionWorld& world,
-                        const DroneConfig& config, float dt, float total_time) {
-    HMM_Vec3 ray_origin = d.position;
-    HMM_Vec3 ray_dir    = HMM_V3(0, -1, 0);
-    float    max_dist   = d.hover_height * 3.0f;
+                        const DroneConfig& config, float dt, float total_time,
+                        bool do_raycast) {
+    // Only raycast every N frames, use cached distance otherwise
+    if (do_raycast || !d.hover_cache_valid) {
+        HMM_Vec3 ray_origin = d.position;
+        HMM_Vec3 ray_dir    = HMM_V3(0, -1, 0);
+        float    max_dist   = d.hover_height * 3.0f;
 
-    HitResult hit = world.raycast(ray_origin, ray_dir, max_dist);
-    if (hit.hit) {
-        float height_error = d.hover_height - hit.t;
-        // Spring force + damping
+        HitResult hit = world.raycast(ray_origin, ray_dir, max_dist);
+        if (hit.hit) {
+            d.hover_cache_t = hit.t;
+            d.hover_cache_valid = true;
+        } else {
+            d.hover_cache_valid = false;
+        }
+    }
+
+    if (d.hover_cache_valid) {
+        float height_error = d.hover_height - d.hover_cache_t;
         float force = height_error * config.hover_force - d.velocity.Y * 2.0f;
         d.velocity.Y += force * dt;
     } else {
-        // No ground below — gentle gravity to find ground
         d.velocity.Y -= 3.0f * dt;
     }
 
@@ -176,6 +190,8 @@ static void apply_hover(Entity& d, const CollisionWorld& world,
 //  Drone AI update
 // ============================================================
 
+static uint32_t s_drone_frame = 0;
+
 void drone_update(Entity& drone, Entity entities[], int max_entities,
                   HMM_Vec3 player_pos, const CollisionWorld& world,
                   const DroneConfig& config, float dt, float total_time) {
@@ -184,6 +200,10 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
     // Hit flash decay
     if (drone.hit_flash > 0.0f)
         drone.hit_flash -= dt;
+
+    // Stagger: does this drone do expensive work this frame?
+    // Each drone checks on a different frame in a 4-frame cycle.
+    bool do_expensive = ((s_drone_frame + drone.ai_frame_id) % 4 == 0);
 
     // Figure out drone index for projectile ownership
     int drone_idx = -1;
@@ -335,11 +355,13 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
     }
     }
 
-    // Wall avoidance: steer away from nearby geometry
+    // Wall avoidance: only recompute every 4th frame (staggered), use cached result otherwise
     if (drone.ai_state != DRONE_IDLE || HMM_LenV3(desired_hvel) > 0.1f) {
-        HMM_Vec3 avoid = wall_avoidance(drone, desired_hvel, world,
-                                         config.wall_avoid_dist, config.wall_avoid_force);
-        desired_hvel = HMM_AddV3(desired_hvel, HMM_MulV3F(avoid, dt));
+        if (do_expensive) {
+            drone.cached_avoid = wall_avoidance(drone, desired_hvel, world,
+                                                 config.wall_avoid_dist, config.wall_avoid_force);
+        }
+        desired_hvel = HMM_AddV3(desired_hvel, HMM_MulV3F(drone.cached_avoid, dt));
     }
 
     // Apply horizontal acceleration toward desired velocity
@@ -350,12 +372,14 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
     drone.velocity.Z += hvel_diff.Z * accel;
 
     // Hover + bob
-    apply_hover(drone, world, config, dt, total_time);
+    apply_hover(drone, world, config, dt, total_time, do_expensive);
 
     // Move with world collision (slides along walls/floors)
     drone.position = world.slide_move(drone.position, drone.radius,
                                       drone.velocity, dt);
 }
+
+void drone_tick_frame() { s_drone_frame++; }
 
 // ============================================================
 //  Projectile update — move, collide with world
