@@ -47,6 +47,8 @@ public:
     VkRenderPass     get_render_pass()     const { return render_pass_; }
     VkDescriptorPool get_imgui_pool()      const { return imgui_pool_; }
     uint32_t         get_min_image_count() const { return static_cast<uint32_t>(swapchain_images_.size()); }
+    uint32_t         swapchain_width()     const { return swapchain_extent_.width; }
+    uint32_t         swapchain_height()    const { return swapchain_extent_.height; }
 
 private:
     SDL_Window* window_ = nullptr;

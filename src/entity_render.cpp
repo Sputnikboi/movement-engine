@@ -3,6 +3,50 @@
 #include <map>
 
 // ============================================================
+//  Frustum extraction from view-projection matrix
+//  (Gribb-Hartmann method)
+// ============================================================
+
+void Frustum::extract(const HMM_Mat4& vp) {
+    // Access elements as m[row][col]
+    // HMM stores column-major: Elements[col][row]
+    auto m = [&](int row, int col) -> float { return vp.Elements[col][row]; };
+
+    // Left:   row3 + row0
+    planes[0] = HMM_V4(m(3,0)+m(0,0), m(3,1)+m(0,1), m(3,2)+m(0,2), m(3,3)+m(0,3));
+    // Right:  row3 - row0
+    planes[1] = HMM_V4(m(3,0)-m(0,0), m(3,1)-m(0,1), m(3,2)-m(0,2), m(3,3)-m(0,3));
+    // Bottom: row3 + row1
+    planes[2] = HMM_V4(m(3,0)+m(1,0), m(3,1)+m(1,1), m(3,2)+m(1,2), m(3,3)+m(1,3));
+    // Top:    row3 - row1
+    planes[3] = HMM_V4(m(3,0)-m(1,0), m(3,1)-m(1,1), m(3,2)-m(1,2), m(3,3)-m(1,3));
+    // Near:   row3 + row2
+    planes[4] = HMM_V4(m(3,0)+m(2,0), m(3,1)+m(2,1), m(3,2)+m(2,2), m(3,3)+m(2,3));
+    // Far:    row3 - row2
+    planes[5] = HMM_V4(m(3,0)-m(2,0), m(3,1)-m(2,1), m(3,2)-m(2,2), m(3,3)-m(2,3));
+
+    // Normalize each plane
+    for (int i = 0; i < 6; i++) {
+        float len = sqrtf(planes[i].X*planes[i].X + planes[i].Y*planes[i].Y + planes[i].Z*planes[i].Z);
+        if (len > 0.0001f) {
+            planes[i].X /= len;
+            planes[i].Y /= len;
+            planes[i].Z /= len;
+            planes[i].W /= len;
+        }
+    }
+}
+
+bool Frustum::sphere_visible(HMM_Vec3 center, float radius) const {
+    for (int i = 0; i < 6; i++) {
+        float dist = planes[i].X * center.X + planes[i].Y * center.Y +
+                     planes[i].Z * center.Z + planes[i].W;
+        if (dist < -radius) return false; // entirely outside this plane
+    }
+    return true;
+}
+
+// ============================================================
 //  Icosphere generation
 // ============================================================
 
@@ -138,15 +182,25 @@ static void append_sphere(Mesh& out, const Mesh& sphere,
         out.indices.push_back(base + idx);
 }
 
-Mesh build_entity_mesh(const Entity entities[], int max_entities) {
-    // Create sphere once (static)
+Mesh build_entity_mesh(const Entity entities[], int max_entities,
+                       const Frustum& frustum) {
     static Mesh sphere = create_icosphere(0);
 
+    // Count alive entities for reserve
+    int alive = 0;
+    for (int i = 0; i < max_entities; i++)
+        if (entities[i].alive) alive++;
+
     Mesh out;
+    out.vertices.reserve(alive * sphere.vertices.size());
+    out.indices.reserve(alive * sphere.indices.size());
 
     for (int i = 0; i < max_entities; i++) {
         const Entity& e = entities[i];
         if (!e.alive) continue;
+
+        // Frustum cull
+        if (!frustum.sphere_visible(e.position, e.radius)) continue;
 
         switch (e.type) {
         case EntityType::Drone: {

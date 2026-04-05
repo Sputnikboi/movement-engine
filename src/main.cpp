@@ -767,8 +767,16 @@ int main(int argc, char* argv[]) {
         // Update effects
         effects.update(dt);
 
-        // Build entity mesh + opaque death effects
-        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES);
+        // Build frustum from current camera for culling
+        Frustum frustum;
+        {
+            float aspect = (float)renderer.swapchain_width() / (float)renderer.swapchain_height();
+            HMM_Mat4 vp = HMM_MulM4(camera.projection_matrix(aspect), camera.view_matrix());
+            frustum.extract(vp);
+        }
+
+        // Build entity mesh + opaque death effects (frustum-culled)
+        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);
         effects.append_to_mesh(entity_mesh);
 
         // Transparent death effects (outer glow)
