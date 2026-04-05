@@ -555,6 +555,18 @@ int main(int argc, char* argv[]) {
 
             // Try to fire — if weapon fires, do hitscan
             if (fire_pressed && weapon.try_fire()) {
+                // Gunshot alert: wake idle enemies within weapon range
+                for (int i = 0; i < MAX_ENTITIES; i++) {
+                    Entity& e = entities[i];
+                    if (!e.alive) continue;
+                    float d = HMM_LenV3(HMM_SubV3(e.position, camera.position));
+                    if (d > weapon.config.range) continue;
+                    if (e.type == EntityType::Drone  && e.ai_state == DRONE_IDLE)
+                        e.ai_state = DRONE_CHASING;
+                    if (e.type == EntityType::Rusher && e.ai_state == RUSHER_IDLE)
+                        e.ai_state = RUSHER_CHASING;
+                }
+
                 HMM_Vec3 ray_origin = camera.position;
                 HMM_Vec3 ray_dir    = camera.forward();
 
