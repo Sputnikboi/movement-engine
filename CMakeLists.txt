@@ -85,6 +85,7 @@ add_executable(${PROJECT_NAME}
     src/bvh.cpp
     src/drone.cpp
     src/rusher.cpp
+    src/procgen.cpp
     src/entity_render.cpp
     src/effects.cpp
     src/weapon.cpp

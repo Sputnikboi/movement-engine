@@ -17,6 +17,7 @@
 #include "entity.h"
 #include "drone.h"
 #include "rusher.h"
+#include "procgen.h"
 #include "entity_render.h"
 #include "effects.h"
 #include "weapon.h"
@@ -192,9 +193,16 @@ int main(int argc, char* argv[]) {
 
         level = std::move(ld.mesh);
     } else {
-        printf("No level found, using built-in test level\n");
-        level = create_test_level();
-        collision.build_from_mesh(level);
+        printf("No level file found, generating procedural level\n");
+        ProcGenConfig pg_cfg;
+        ld = generate_level(pg_cfg);
+        spawn_pos = ld.spawn_pos;
+        has_spawn = ld.has_spawn;
+        initial_enemy_spawns = std::move(ld.enemy_spawns);
+        custom_level = true;
+
+        collision.build_from_mesh(ld.mesh);
+        level = std::move(ld.mesh);
     }
 
     // --- Init renderer ---
@@ -264,7 +272,8 @@ int main(int argc, char* argv[]) {
     // Level browser state
     std::string current_level_name = (custom_level && level_arg) ? fs::path(level_arg).filename().string()
                                    : custom_level              ? "Room1.glb"
-                                   :                             "built-in test level";
+                                   :                             "Procedural";
+    ProcGenConfig procgen_cfg;
     std::vector<std::string> level_files;
     bool levels_scanned = false;
     char level_path_buf[512] = "";
@@ -969,6 +978,51 @@ int main(int argc, char* argv[]) {
                                noclip, current_level_name,
                                entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg);
                 }
+
+                ImGui::Separator();
+                ImGui::Text("Procedural Generation");
+                if (ImGui::Button("Generate New Level")) {
+                    LevelData pld = generate_level(procgen_cfg);
+
+                    // Clear entities
+                    for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
+
+                    // Build collision
+                    collision.triangles.clear();
+                    collision.ladder_volumes.clear();
+                    collision.build_from_mesh(pld.mesh);
+
+                    // Upload to renderer
+                    renderer.reload_mesh(pld.mesh);
+
+                    // Spawn player
+                    player.position = pld.spawn_pos;
+                    player.velocity = HMM_V3(0, 0, 0);
+                    camera.yaw = 0; camera.pitch = 0;
+                    noclip = false;
+
+                    // Spawn enemies
+                    for (const auto& es : pld.enemy_spawns) {
+                        if (es.type == EntityType::Drone)
+                            drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
+                        else if (es.type == EntityType::Rusher)
+                            rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+                    }
+
+                    current_level_name = "Procedural";
+                }
+                ImGui::SameLine();
+                ImGui::InputInt("Seed", (int*)&procgen_cfg.seed);
+
+                ImGui::SliderFloat2("Room W", &procgen_cfg.room_width_min, 15.0f, 80.0f, "%.0f");
+                ImGui::SliderFloat2("Room D", &procgen_cfg.room_depth_min, 15.0f, 80.0f, "%.0f");
+                ImGui::SliderFloat("Room Height", &procgen_cfg.room_height, 5.0f, 25.0f, "%.0f");
+                ImGui::SliderInt("Boxes Min", &procgen_cfg.box_count_min, 0, 30);
+                ImGui::SliderInt("Boxes Max", &procgen_cfg.box_count_max, 0, 30);
+                ImGui::SliderInt("Platforms", &procgen_cfg.platform_count, 0, 6);
+                ImGui::Checkbox("Ramps", &procgen_cfg.gen_ramps);
+                ImGui::SliderInt("Drones", &procgen_cfg.drone_count, 0, 20);
+                ImGui::SliderInt("Rushers", &procgen_cfg.rusher_count, 0, 20);
             }
 
             // --- Enemies ---
