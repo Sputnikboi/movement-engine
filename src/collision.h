@@ -30,13 +30,17 @@ struct CollisionWorld {
     // Build from a Mesh (extracts triangles from vertex/index data, builds BVH)
     void build_from_mesh(const Mesh& mesh);
 
+    // Add extra triangles + rebuild BVH (for invisible collision like ladders)
+    void add_mesh_triangles(const Mesh& mesh);
+
     // Add a ladder volume from a mesh node's geometry. Computes AABB + average normal,
     // inflates by ladder_inflate.
     void add_ladder_volume(const Mesh& mesh, uint32_t index_start, uint32_t index_count);
 
     // Check if a point is inside any ladder volume.
-    // Returns true + the ladder's face normal.
-    bool on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const;
+    // Returns true + the ladder's face normal + the volume's center.
+    bool on_ladder(HMM_Vec3 center, float radius,
+                   HMM_Vec3& ladder_normal, HMM_Vec3& ladder_center) const;
 
     // Ray vs all triangles. Returns closest hit.
     HitResult raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist) const;

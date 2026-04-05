@@ -35,6 +35,33 @@ void CollisionWorld::build_from_mesh(const Mesh& mesh) {
     bvh.build(triangles);
 }
 
+void CollisionWorld::add_mesh_triangles(const Mesh& mesh) {
+    if (mesh.indices.empty()) return;
+
+    for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+        Triangle tri;
+        auto load = [](const float* p) { return HMM_V3(p[0], p[1], p[2]); };
+
+        tri.v0 = load(mesh.vertices[mesh.indices[i + 0]].pos);
+        tri.v1 = load(mesh.vertices[mesh.indices[i + 1]].pos);
+        tri.v2 = load(mesh.vertices[mesh.indices[i + 2]].pos);
+
+        HMM_Vec3 e1 = HMM_SubV3(tri.v1, tri.v0);
+        HMM_Vec3 e2 = HMM_SubV3(tri.v2, tri.v0);
+        float len = HMM_LenV3(HMM_Cross(e1, e2));
+        if (len < 0.0001f) continue;
+        tri.normal = HMM_NormV3(HMM_Cross(e1, e2));
+
+        triangles.push_back(tri);
+    }
+
+    fprintf(stdout, "CollisionWorld: added %zu extra triangles (total %zu)\n",
+            mesh.indices.size() / 3, triangles.size());
+
+    // Rebuild BVH with the additional triangles
+    bvh.build(triangles);
+}
+
 // ============================================================
 //  Möller–Trumbore ray-triangle intersection
 // ============================================================
@@ -468,14 +495,15 @@ void CollisionWorld::add_ladder_volume(const Mesh& mesh, uint32_t index_start, u
             avg_normal.X, avg_normal.Y, avg_normal.Z);
 }
 
-bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius, HMM_Vec3& ladder_normal) const {
+bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius,
+                               HMM_Vec3& ladder_normal, HMM_Vec3& ladder_center) const {
     for (const auto& vol : ladder_volumes) {
-        // Sphere-AABB overlap: expand AABB by radius, test point inside
         if (center.X >= vol.mins.X - radius && center.X <= vol.maxs.X + radius &&
             center.Y >= vol.mins.Y - radius && center.Y <= vol.maxs.Y + radius &&
             center.Z >= vol.mins.Z - radius && center.Z <= vol.maxs.Z + radius)
         {
             ladder_normal = vol.face_normal;
+            ladder_center = HMM_MulV3F(HMM_AddV3(vol.mins, vol.maxs), 0.5f);
             return true;
         }
     }

@@ -345,9 +345,20 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
     velocity.X = right_x * horiz_strafe + forward_x * horiz_fwd;
     velocity.Z = right_z * horiz_strafe + forward_z * horiz_fwd;
 
-    // Slight push toward ladder to stay attached
-    velocity.X -= ladder_normal.X * 0.5f;
-    velocity.Z -= ladder_normal.Z * 0.5f;
+    // Push toward ladder surface to stay attached
+    velocity.X -= ladder_normal.X * 1.0f;
+    velocity.Z -= ladder_normal.Z * 1.0f;
+
+    // Centering force: pull toward ladder center on the horizontal axis
+    // perpendicular to the face normal (so you slide toward the middle)
+    HMM_Vec3 to_center = HMM_SubV3(ladder_center, position);
+    // Remove the component along the face normal (don't pull in/out)
+    float along_normal = HMM_DotV3(to_center, ladder_normal);
+    to_center = HMM_SubV3(to_center, HMM_MulV3F(ladder_normal, along_normal));
+    // Remove Y component (centering is horizontal only)
+    to_center.Y = 0.0f;
+    velocity.X += to_center.X * ladder_centering;
+    velocity.Z += to_center.Z * ladder_centering;
 
     // No gravity on ladder
     do_collide_and_move(dt, world);
@@ -576,18 +587,19 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
     // --- Ladder check ---
     {
         HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
-        HMM_Vec3 lnorm;
-        bool touching_ladder = world.on_ladder(sphere_center, radius, lnorm);
+        HMM_Vec3 lnorm, lcenter;
+        bool touching_ladder = world.on_ladder(sphere_center, radius, lnorm, lcenter);
 
         if (touching_ladder && !on_ladder && !grounded) {
-            // Attach to ladder (only from air — walking past shouldn't grab)
             on_ladder = true;
             ladder_normal = lnorm;
-            velocity = HMM_V3(0, 0, 0); // kill momentum on grab
+            ladder_center = lcenter;
+            velocity = HMM_V3(0, 0, 0);
         } else if (touching_ladder && on_ladder) {
-            ladder_normal = lnorm; // update normal (might change on curved ladders)
+            ladder_normal = lnorm;
+            ladder_center = lcenter;
         } else if (!touching_ladder && on_ladder) {
-            on_ladder = false; // walked/jumped off
+            on_ladder = false;
         }
     }
 

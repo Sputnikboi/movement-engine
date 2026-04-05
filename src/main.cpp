@@ -65,7 +65,10 @@ static bool load_level(const std::string& path,
     collision.ladder_volumes.clear();
     collision.build_from_mesh(ld.mesh);
 
-    // Extract ladder volumes from ladder-specific geometry (not rendered)
+    // Add ladder geometry to collision (solid surface, just not rendered)
+    collision.add_mesh_triangles(ld.ladder_mesh);
+
+    // Extract ladder volumes from ladder-specific geometry
     for (const auto& sub : ld.ladder_submeshes) {
         collision.add_ladder_volume(ld.ladder_mesh, sub.index_start, sub.index_count);
     }
@@ -1083,9 +1086,10 @@ int main(int argc, char* argv[]) {
 
                 ImGui::Separator();
                 ImGui::Text("Ladder");
-                ImGui::SliderFloat("Ladder Speed",    &player.ladder_speed,    1.0f, 15.0f);
-                ImGui::SliderFloat("Ladder Jump Off", &player.ladder_jump_off, 1.0f, 15.0f);
-                ImGui::SliderFloat("Ladder Inflate",  &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
+                ImGui::SliderFloat("Ladder Speed",     &player.ladder_speed,     1.0f, 15.0f);
+                ImGui::SliderFloat("Ladder Jump Off",  &player.ladder_jump_off,  1.0f, 15.0f);
+                ImGui::SliderFloat("Ladder Centering", &player.ladder_centering, 0.0f, 10.0f);
+                ImGui::SliderFloat("Ladder Inflate",   &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
                 ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());
                 if (player.on_ladder)
                     ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
