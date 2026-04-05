@@ -31,6 +31,7 @@ void Config::apply(Camera& camera, Player& player) const {
 
     player.gravity        = gravity;
     player.max_speed      = max_speed;
+    player.weapon_speed   = weapon_speed;
     player.air_wish_speed = air_wish_speed;
     player.ground_accel   = ground_accel;
     player.air_accel      = air_accel;
@@ -56,6 +57,7 @@ void Config::pull(const Camera& camera, const Player& player) {
 
     gravity        = player.gravity;
     max_speed      = player.max_speed;
+    weapon_speed   = player.weapon_speed;
     air_wish_speed = player.air_wish_speed;
     ground_accel   = player.ground_accel;
     air_accel      = player.air_accel;
@@ -93,6 +95,7 @@ bool Config::save(const std::string& path) const {
     fprintf(f, "[movement]\n");
     fprintf(f, "gravity = %.2f\n", gravity);
     fprintf(f, "max_speed = %.2f\n", max_speed);
+    fprintf(f, "weapon_speed = %.2f\n", weapon_speed);
     fprintf(f, "air_wish_speed = %.4f\n", air_wish_speed);
     fprintf(f, "ground_accel = %.2f\n", ground_accel);
     fprintf(f, "air_accel = %.2f\n", air_accel);
@@ -158,6 +161,7 @@ bool Config::load(const std::string& path) {
         else if (key == "fov")            fov             = std::stof(val);
         else if (key == "gravity")        gravity         = std::stof(val);
         else if (key == "max_speed")      max_speed       = std::stof(val);
+        else if (key == "weapon_speed")   weapon_speed    = std::stof(val);
         else if (key == "air_wish_speed") air_wish_speed  = std::stof(val);
         else if (key == "ground_accel")   ground_accel    = std::stof(val);
         else if (key == "air_accel")      air_accel       = std::stof(val);

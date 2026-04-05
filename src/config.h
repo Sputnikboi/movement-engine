@@ -18,6 +18,7 @@ struct Config {
     // Movement (exposed for tuning)
     float gravity              = 20.0f;
     float max_speed            = 8.0f;
+    float weapon_speed         = 6.5f;
     float air_wish_speed       = 0.76f;
     float ground_accel         = 10.0f;
     float air_accel            = 70.0f;

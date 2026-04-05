@@ -618,13 +618,10 @@ int main(int argc, char* argv[]) {
 
         // --- Weapon update & shooting ---
         {
-            bool fire_pressed = !show_settings && !noclip && kb.held(Action::Shoot, keys_frame);
-            bool reload_pressed = !show_settings && !noclip && kb.held(Action::Reload, keys_frame);
-            bool ads_input = !show_settings && !noclip && kb.held(Action::ADS, keys_frame);
-
-            // Auto-unholster on any weapon action
-            if (player.weapon_holstered && (fire_pressed || reload_pressed || ads_input))
-                player.weapon_holstered = false;
+            bool holstered = player.weapon_holstered;
+            bool fire_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Shoot, keys_frame);
+            bool reload_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Reload, keys_frame);
+            bool ads_input = !show_settings && !noclip && !holstered && kb.held(Action::ADS, keys_frame);
 
             weapon.update(dt, fire_pressed, reload_pressed, ads_input);
 
