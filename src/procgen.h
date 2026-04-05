@@ -9,7 +9,7 @@ struct ProcGenConfig {
     float room_width_max   = 50.0f;
     float room_depth_min   = 30.0f;
     float room_depth_max   = 50.0f;
-    float room_height      = 12.0f;
+    float room_height      = 25.0f;
     float wall_thickness   = 0.5f;
 
     // Boxes / cover

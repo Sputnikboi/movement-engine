@@ -21,12 +21,28 @@ static void add_quad(Mesh& m, HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 d,
         m.vertices.push_back(v);
     };
     push(a); push(b); push(c); push(d);
-    m.indices.push_back(base + 0);
-    m.indices.push_back(base + 1);
-    m.indices.push_back(base + 2);
-    m.indices.push_back(base + 0);
-    m.indices.push_back(base + 2);
-    m.indices.push_back(base + 3);
+
+    // Auto-correct winding: check if cross(b-a, c-a) matches the normal.
+    // If not, reverse triangle winding so the face is visible from the normal side.
+    HMM_Vec3 e1 = HMM_SubV3(b, a);
+    HMM_Vec3 e2 = HMM_SubV3(c, a);
+    HMM_Vec3 cross = HMM_Cross(e1, e2);
+
+    if (HMM_DotV3(cross, normal) >= 0.0f) {
+        m.indices.push_back(base + 0);
+        m.indices.push_back(base + 1);
+        m.indices.push_back(base + 2);
+        m.indices.push_back(base + 0);
+        m.indices.push_back(base + 2);
+        m.indices.push_back(base + 3);
+    } else {
+        m.indices.push_back(base + 0);
+        m.indices.push_back(base + 2);
+        m.indices.push_back(base + 1);
+        m.indices.push_back(base + 0);
+        m.indices.push_back(base + 3);
+        m.indices.push_back(base + 2);
+    }
 }
 
 // Add a box (6 faces) at position with given size. Bottom face at pos.Y.
