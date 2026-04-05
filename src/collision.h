@@ -25,7 +25,7 @@ struct CollisionWorld {
         HMM_Vec3 face_normal;   // average face normal (points away from wall)
     };
     std::vector<LadderVolume> ladder_volumes;
-    float ladder_inflate = 0.5f;  // how much to inflate the AABB on each side
+    float ladder_inflate = 0.1f;  // how much to inflate the AABB on each side
 
     // Build from a Mesh (extracts triangles from vertex/index data, builds BVH)
     void build_from_mesh(const Mesh& mesh);
@@ -38,9 +38,11 @@ struct CollisionWorld {
     void add_ladder_volume(const Mesh& mesh, uint32_t index_start, uint32_t index_count);
 
     // Check if a point is inside any ladder volume.
-    // Returns true + the ladder's face normal + the volume's center.
+    // ignore_idx: skip this volume (used for jump-off cooldown, -1 = none).
+    // Returns true + the ladder's face normal + volume center + volume index.
     bool on_ladder(HMM_Vec3 center, float radius,
-                   HMM_Vec3& ladder_normal, HMM_Vec3& ladder_center) const;
+                   HMM_Vec3& ladder_normal, HMM_Vec3& ladder_center,
+                   int& volume_idx, int ignore_idx = -1) const;
 
     // Ray vs all triangles. Returns closest hit.
     HitResult raycast(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist) const;

@@ -304,13 +304,18 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
     // Jump off ladder
     bool wants_jump = auto_hop ? input.jump_held : (input.jump_held && !jump_held_last);
     if (wants_jump) {
+        // Cooldown: ignore this ladder volume so we don't re-grab instantly
+        ladder_cooldown_idx = ladder_volume_idx;
+        ladder_cooldown = 0.4f;
         on_ladder = false;
-        // Push away from ladder + upward
+
+        // Push away from ladder + upward — apply position nudge immediately
+        // so we clear the collision surface this frame
         velocity = HMM_AddV3(HMM_MulV3F(ladder_normal, ladder_jump_off),
                              HMM_V3(0, jump_speed * 0.5f, 0));
+        position = HMM_AddV3(position, HMM_MulV3F(ladder_normal, 0.3f));
         grounded = false;
         lurch_timer = lurch_window;
-        do_collide_and_move(dt, world);
         return;
     }
 
@@ -344,10 +349,6 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
     velocity.Y = vert;
     velocity.X = right_x * horiz_strafe + forward_x * horiz_fwd;
     velocity.Z = right_z * horiz_strafe + forward_z * horiz_fwd;
-
-    // Push toward ladder surface to stay attached
-    velocity.X -= ladder_normal.X * 1.0f;
-    velocity.Z -= ladder_normal.Z * 1.0f;
 
     // No gravity on ladder
     do_collide_and_move(dt, world);
@@ -573,20 +574,35 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
         }
     }
 
+    // --- Ladder cooldown tick ---
+    if (ladder_cooldown > 0.0f) {
+        ladder_cooldown -= dt;
+        if (ladder_cooldown <= 0.0f) {
+            ladder_cooldown = 0.0f;
+            ladder_cooldown_idx = -1;
+        }
+    }
+
     // --- Ladder check ---
     {
         HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0.0f, radius, 0.0f));
         HMM_Vec3 lnorm, lcenter;
-        bool touching_ladder = world.on_ladder(sphere_center, radius, lnorm, lcenter);
+        int vol_idx = -1;
+        // Skip the volume we just jumped off
+        int ignore = (ladder_cooldown > 0.0f) ? ladder_cooldown_idx : -1;
+        bool touching_ladder = world.on_ladder(sphere_center, radius,
+                                                lnorm, lcenter, vol_idx, ignore);
 
         if (touching_ladder && !on_ladder && !grounded) {
             on_ladder = true;
             ladder_normal = lnorm;
             ladder_center = lcenter;
+            ladder_volume_idx = vol_idx;
             velocity = HMM_V3(0, 0, 0);
         } else if (touching_ladder && on_ladder) {
             ladder_normal = lnorm;
             ladder_center = lcenter;
+            ladder_volume_idx = vol_idx;
         } else if (!touching_ladder && on_ladder) {
             on_ladder = false;
         }

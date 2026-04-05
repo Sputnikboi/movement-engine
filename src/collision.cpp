@@ -496,14 +496,18 @@ void CollisionWorld::add_ladder_volume(const Mesh& mesh, uint32_t index_start, u
 }
 
 bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius,
-                               HMM_Vec3& ladder_normal, HMM_Vec3& ladder_center) const {
-    for (const auto& vol : ladder_volumes) {
+                               HMM_Vec3& ladder_normal, HMM_Vec3& ladder_center,
+                               int& volume_idx, int ignore_idx) const {
+    for (int i = 0; i < (int)ladder_volumes.size(); i++) {
+        if (i == ignore_idx) continue;
+        const auto& vol = ladder_volumes[i];
         if (center.X >= vol.mins.X - radius && center.X <= vol.maxs.X + radius &&
             center.Y >= vol.mins.Y - radius && center.Y <= vol.maxs.Y + radius &&
             center.Z >= vol.mins.Z - radius && center.Z <= vol.maxs.Z + radius)
         {
             ladder_normal = vol.face_normal;
             ladder_center = HMM_MulV3F(HMM_AddV3(vol.mins, vol.maxs), 0.5f);
+            volume_idx = i;
             return true;
         }
     }

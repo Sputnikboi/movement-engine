@@ -177,7 +177,9 @@ static void process_node(const cgltf_node* node, LevelData& out) {
     }
 
     if (node->mesh) {
-        bool is_ladder = name_starts_with(node->name, "ladder");
+        // "Ladder" → trigger volume (invisible). "VLadder" → visual only (rendered normally).
+        bool is_ladder = name_starts_with(node->name, "ladder")
+                      && !name_starts_with(node->name, "vladder");
 
         // Choose target mesh: ladder nodes go to invisible ladder_mesh
         Mesh& target = is_ladder ? out.ladder_mesh : out.mesh;
