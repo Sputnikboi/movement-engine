@@ -593,7 +593,7 @@ void Player::update(float dt, const InputState& input, const CollisionWorld& wor
         bool touching_ladder = world.on_ladder(sphere_center, radius,
                                                 lnorm, lcenter, vol_idx, ignore);
 
-        if (touching_ladder && !on_ladder && !grounded) {
+        if (touching_ladder && !on_ladder) {
             on_ladder = true;
             ladder_normal = lnorm;
             ladder_center = lcenter;
