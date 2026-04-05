@@ -5,10 +5,10 @@
 
 struct ProcGenConfig {
     // Room dimensions
-    float room_width_min   = 50.0f;
-    float room_width_max   = 80.0f;
-    float room_depth_min   = 50.0f;
-    float room_depth_max   = 80.0f;
+    float room_width_min   = 60.0f;
+    float room_width_max   = 100.0f;
+    float room_depth_min   = 60.0f;
+    float room_depth_max   = 100.0f;
     float room_height      = 25.0f;
     float wall_thickness   = 0.5f;
 

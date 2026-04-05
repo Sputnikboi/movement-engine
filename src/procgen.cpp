@@ -252,11 +252,9 @@ LevelData generate_level(const ProcGenConfig& config,
         float ph = randf(config.platform_height_min, config.platform_height_max);
         float yaw = randf(0, HMM_PI32 * 2.0f); // random rotation
 
-        // Ramp length determines total footprint
-        float ramp_len = config.gen_ramps ? ph * 4.0f : 0.0f;
-        // Bounding radius: half-diagonal of platform + ramp extent
+        // Bounding radius: half-diagonal of platform + ramp width for the wrap-around
         float half_diag = sqrtf(pw * pw + pd * pd) * 0.5f;
-        float total_radius = half_diag + ramp_len + config.ramp_width * 0.5f;
+        float total_radius = half_diag + config.ramp_width + 1.0f;
 
         // Try to place without overlap
         float px = 0, pz = 0;
@@ -275,21 +273,45 @@ LevelData generate_level(const ProcGenConfig& config,
         add_box(m, {px, 0, pz}, pw, ph, pd, config.platform_color, yaw);
         placed[placed_count++] = {px, pz, total_radius};
 
-        // Ramp up to this platform — always on the local +Z side, rotated by yaw
+        // Wrap-around ramp: 3 segments along 3 sides of the platform
         if (config.gen_ramps) {
-            float rw2 = config.ramp_width * 0.5f;
+            float rw = config.ramp_width;
+            float phw = pw * 0.5f, phd = pd * 0.5f;
             float c = cosf(yaw), s = sinf(yaw);
-            auto rot = [&](float lx, float lz) -> HMM_Vec3 {
-                return {px + lx * c + lz * s, 0, pz - lx * s + lz * c};
+            auto rot = [&](float lx, float lz, float ly) -> HMM_Vec3 {
+                return {px + lx * c + lz * s, ly, pz - lx * s + lz * c};
             };
-            // Local-space ramp: low end at +Z + ramp_len, high end at +Z edge of platform
-            HMM_Vec3 low0 = rot(-rw2, pd * 0.5f + ramp_len);
-            HMM_Vec3 low1 = rot( rw2, pd * 0.5f + ramp_len);
-            HMM_Vec3 high0 = rot(-rw2, pd * 0.5f);
-            HMM_Vec3 high1 = rot( rw2, pd * 0.5f);
-            low0.Y = 0; low1.Y = 0;
-            high0.Y = ph; high1.Y = ph;
-            add_ramp_from_corners(m, low0, low1, high0, high1, config.ramp_color);
+
+            // 4 sides in local space (clockwise from above):
+            //   0: -Z edge (-hw,-hd) → (+hw,-hd)  outward (0,-1)
+            //   1: +X edge (+hw,-hd) → (+hw,+hd)  outward (+1,0)
+            //   2: +Z edge (+hw,+hd) → (-hw,+hd)  outward (0,+1)
+            //   3: -X edge (-hw,+hd) → (-hw,-hd)  outward (-1,0)
+            struct Side {
+                float sx, sz, ex, ez; // start/end corners (local XZ)
+                float ox, oz;         // outward direction
+            };
+            Side sides[4] = {
+                {-phw, -phd,  phw, -phd,  0, -1},
+                { phw, -phd,  phw,  phd,  1,  0},
+                { phw,  phd, -phw,  phd,  0,  1},
+                {-phw,  phd, -phw, -phd, -1,  0},
+            };
+
+            int start_side = rand() % 4;
+            int num_segs = 3;
+            for (int seg = 0; seg < num_segs; seg++) {
+                const Side& sd = sides[(start_side + seg) % 4];
+                float h_lo = ph * (float)seg / (float)num_segs;
+                float h_hi = ph * (float)(seg + 1) / (float)num_segs;
+
+                // Inner edge hugs the platform, outer edge extends outward
+                HMM_Vec3 low0  = rot(sd.sx + sd.ox * rw, sd.sz + sd.oz * rw, h_lo);
+                HMM_Vec3 low1  = rot(sd.sx,              sd.sz,              h_lo);
+                HMM_Vec3 high0 = rot(sd.ex + sd.ox * rw, sd.ez + sd.oz * rw, h_hi);
+                HMM_Vec3 high1 = rot(sd.ex,              sd.ez,              h_hi);
+                add_ramp_from_corners(m, low0, low1, high0, high1, config.ramp_color);
+            }
         }
     }
 
@@ -328,19 +350,24 @@ LevelData generate_level(const ProcGenConfig& config,
     ld.spawn_pos = HMM_V3(entry_x, 1.0f, -hd + 3.0f);
     ld.has_spawn = true;
 
-    // --- Enemy spawns (avoid placed objects) ---
+    // --- Enemy spawns (avoid placed objects + min distance from player) ---
+    float min_enemy_dist = 15.0f; // minimum distance from player spawn
     auto spawn_enemy = [&](EntityType type, float spawn_h) {
         for (int attempt = 0; attempt < 40; attempt++) {
             float ex = randf(-hw * 0.7f, hw * 0.7f);
             float ez = randf(-hd * 0.7f, hd * 0.7f);
-            // Check not inside any placed box/platform/door zone (1m clearance)
-            if (!overlaps(ex, ez, 0.5f, placed, placed_count, 1.0f)) {
-                EnemySpawn es;
-                es.position = HMM_V3(ex, spawn_h, ez);
-                es.type = type;
-                ld.enemy_spawns.push_back(es);
-                return;
-            }
+            // Check not inside any placed object
+            if (overlaps(ex, ez, 0.5f, placed, placed_count, 1.0f))
+                continue;
+            // Check minimum distance from player spawn
+            float dx = ex - ld.spawn_pos.X, dz = ez - ld.spawn_pos.Z;
+            if (dx * dx + dz * dz < min_enemy_dist * min_enemy_dist)
+                continue;
+            EnemySpawn es;
+            es.position = HMM_V3(ex, spawn_h, ez);
+            es.type = type;
+            ld.enemy_spawns.push_back(es);
+            return;
         }
         // Fallback: spawn anyway at a random position
         float ex = randf(-hw * 0.5f, hw * 0.5f);
