@@ -65,14 +65,9 @@ static bool load_level(const std::string& path,
     collision.ladder_volumes.clear();
     collision.build_from_mesh(ld.mesh);
 
-    // Extract ladder volumes from named nodes
-    for (const auto& sub : ld.submeshes) {
-        char lower[8] = {};
-        for (int c = 0; c < 6 && sub.name[c]; c++)
-            lower[c] = (sub.name[c] >= 'A' && sub.name[c] <= 'Z') ? sub.name[c] + 32 : sub.name[c];
-        if (strncmp(lower, "ladder", 6) == 0) {
-            collision.add_ladder_volume(ld.mesh, sub.index_start, sub.index_count);
-        }
+    // Extract ladder volumes from ladder-specific geometry (not rendered)
+    for (const auto& sub : ld.ladder_submeshes) {
+        collision.add_ladder_volume(ld.ladder_mesh, sub.index_start, sub.index_count);
     }
 
     // Update player
