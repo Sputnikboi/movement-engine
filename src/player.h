@@ -21,6 +21,12 @@ struct Player {
 
     // --- Dimensions ---
     float radius         = 0.4f;
+
+    // Health
+    float health         = 100.0f;
+    float max_health     = 100.0f;
+    float damage_accum   = 0.0f;  // recent damage for vignette intensity
+    float damage_decay   = 3.0f;  // seconds to fully fade vignette
     float height_stand   = 1.8f;
     float height_crouch  = 1.0f;
     float eye_stand      = 1.6f;

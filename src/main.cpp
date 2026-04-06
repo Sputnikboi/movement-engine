@@ -800,7 +800,8 @@ int main(int argc, char* argv[]) {
                         rusher_update(e, entities, MAX_ENTITIES,
                                       player.position, collision, rusher_cfg, dt, total_time);
                         if (rusher_check_player_hit(e, player.capsule_bottom(), player.capsule_top(), player.radius, rusher_cfg)) {
-                            // TODO: player takes damage
+                            player.health -= rusher_cfg.melee_damage;
+                            player.damage_accum += rusher_cfg.melee_damage;
                         }
                     }
                 }
@@ -813,7 +814,8 @@ int main(int argc, char* argv[]) {
                         float tdmg = 0.0f;
                         if (turret_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
                                                     player.radius, collision, turret_cfg, tdmg)) {
-                            // TODO: player takes damage (tdmg)
+                            player.health -= tdmg;
+                            player.damage_accum += tdmg;
                         }
                     }
                 }
@@ -829,7 +831,8 @@ int main(int argc, char* argv[]) {
                                                   player.radius, tank_cfg, tdmg, kb)) {
                             // Apply knockback to player
                             player.velocity = HMM_AddV3(player.velocity, kb);
-                            // TODO: player takes damage (tdmg)
+                            player.health -= tdmg;
+                            player.damage_accum += tdmg;
                         }
                     }
                 }
@@ -847,7 +850,8 @@ int main(int argc, char* argv[]) {
                         if (bomber_check_explosion(e, player.capsule_bottom(), player.capsule_top(),
                                                    player.radius, bomber_cfg, bdmg, bkb)) {
                             player.velocity = HMM_AddV3(player.velocity, bkb);
-                            // TODO: player takes damage (bdmg)
+                            player.health -= bdmg;
+                            player.damage_accum += bdmg;
                         }
                     }
                 }
@@ -938,7 +942,8 @@ int main(int argc, char* argv[]) {
                 if (sphere_capsule_overlap(e.position, e.radius,
                                            player.capsule_bottom(), player.capsule_top(),
                                            player.radius)) {
-                    // TODO: player takes damage
+                    player.health -= e.damage;
+                    player.damage_accum += e.damage;
                     e.alive = false;
                 }
             }
@@ -982,6 +987,8 @@ int main(int argc, char* argv[]) {
         // Door interaction: pressing interact near unlocked exit → new room
         if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings) {
             rooms_cleared++;
+            player.health = player.max_health;
+            player.damage_accum = 0.0f;
             printf("Entering room %d...\n", rooms_cleared + 1);
             procgen_cfg.seed = 0; // random seed each time
             procgen_cfg.room_number = rooms_cleared + 1;
@@ -1107,6 +1114,21 @@ int main(int argc, char* argv[]) {
             float speed_xz = sqrtf(player.velocity.X * player.velocity.X +
                                    player.velocity.Z * player.velocity.Z);
             ImGui::Text("Speed: %.1f u/s", speed_xz);
+
+            // Health bar
+            {
+                float hp_frac = player.health / player.max_health;
+                ImVec4 hp_color = (hp_frac > 0.5f)
+                    ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f)
+                    : (hp_frac > 0.25f)
+                        ? ImVec4(1.0f, 0.8f, 0.2f, 1.0f)
+                        : ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, hp_color);
+                char hp_text[32];
+                snprintf(hp_text, sizeof(hp_text), "HP: %.0f / %.0f", player.health, player.max_health);
+                ImGui::ProgressBar(hp_frac, ImVec2(180, 14), hp_text);
+                ImGui::PopStyleColor();
+            }
             ImGui::Text("Pos: %.1f %.1f %.1f", player.position.X, player.position.Y, player.position.Z);
             const char* state = "AIR";
             if (player.grounded) {
@@ -1165,6 +1187,33 @@ int main(int argc, char* argv[]) {
             ImGui::TextDisabled("ESC: settings  H: hide HUD  R: reload  RMB: aim");
 
             ImGui::End();
+
+            // --- Damage vignette ---
+            {
+                float intensity = player.damage_accum / 40.0f; // 40 dmg = full intensity
+                if (intensity > 1.0f) intensity = 1.0f;
+                if (intensity > 0.01f) {
+                    ImDrawList* fg = ImGui::GetForegroundDrawList();
+                    ImVec2 sz = ImGui::GetIO().DisplaySize;
+                    float alpha = intensity * 0.6f;
+                    // Four edge gradients (vignette)
+                    float border = sz.x * 0.15f; // vignette width
+                    ImU32 red_full = ImGui::ColorConvertFloat4ToU32(ImVec4(0.8f, 0.0f, 0.0f, alpha));
+                    ImU32 red_zero = ImGui::ColorConvertFloat4ToU32(ImVec4(0.8f, 0.0f, 0.0f, 0.0f));
+                    // Top
+                    fg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(sz.x, border),
+                        red_full, red_full, red_zero, red_zero);
+                    // Bottom
+                    fg->AddRectFilledMultiColor(ImVec2(0, sz.y - border), ImVec2(sz.x, sz.y),
+                        red_zero, red_zero, red_full, red_full);
+                    // Left
+                    fg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(border, sz.y),
+                        red_full, red_zero, red_zero, red_full);
+                    // Right
+                    fg->AddRectFilledMultiColor(ImVec2(sz.x - border, 0), ImVec2(sz.x, sz.y),
+                        red_zero, red_full, red_full, red_zero);
+                }
+            }
 
             // --- Crosshair ---
             ImDrawList* draw = ImGui::GetForegroundDrawList();
