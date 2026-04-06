@@ -370,15 +370,23 @@ void shielder_update(Entity& shielder, Entity entities[], int max_entities,
 
 void shielder_apply_barriers(Entity entities[], int max_entities,
                              const ShielderConfig& config, float dt) {
-    // First, find which entities are in range of an active shielder
+    // Track which entities are in range of ANY active shielder (for decay logic)
     bool in_aura[256] = {};
 
+    // Each shielder applies shields ONE AT A TIME with a cooldown (ai_timer2)
     for (int i = 0; i < max_entities && i < 256; i++) {
-        const Entity& s = entities[i];
+        Entity& s = entities[i];
         if (!s.alive || s.type != EntityType::Shielder) continue;
         if (s.ai_state != SHIELDER_SHIELDING) continue;
 
-        // Mark all non-shielder, non-projectile allies in range
+        // Tick this shielder's apply cooldown
+        if (s.ai_timer2 > 0.0f)
+            s.ai_timer2 -= dt;
+
+        // Mark allies in range for aura tracking
+        int best_target = -1;
+        float best_dist = 999.0f;
+
         for (int j = 0; j < max_entities && j < 256; j++) {
             if (j == i) continue;
             const Entity& e = entities[j];
@@ -388,19 +396,30 @@ void shielder_apply_barriers(Entity entities[], int max_entities,
             float dist = HMM_LenV3(HMM_SubV3(e.position, s.position));
             if (dist < config.shield_radius) {
                 in_aura[j] = true;
+
+                // Pick closest unshielded ally as next target
+                if (s.ai_timer2 <= 0.0f && e.shield_hp <= 0.0f && dist < best_dist) {
+                    best_dist = dist;
+                    best_target = j;
+                }
             }
+        }
+
+        // Apply shield to one ally if cooldown is ready
+        if (best_target >= 0) {
+            entities[best_target].shield_hp = config.shield_hp;
+            s.ai_timer2 = config.shield_apply_cd;  // reset cooldown
         }
     }
 
-    // Recharge shields for entities in aura, decay for those out of range
-    // shield_hp encoding: >0 = active shield, <0 = on cooldown (counts up to 0)
+    // Existing shields: recharge if in aura, decay if not
     for (int i = 0; i < max_entities && i < 256; i++) {
         Entity& e = entities[i];
         if (!e.alive) continue;
         if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
 
+        // Shield-break cooldown (negative = on cooldown)
         if (e.shield_hp < 0.0f) {
-            // On cooldown — clamp to config cooldown, tick towards 0
             if (e.shield_hp < -config.shield_apply_cd)
                 e.shield_hp = -config.shield_apply_cd;
             e.shield_hp += dt;
@@ -409,14 +428,14 @@ void shielder_apply_barriers(Entity entities[], int max_entities,
         }
 
         if (in_aura[i]) {
-            // Recharge towards max
-            if (e.shield_hp < config.shield_hp) {
+            // Recharge towards max while in range
+            if (e.shield_hp > 0.0f && e.shield_hp < config.shield_hp) {
                 e.shield_hp += config.shield_recharge * dt;
                 if (e.shield_hp > config.shield_hp)
                     e.shield_hp = config.shield_hp;
             }
         } else {
-            // Not in aura: shield decays slowly
+            // Out of aura: shield decays
             if (e.shield_hp > 0.0f) {
                 e.shield_hp -= config.shield_recharge * 0.5f * dt;
                 if (e.shield_hp < 0.0f) e.shield_hp = 0.0f;
