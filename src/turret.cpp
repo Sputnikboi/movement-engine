@@ -231,18 +231,7 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
             turret.ai_timer = 0.0f;
             turret.ai_timer2 = 0.0f;  // shots fired so far
         }
-
-        // Lost LOS? Cancel windup
-        if (do_expensive && dist < config.lose_range) {
-            HitResult los = world.raycast(turret.position, dir_to_player, dist);
-            if (los.hit) {
-                turret.ai_state = TURRET_TRACKING;
-            }
-        }
-        if (dist > config.lose_range) {
-            turret.ai_state = TURRET_IDLE;
-            turret.ai_timer = randf(2.0f, 5.0f);
-        }
+        // Windup commits — no cancellation from LOS/range loss
     } break;
 
     case TURRET_FIRING: {
