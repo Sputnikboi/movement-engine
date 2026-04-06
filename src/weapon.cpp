@@ -226,7 +226,7 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 local_offset,
 
     // Build camera-relative world position (no local_offset here)
     HMM_Vec3 fwd   = cam.forward();
-    HMM_Vec3 right = cam.right();
+    HMM_Vec3 right = HMM_MulV3F(cam.right(), -1.0f); // negate to match RH view matrix convention
     HMM_Vec3 up    = HMM_Cross(right, fwd);
 
     HMM_Vec3 world_pos = HMM_AddV3(cam.position,
