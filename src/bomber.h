@@ -41,7 +41,7 @@ struct BomberConfig {
     // Explosion (on ground impact)
     float explosion_damage  = 15.0f;
     float explosion_radius  = 5.0f;
-    float explosion_knockback = 0.4f;
+    float explosion_knockback = 40.0f;
 
     // Dive trigger
     float dive_trigger_dist = 15.0f;  // starts dive when within this horizontal distance
