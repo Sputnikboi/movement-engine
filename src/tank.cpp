@@ -168,7 +168,13 @@ void tank_update(Entity& tank, Entity entities[], int max_entities,
 
         bool was_falling = vel_before.Y < -1.0f;
         float speed_lost = speed_before - speed_after;
-        if (was_falling && speed_lost > speed_before * 0.4f) {
+        bool impact = was_falling && speed_lost > speed_before * 0.4f;
+        // Near-ground fast kill: if barely moving after 0.3s, just explode
+        if (!impact && tank.death_timer > 0.3f) {
+            HitResult gnd = world.raycast(tank.position, HMM_V3(0,-1,0), tank.radius + 0.5f);
+            if (gnd.hit) impact = true;
+        }
+        if (impact) {
             tank.ai_state = TANK_DEAD;
             tank.alive = false;
             return;

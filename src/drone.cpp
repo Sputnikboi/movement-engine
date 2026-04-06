@@ -239,7 +239,13 @@ void drone_update(Entity& drone, Entity entities[], int max_entities,
         // where Y doesn't go to zero but speed gets redirected/lost)
         bool was_falling = vel_before.Y < -1.0f;
         float speed_lost = speed_before - speed_after;
-        if (was_falling && speed_lost > speed_before * 0.4f) {
+        bool impact = was_falling && speed_lost > speed_before * 0.4f;
+        // Near-ground fast kill: if barely moving after 0.3s, just explode
+        if (!impact && drone.death_timer > 0.3f) {
+            HitResult gnd = world.raycast(drone.position, HMM_V3(0,-1,0), drone.radius + 0.5f);
+            if (gnd.hit) impact = true;
+        }
+        if (impact) {
             drone.ai_state = DRONE_DEAD;
             drone.alive = false;
             return;
