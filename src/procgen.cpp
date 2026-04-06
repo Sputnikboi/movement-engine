@@ -271,8 +271,6 @@ LevelData generate_level(const ProcGenConfig& config,
     float exit_plat_width = 14.0f;
     float exit_ramp_len   = 8.0f;
 
-    float door_flat_radius = 5.0f;
-    float exit_flat_radius = exit_plat_depth + exit_ramp_len + 3.0f;
     float entry_x = 0.0f, exit_x = 0.0f;
 
     float cw = hm.cell_w(), cd = hm.cell_d();
@@ -304,28 +302,63 @@ LevelData generate_level(const ProcGenConfig& config,
                     h += hl.height * falloff;
                 }
             }
-            // Clamp so terrain doesn't go below floor
-            if (h < -0.5f) h = -0.5f;
+            // Clamp craters
+            if (h < -2.0f) h = -2.0f;
 
-            // Flatten near entry door
+            // Flatten rectangular safe zone at entry (-Z wall)
             {
-                float dze = z - (-hd);
-                float dxe = x - entry_x;
-                float dist = sqrtf(dxe*dxe + dze*dze);
-                if (dist < door_flat_radius)
-                    h *= dist / door_flat_radius;
+                float entry_safe_w = 10.0f, entry_safe_d = 10.0f;
+                float fade_w = 4.0f; // fade-out margin
+                float dz_in = z - (-hd); // distance from -Z wall into room
+                float dx = fabsf(x - entry_x);
+                if (dz_in < entry_safe_d && dx < entry_safe_w) {
+                    h = 0.0f; // fully flat
+                } else if (dz_in < entry_safe_d + fade_w && dx < entry_safe_w + fade_w) {
+                    float tz = (dz_in > entry_safe_d) ? (dz_in - entry_safe_d) / fade_w : 0.0f;
+                    float tx = (dx > entry_safe_w) ? (dx - entry_safe_w) / fade_w : 0.0f;
+                    float blend = fmaxf(tz, tx);
+                    blend = blend * blend * (3.0f - 2.0f * blend); // smoothstep
+                    h *= blend;
+                }
             }
-            // Flatten near exit platform zone
+            // Flatten rectangular safe zone at exit (+Z wall)
             {
-                float dze = z - hd;
-                float dxe = x - exit_x;
-                float dist = sqrtf(dxe*dxe + dze*dze);
-                if (dist < exit_flat_radius)
-                    h *= dist / exit_flat_radius;
+                float exit_safe_d = exit_plat_depth + exit_ramp_len + 4.0f;
+                float exit_safe_w = exit_plat_width * 0.5f + 3.0f;
+                float fade_w = 4.0f;
+                float dz_in = hd - z; // distance from +Z wall into room
+                float dx = fabsf(x - exit_x);
+                if (dz_in < exit_safe_d && dx < exit_safe_w) {
+                    h = 0.0f;
+                } else if (dz_in < exit_safe_d + fade_w && dx < exit_safe_w + fade_w) {
+                    float tz = (dz_in > exit_safe_d) ? (dz_in - exit_safe_d) / fade_w : 0.0f;
+                    float tx = (dx > exit_safe_w) ? (dx - exit_safe_w) / fade_w : 0.0f;
+                    float blend = fmaxf(tz, tx);
+                    blend = blend * blend * (3.0f - 2.0f * blend);
+                    h *= blend;
+                }
+            }
+            // Flatten near room edges so terrain doesn't poke through walls
+            {
+                float edge_margin = 3.0f;
+                float dx_wall = fminf(x - (-hw), hw - x);
+                float dz_wall = fminf(z - (-hd), hd - z);
+                float d_wall = fminf(dx_wall, dz_wall);
+                if (d_wall < edge_margin) {
+                    float blend = d_wall / edge_margin;
+                    blend = blend * blend * (3.0f - 2.0f * blend);
+                    h *= blend;
+                }
             }
             hm.at(ix, iz) = h;
         }
     }
+
+    // Find minimum terrain height for extending walls/pillars below
+    float min_terrain_y = 0.0f;
+    for (int i = 0; i < (int)hm.heights.size(); i++)
+        if (hm.heights[i] < min_terrain_y) min_terrain_y = hm.heights[i];
+    float wall_floor = min_terrain_y - 1.0f; // extend 1m below lowest point
 
     emit_terrain(m, hm, config.floor_color);
 
@@ -351,14 +384,14 @@ LevelData generate_level(const ProcGenConfig& config,
     };
 
     // Entry door gap starts at floor level
-    wall_with_door(-hw, hw, 0, rh, -hd, {0,0,1}, entry_x, door_w, door_h);
+    wall_with_door(-hw, hw, wall_floor, rh, -hd, {0,0,1}, entry_x, door_w, door_h);
     // Exit door gap starts at platform height  
     wall_with_door(-hw, hw, exit_plat_h, rh, hd, {0,0,-1}, exit_x, door_w, exit_plat_h + door_h);
     // Full wall strip from floor to platform height (below the upper wall section)
-    add_quad(m, {-hw,0,hd}, {-hw,exit_plat_h,hd}, {hw,exit_plat_h,hd}, {hw,0,hd},
+    add_quad(m, {-hw,wall_floor,hd}, {-hw,exit_plat_h,hd}, {hw,exit_plat_h,hd}, {hw,wall_floor,hd},
              {0,0,-1}, config.wall_color);
-    add_quad(m, {hw,0,hd}, {hw,rh,hd}, {hw,rh,-hd}, {hw,0,-hd}, {-1,0,0}, config.wall_color);
-    add_quad(m, {-hw,0,-hd}, {-hw,rh,-hd}, {-hw,rh,hd}, {-hw,0,hd}, {1,0,0}, config.wall_color);
+    add_quad(m, {hw,wall_floor,hd}, {hw,rh,hd}, {hw,rh,-hd}, {hw,wall_floor,-hd}, {-1,0,0}, config.wall_color);
+    add_quad(m, {-hw,wall_floor,-hd}, {-hw,rh,-hd}, {-hw,rh,hd}, {-hw,wall_floor,hd}, {1,0,0}, config.wall_color);
 
     // --- Exit platform (raised area at +Z wall) ---
     {
@@ -372,16 +405,16 @@ LevelData generate_level(const ProcGenConfig& config,
                  {px1,exit_plat_h,pz1}, {px0,exit_plat_h,pz1},
                  {0,1,0}, pcol);
         // Front wall (facing -Z into room)
-        add_quad(m, {px0,0,pz0}, {px0,exit_plat_h,pz0},
-                 {px1,exit_plat_h,pz0}, {px1,0,pz0},
+        add_quad(m, {px0,wall_floor,pz0}, {px0,exit_plat_h,pz0},
+                 {px1,exit_plat_h,pz0}, {px1,wall_floor,pz0},
                  {0,0,-1}, pcol);
         // Left wall
-        add_quad(m, {px0,0,pz1}, {px0,exit_plat_h,pz1},
-                 {px0,exit_plat_h,pz0}, {px0,0,pz0},
+        add_quad(m, {px0,wall_floor,pz1}, {px0,exit_plat_h,pz1},
+                 {px0,exit_plat_h,pz0}, {px0,wall_floor,pz0},
                  {-1,0,0}, pcol);
         // Right wall
-        add_quad(m, {px1,0,pz0}, {px1,exit_plat_h,pz0},
-                 {px1,exit_plat_h,pz1}, {px1,0,pz1},
+        add_quad(m, {px1,wall_floor,pz0}, {px1,exit_plat_h,pz0},
+                 {px1,exit_plat_h,pz1}, {px1,wall_floor,pz1},
                  {1,0,0}, pcol);
 
         // Ramp from floor up to platform (slope face only)
@@ -397,10 +430,10 @@ LevelData generate_level(const ProcGenConfig& config,
         if (rn.Y < 0) rn = HMM_MulV3F(rn, -1.0f);
         add_quad(m, low0, high0, high1, low1, rn, config.ramp_color);
         // Ramp side walls down to floor
-        add_quad(m, {exit_x - rw2, 0, ramp_z0}, {exit_x - rw2, 0, pz0},
+        add_quad(m, {exit_x - rw2, wall_floor, ramp_z0}, {exit_x - rw2, wall_floor, pz0},
                  {exit_x - rw2, exit_plat_h, pz0}, low0,
                  {-1,0,0}, pcol);
-        add_quad(m, {exit_x + rw2, 0, pz0}, {exit_x + rw2, 0, ramp_z0},
+        add_quad(m, {exit_x + rw2, wall_floor, pz0}, {exit_x + rw2, wall_floor, ramp_z0},
                  low1, {exit_x + rw2, exit_plat_h, pz0},
                  {1,0,0}, pcol);
     }
@@ -583,8 +616,7 @@ LevelData generate_level(const ProcGenConfig& config,
         float var = randf(-0.03f, 0.03f);
         col.X += var; col.Y += var; col.Z += var;
 
-        float base_y = 0;
-        add_box(m, {tx, base_y, tz}, tw, th, td, col, yaw);
+        add_box(m, {tx, wall_floor, tz}, tw, th - wall_floor, td, col, yaw);
         placed[placed_count++] = {tx, tz, tr};
     }
 
@@ -614,7 +646,7 @@ LevelData generate_level(const ProcGenConfig& config,
                     float var = randf(-0.03f, 0.03f);
                     col.X += var; col.Y += var; col.Z += var;
 
-                    add_box(m, {px, 0, pz}, bw, bh, bd, col, yaw);
+                    add_box(m, {px, wall_floor, pz}, bw, bh - wall_floor, bd, col, yaw);
                     placed[placed_count++] = {px, pz, br + 2.0f};
                 }
             }

@@ -28,8 +28,8 @@ struct ProcGenConfig {
     int   cluster_size_max = 5;
 
     // Floor terrain (smooth hills/depressions)
-    int   hill_count_min   = 2;
-    int   hill_count_max   = 5;
+    int   hill_count_min   = 4;
+    int   hill_count_max   = 8;
     float hill_height_min  = 1.0f;
     float hill_height_max  = 4.0f;
     float hill_radius_min  = 8.0f;
