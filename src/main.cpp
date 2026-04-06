@@ -1074,6 +1074,7 @@ int main(int argc, char* argv[]) {
                 Entity& e = entities[i];
                 if (!e.alive || e.type != EntityType::Projectile) continue;
 
+                if (e.owner == -3) continue; // skip player projectiles
                 if (sphere_capsule_overlap(e.position, e.radius,
                                            player.capsule_bottom(), player.capsule_top(),
                                            player.radius)) {
