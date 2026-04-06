@@ -72,7 +72,7 @@ struct Player {
     float lurch_reclaim_per_use    = 0.25f;   // fraction of accum drained per lurch after the first
 
     // --- Ground check ---
-    float ground_check_dist = 0.15f;
+    float ground_check_dist = 0.35f;
 
     // --- Ladder state ---
     bool     on_ladder         = false;
