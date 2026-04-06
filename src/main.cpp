@@ -771,6 +771,13 @@ int main(int argc, char* argv[]) {
 
         // --- Update entities (only when not paused) ---
         if (!show_settings) {
+            // --- Player damage decay ---
+            if (player.damage_accum > 0.0f) {
+                player.damage_accum -= player.damage_accum * (2.0f / player.damage_decay) * dt;
+                if (player.damage_accum < 0.1f) player.damage_accum = 0.0f;
+            }
+            if (player.health < 0.0f) player.health = 0.0f;
+
             // Track dying drones to spawn explosions when they hit ground
             struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
             drone_tick_frame();
