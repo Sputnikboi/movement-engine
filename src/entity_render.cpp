@@ -135,6 +135,62 @@ Mesh create_icosphere(int subdivisions) {
 }
 
 // ============================================================
+//  Low-poly kunai shape for world projectiles (~12 verts)
+// ============================================================
+static Mesh create_kunai_lod() {
+    Mesh m;
+    // Elongated diamond: tip at +Z, pommel at -Z, 4-sided cross section
+    // Blade: long front section, handle: shorter back
+    const float blade_len = 7.0f;
+    const float handle_len = 3.0f;
+    const float blade_w = 0.35f;
+    const float handle_w = 0.15f;
+
+    // 6 key points: tip, 4 mid-ring, pommel
+    HMM_Vec3 tip    = {0, 0, blade_len};
+    HMM_Vec3 pommel = {0, 0, -handle_len};
+    HMM_Vec3 mid[4] = {
+        { blade_w, 0, 0},
+        {0,  blade_w, 0},
+        {-blade_w, 0, 0},
+        {0, -blade_w, 0},
+    };
+    HMM_Vec3 grip[4] = {
+        { handle_w, 0, -0.3f},
+        {0,  handle_w, -0.3f},
+        {-handle_w, 0, -0.3f},
+        {0, -handle_w, -0.3f},
+    };
+
+    float col[3] = {0.55f, 0.55f, 0.5f};
+
+    auto add_tri = [&](HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c) {
+        uint32_t base = (uint32_t)m.vertices.size();
+        HMM_Vec3 e1 = HMM_SubV3(b, a), e2 = HMM_SubV3(c, a);
+        HMM_Vec3 n = HMM_NormV3(HMM_Cross(e1, e2));
+        Vertex3D v;
+        v.color[0] = col[0]; v.color[1] = col[1]; v.color[2] = col[2];
+        v.normal[0] = n.X; v.normal[1] = n.Y; v.normal[2] = n.Z;
+        v.pos[0] = a.X; v.pos[1] = a.Y; v.pos[2] = a.Z; m.vertices.push_back(v);
+        v.pos[0] = b.X; v.pos[1] = b.Y; v.pos[2] = b.Z; m.vertices.push_back(v);
+        v.pos[0] = c.X; v.pos[1] = c.Y; v.pos[2] = c.Z; m.vertices.push_back(v);
+        m.indices.push_back(base); m.indices.push_back(base+1); m.indices.push_back(base+2);
+    };
+
+    for (int i = 0; i < 4; i++) {
+        int j = (i + 1) % 4;
+        // Blade (front cone)
+        add_tri(tip, mid[j], mid[i]);
+        // Mid band
+        add_tri(mid[i], mid[j], grip[j]);
+        add_tri(mid[i], grip[j], grip[i]);
+        // Handle (back cone)
+        add_tri(grip[i], grip[j], pommel);
+    }
+    return m;
+}
+
+// ============================================================
 //  Append a transformed mesh (for knife projectiles, etc.)
 // ============================================================
 static void append_mesh_transformed(Mesh& out, const Mesh& src,
@@ -222,8 +278,7 @@ static void append_sphere(Mesh& out, const Mesh& sphere,
 }
 
 Mesh build_entity_mesh(const Entity entities[], int max_entities,
-                       const Frustum& frustum,
-                       const Mesh* knife_mesh) {
+                       const Frustum& frustum) {
     static Mesh sphere = create_icosphere(0);
 
     // Count alive entities for reserve
@@ -396,13 +451,10 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
             // Skip rendering real knife during grace period (avoids appearing inside camera)
             if (e.owner == -3 && e.ai_timer > 0.0f) break;
 
-            if ((e.owner == -3 || e.owner == -4) && knife_mesh && !knife_mesh->vertices.empty()) {
-                // Player knife projectile (real or dummy) — render Kunai model
-                // color_mult undoes the 0.45x viewmodel darkening (1/0.45 ≈ 2.22)
-                append_mesh_transformed(out, *knife_mesh, e.position, e.yaw, e.pitch, 0.08f, 2.22f);
-            } else if (e.owner == -3 || e.owner == -4) {
-                // Fallback sphere
-                append_sphere(out, sphere, e.position, e.radius, 1.0f, 1.0f, 0.9f);
+            if (e.owner == -3 || e.owner == -4) {
+                // Player knife projectile — use low-poly LOD mesh
+                static Mesh kunai_lod = create_kunai_lod();
+                append_mesh_transformed(out, kunai_lod, e.position, e.yaw, e.pitch, 0.08f);
             } else if (e.owner == -2) {
                 // Bomb (from bomber) — red-orange
                 append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.3f, 0.1f);

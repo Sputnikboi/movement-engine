@@ -27,10 +27,8 @@ struct Frustum {
 Mesh create_icosphere(int subdivisions = 1);
 
 // Build a mesh of all alive entities visible to the frustum.
-// knife_mesh: if non-null, player knife projectiles render as this mesh instead of a sphere.
 Mesh build_entity_mesh(const Entity entities[], int max_entities,
-                       const Frustum& frustum,
-                       const Mesh* knife_mesh = nullptr);
+                       const Frustum& frustum);
 
 // Build transparent blue shield bubbles around shielded enemies
 void build_shield_bubbles(Mesh& transparent_out,

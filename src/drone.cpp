@@ -419,7 +419,25 @@ void projectiles_update(Entity entities[], int max_entities,
                                           travel_len + p.radius);
             if (hit.hit && hit.t <= travel_len + p.radius) {
                 if (p.owner == -3) {
-                    // Player knife: stick in wall
+                    // Player knife: stick in wall (cap at 8 stuck)
+                    constexpr int MAX_STUCK = 8;
+                    int stuck_count = 0;
+                    int oldest_idx = -1;
+                    float oldest_life = 999.0f;
+                    for (int s = 0; s < max_entities; s++) {
+                        Entity& se = entities[s];
+                        if (se.alive && se.type == EntityType::Projectile &&
+                            se.owner == -3 && se.ai_state == 1) {
+                            stuck_count++;
+                            if (se.lifetime < oldest_life) {
+                                oldest_life = se.lifetime;
+                                oldest_idx = s;
+                            }
+                        }
+                    }
+                    if (stuck_count >= MAX_STUCK && oldest_idx >= 0)
+                        entities[oldest_idx].alive = false;
+
                     p.position = HMM_AddV3(p.position, HMM_MulV3F(travel_dir, hit.t - p.radius * 0.5f));
                     p.velocity = {};
                     p.ai_state = 1; // stuck

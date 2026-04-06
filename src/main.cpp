@@ -1261,8 +1261,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Build entity mesh + opaque death effects (frustum-culled)
-        const Mesh* knife_proj_mesh = (weapons[2].mesh_loaded) ? &weapons[2].viewmodel_mesh : nullptr;
-        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum, knife_proj_mesh);
+        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);
         effects.append_to_mesh(entity_mesh);
 
         // Transparent death effects (outer glow)
