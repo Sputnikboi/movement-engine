@@ -46,28 +46,28 @@ static HMM_Vec3 rotate_n(HMM_Vec3 n, float c, float s) {
 }
 
 // Full 3-axis rotation: yaw (Y), pitch (X), roll (Z)
-static HMM_Vec3 rotate_ypz(HMM_Vec3 p, HMM_Vec3 center, float yaw, float pitch, float roll) {
+static HMM_Vec3 rotate_pry(HMM_Vec3 p, HMM_Vec3 center, float yaw, float pitch, float roll) {
     float lx = p.X - center.X, ly = p.Y - center.Y, lz = p.Z - center.Z;
-    // Yaw (around Y)
-    float cy = cosf(yaw), sy = sinf(yaw);
-    float x1 = lx * cy + lz * sy;
-    float z1 = -lx * sy + lz * cy;
-    float y1 = ly;
-    // Pitch (around X)
+    // Pitch (around X) — tilt forward/back with terrain
     float cp = cosf(pitch), sp = sinf(pitch);
-    float y2 = y1 * cp - z1 * sp;
-    float z2 = y1 * sp + z1 * cp;
-    float x2 = x1;
-    // Roll (around Z)
+    float y1 = ly * cp - lz * sp;
+    float z1 = ly * sp + lz * cp;
+    float x1 = lx;
+    // Roll (around Z) — tilt sideways with terrain
     float cr = cosf(roll), sr = sinf(roll);
-    float x3 = x2 * cr - y2 * sr;
-    float y3 = x2 * sr + y2 * cr;
-    float z3 = z2;
+    float x2 = x1 * cr - y1 * sr;
+    float y2 = x1 * sr + y1 * cr;
+    float z2 = z1;
+    // Yaw (around Y) — spin to face direction
+    float cy = cosf(yaw), sy = sinf(yaw);
+    float x3 = x2 * cy + z2 * sy;
+    float z3 = -x2 * sy + z2 * cy;
+    float y3 = y2;
     return {center.X + x3, center.Y + y3, center.Z + z3};
 }
-static HMM_Vec3 rotate_n_ypz(HMM_Vec3 n, float yaw, float pitch, float roll) {
+static HMM_Vec3 rotate_n_pry(HMM_Vec3 n, float yaw, float pitch, float roll) {
     HMM_Vec3 zero = {0,0,0};
-    return rotate_ypz(HMM_AddV3(zero, n), zero, yaw, pitch, roll);
+    return rotate_pry(HMM_AddV3(zero, n), zero, yaw, pitch, roll);
 }
 
 // Add a box with yaw + optional pitch/roll tilt. Bottom center at pos.
@@ -76,10 +76,10 @@ static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d,
     float x0 = pos.X - w * 0.5f, x1 = pos.X + w * 0.5f;
     float y0 = pos.Y,            y1 = pos.Y + h;
     float z0 = pos.Z - d * 0.5f, z1 = pos.Z + d * 0.5f;
-    HMM_Vec3 ctr = {pos.X, pos.Y + h * 0.5f, pos.Z}; // rotate around center of box
+    HMM_Vec3 ctr = {pos.X, pos.Y, pos.Z}; // rotate around bottom so box sits on terrain
 
-    auto r  = [&](HMM_Vec3 p) { return rotate_ypz(p, ctr, yaw, pitch, roll); };
-    auto rn = [&](HMM_Vec3 n) { return rotate_n_ypz(n, yaw, pitch, roll); };
+    auto r  = [&](HMM_Vec3 p) { return rotate_pry(p, ctr, yaw, pitch, roll); };
+    auto rn = [&](HMM_Vec3 n) { return rotate_n_pry(n, yaw, pitch, roll); };
 
     add_quad(m, r({x0,y1,z0}), r({x1,y1,z0}), r({x1,y1,z1}), r({x0,y1,z1}),
              rn({0,1,0}), color);
@@ -165,13 +165,11 @@ struct HeightMap {
     }
 
     // Derive pitch and roll to align a yaw-rotated box with terrain
-    void normal_to_tilt(float x, float z, float yaw, float* pitch, float* roll) const {
+    // World-space pitch/roll from terrain normal (applied before yaw)
+    void normal_to_tilt(float x, float z, float* pitch, float* roll) const {
         HMM_Vec3 n = sample_normal(x, z);
-        float cy = cosf(yaw), sy = sinf(yaw);
-        float n_fwd  =  n.X * sy + n.Z * cy;
-        float n_right =  n.X * cy - n.Z * sy;
-        *pitch = atan2f(n_fwd, n.Y);
-        *roll  = -atan2f(n_right, n.Y);
+        *pitch = atan2f(-n.Z, n.Y);
+        *roll  = atan2f(n.X, n.Y);
     }
 };
 
@@ -388,7 +386,7 @@ LevelData generate_level(const ProcGenConfig& config,
                 float bh = randf(config.box_height_min, config.box_height_max);
                 float yaw = cluster_yaw + randf(-0.5f, 0.5f);
                 float pitch, roll;
-                hm.normal_to_tilt(bx, bz, yaw, &pitch, &roll);
+                hm.normal_to_tilt(bx, bz, &pitch, &roll);
 
 
                 float base_y = hm.sample(bx, bz);
@@ -423,7 +421,7 @@ LevelData generate_level(const ProcGenConfig& config,
             float bh = randf(config.box_height_min, config.box_height_max);
             float yaw = randf(0, HMM_PI32 * 2.0f);
             float pitch, roll;
-            hm.normal_to_tilt(cx, cz, yaw, &pitch, &roll);
+            hm.normal_to_tilt(cx, cz, &pitch, &roll);
             float base_y = hm.sample(cx, cz);
             float br = sqrtf(bw * bw + bd * bd) * 0.5f;
 
