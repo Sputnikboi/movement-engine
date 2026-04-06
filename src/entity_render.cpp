@@ -300,15 +300,19 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
         } break;
 
         case EntityType::Bomber: {
-            // Dark green, glows when bombing
+            // Dark green, glows when diving
             float hp_frac = (e.max_health > 0) ? e.health / e.max_health : 0.0f;
             float r = 0.2f + (1.0f - hp_frac) * 0.3f;
             float g = 0.5f + hp_frac * 0.2f;
             float b = 0.2f;
 
-            // Bombing run: orange glow
-            if (e.ai_state == 2) { // BOMBER_BOMBING
-                r = 0.9f; g = 0.6f; b = 0.1f;
+            // Diving: angry red-orange
+            if (e.ai_state == 2) { // BOMBER_DIVING
+                r = 1.0f; g = 0.3f; b = 0.05f;
+            }
+            // Exploding: bright white-red
+            if (e.ai_state == 3) { // BOMBER_EXPLODING
+                r = 1.0f; g = 0.9f; b = 0.5f;
             }
 
             if (e.hit_flash > 0.0f) {
@@ -363,4 +367,48 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
     }
 
     return out;
+}
+
+// ============================================================
+//  Shield bubble rendering (transparent)
+// ============================================================
+
+void build_shield_bubbles(Mesh& out,
+                          const Entity entities[], int max_entities,
+                          const Frustum& frustum) {
+    static Mesh bubble_sphere = create_icosphere(1); // subdivision 1 for smoother bubble
+
+    for (int i = 0; i < max_entities; i++) {
+        const Entity& e = entities[i];
+        if (!e.alive) continue;
+        if (e.shield_hp < 0.5f) continue; // no visible barrier
+        if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
+
+        if (!frustum.sphere_visible(e.position, e.radius * 1.8f)) continue;
+
+        float bubble_radius = e.radius * 1.6f;
+        float alpha = 0.25f + (e.shield_hp / 20.0f) * 0.15f; // brighter with more HP
+        if (alpha > 0.4f) alpha = 0.4f;
+
+        uint32_t base = static_cast<uint32_t>(out.vertices.size());
+
+        for (auto& sv : bubble_sphere.vertices) {
+            Vertex3D v;
+            v.pos[0] = sv.pos[0] * bubble_radius + e.position.X;
+            v.pos[1] = sv.pos[1] * bubble_radius + e.position.Y;
+            v.pos[2] = sv.pos[2] * bubble_radius + e.position.Z;
+            // Emissive path: zero-length normal, normal.x = alpha
+            v.normal[0] = alpha;
+            v.normal[1] = 0.0f;
+            v.normal[2] = 0.0f;
+            // Cyan-blue color
+            v.color[0] = 0.15f;
+            v.color[1] = 0.5f;
+            v.color[2] = 0.9f;
+            out.vertices.push_back(v);
+        }
+
+        for (auto idx : bubble_sphere.indices)
+            out.indices.push_back(base + idx);
+    }
 }

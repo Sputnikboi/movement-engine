@@ -29,24 +29,7 @@ void Config::apply(Camera& camera, Player& player) const {
     camera.invert_y    = invert_y ? -1.0f : 1.0f;
     camera.fov         = fov;
 
-    player.gravity        = gravity;
-    player.max_speed      = max_speed;
-    player.weapon_speed   = weapon_speed;
-    player.air_wish_speed = air_wish_speed;
-    player.ground_accel   = ground_accel;
-    player.air_accel      = air_accel;
-    player.friction       = friction;
-    player.jump_speed           = jump_speed;
-    player.auto_hop             = auto_hop;
-    player.crouch_speed         = crouch_speed;
-    player.slide_friction       = slide_friction;
-    player.slide_boost          = slide_boost;
-    player.slide_min_speed      = slide_min_speed;
-    player.slide_stop_speed     = slide_stop_speed;
-    player.slide_boost_cooldown = slide_boost_cooldown;
-    player.slide_jump_boost     = slide_jump_boost;
-    player.lurch_window         = lurch_window;
-    player.lurch_strength       = lurch_strength;
+
 }
 
 void Config::pull(const Camera& camera, const Player& player) {
@@ -55,24 +38,7 @@ void Config::pull(const Camera& camera, const Player& player) {
     invert_y    = camera.invert_y < 0.0f;
     fov         = camera.fov;
 
-    gravity        = player.gravity;
-    max_speed      = player.max_speed;
-    weapon_speed   = player.weapon_speed;
-    air_wish_speed = player.air_wish_speed;
-    ground_accel   = player.ground_accel;
-    air_accel      = player.air_accel;
-    friction       = player.friction;
-    jump_speed           = player.jump_speed;
-    auto_hop             = player.auto_hop;
-    crouch_speed         = player.crouch_speed;
-    slide_friction       = player.slide_friction;
-    slide_boost          = player.slide_boost;
-    slide_min_speed      = player.slide_min_speed;
-    slide_stop_speed     = player.slide_stop_speed;
-    slide_boost_cooldown = player.slide_boost_cooldown;
-    slide_jump_boost     = player.slide_jump_boost;
-    lurch_window         = player.lurch_window;
-    lurch_strength       = player.lurch_strength;
+
 }
 
 bool Config::save(const std::string& path) const {
@@ -92,26 +58,7 @@ bool Config::save(const std::string& path) const {
     fprintf(f, "fov = %.1f\n", fov);
     fprintf(f, "\n");
 
-    fprintf(f, "[movement]\n");
-    fprintf(f, "gravity = %.2f\n", gravity);
-    fprintf(f, "max_speed = %.2f\n", max_speed);
-    fprintf(f, "weapon_speed = %.2f\n", weapon_speed);
-    fprintf(f, "air_wish_speed = %.4f\n", air_wish_speed);
-    fprintf(f, "ground_accel = %.2f\n", ground_accel);
-    fprintf(f, "air_accel = %.2f\n", air_accel);
-    fprintf(f, "friction = %.2f\n", friction);
-    fprintf(f, "jump_speed = %.2f\n", jump_speed);
-    fprintf(f, "auto_hop = %d\n", auto_hop ? 1 : 0);
-    fprintf(f, "crouch_speed = %.2f\n", crouch_speed);
-    fprintf(f, "slide_friction = %.2f\n", slide_friction);
-    fprintf(f, "slide_boost = %.2f\n", slide_boost);
-    fprintf(f, "slide_min_speed = %.2f\n", slide_min_speed);
-    fprintf(f, "slide_stop_speed = %.2f\n", slide_stop_speed);
-    fprintf(f, "slide_boost_cooldown = %.2f\n", slide_boost_cooldown);
-    fprintf(f, "slide_jump_boost = %.2f\n", slide_jump_boost);
-    fprintf(f, "lurch_window = %.2f\n", lurch_window);
-    fprintf(f, "lurch_strength = %.2f\n", lurch_strength);
-    fprintf(f, "\n");
+
 
     fprintf(f, "[keybinds]\n");
     for (int i = 0; i < ACTION_COUNT; i++) {
@@ -159,24 +106,6 @@ bool Config::load(const std::string& path) {
         else if (key == "invert_x")       invert_x       = std::stoi(val) != 0;
         else if (key == "invert_y")       invert_y       = std::stoi(val) != 0;
         else if (key == "fov")            fov             = std::stof(val);
-        else if (key == "gravity")        gravity         = std::stof(val);
-        else if (key == "max_speed")      max_speed       = std::stof(val);
-        else if (key == "weapon_speed")   weapon_speed    = std::stof(val);
-        else if (key == "air_wish_speed") air_wish_speed  = std::stof(val);
-        else if (key == "ground_accel")   ground_accel    = std::stof(val);
-        else if (key == "air_accel")      air_accel       = std::stof(val);
-        else if (key == "friction")       friction        = std::stof(val);
-        else if (key == "jump_speed")     jump_speed      = std::stof(val);
-        else if (key == "auto_hop")       auto_hop        = std::stoi(val) != 0;
-        else if (key == "crouch_speed")   crouch_speed    = std::stof(val);
-        else if (key == "slide_friction") slide_friction   = std::stof(val);
-        else if (key == "slide_boost")    slide_boost      = std::stof(val);
-        else if (key == "slide_min_speed") slide_min_speed = std::stof(val);
-        else if (key == "slide_stop_speed") slide_stop_speed = std::stof(val);
-        else if (key == "slide_boost_cooldown") slide_boost_cooldown = std::stof(val);
-        else if (key == "slide_jump_boost") slide_jump_boost = std::stof(val);
-        else if (key == "lurch_window")   lurch_window    = std::stof(val);
-        else if (key == "lurch_strength") lurch_strength  = std::stof(val);
         else {
             // Try keybinds (format: "action = code0,code1")
             for (int i = 0; i < ACTION_COUNT; i++) {

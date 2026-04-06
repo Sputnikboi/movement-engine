@@ -29,3 +29,8 @@ Mesh create_icosphere(int subdivisions = 1);
 // Build a mesh of all alive entities visible to the frustum.
 Mesh build_entity_mesh(const Entity entities[], int max_entities,
                        const Frustum& frustum);
+
+// Build transparent blue shield bubbles around shielded enemies
+void build_shield_bubbles(Mesh& transparent_out,
+                          const Entity entities[], int max_entities,
+                          const Frustum& frustum);

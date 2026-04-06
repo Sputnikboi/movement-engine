@@ -365,25 +365,71 @@ void shielder_update(Entity& shielder, Entity entities[], int max_entities,
 }
 
 // ============================================================
-//  Shield aura query — called when dealing damage to enemies
+//  Shield barrier system
 // ============================================================
 
-float shielder_get_damage_mult(const Entity entities[], int max_entities,
-                               HMM_Vec3 target_pos, const ShielderConfig& config) {
-    float best = 1.0f;  // no shield by default
+void shielder_apply_barriers(Entity entities[], int max_entities,
+                             const ShielderConfig& config, float dt) {
+    // First, find which entities are in range of an active shielder
+    bool in_aura[256] = {};
 
-    for (int i = 0; i < max_entities; i++) {
-        const Entity& e = entities[i];
-        if (!e.alive || e.type != EntityType::Shielder) continue;
-        // Only active shielders project aura
-        if (e.ai_state != SHIELDER_SHIELDING) continue;
+    for (int i = 0; i < max_entities && i < 256; i++) {
+        const Entity& s = entities[i];
+        if (!s.alive || s.type != EntityType::Shielder) continue;
+        if (s.ai_state != SHIELDER_SHIELDING) continue;
 
-        float dist = HMM_LenV3(HMM_SubV3(target_pos, e.position));
-        if (dist < config.shield_radius) {
-            float mult = config.damage_reduction;
-            if (mult < best) best = mult;
+        // Mark all non-shielder, non-projectile allies in range
+        for (int j = 0; j < max_entities && j < 256; j++) {
+            if (j == i) continue;
+            const Entity& e = entities[j];
+            if (!e.alive) continue;
+            if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
+
+            float dist = HMM_LenV3(HMM_SubV3(e.position, s.position));
+            if (dist < config.shield_radius) {
+                in_aura[j] = true;
+            }
         }
     }
 
-    return best;
+    // Recharge shields for entities in aura, decay for those out of range
+    for (int i = 0; i < max_entities && i < 256; i++) {
+        Entity& e = entities[i];
+        if (!e.alive) continue;
+        if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
+
+        if (in_aura[i]) {
+            // Recharge towards max
+            if (e.shield_hp < config.shield_hp) {
+                e.shield_hp += config.shield_recharge * dt;
+                if (e.shield_hp > config.shield_hp)
+                    e.shield_hp = config.shield_hp;
+            }
+        } else {
+            // Not in aura: shield decays slowly
+            if (e.shield_hp > 0.0f) {
+                e.shield_hp -= config.shield_recharge * 0.5f * dt;
+                if (e.shield_hp < 0.0f) e.shield_hp = 0.0f;
+            }
+        }
+    }
+}
+
+float shielder_absorb_damage(Entity& target, float raw_damage) {
+    if (target.shield_hp <= 0.0f) return raw_damage;
+
+    if (target.shield_hp >= raw_damage) {
+        // Shield absorbs entire hit
+        target.shield_hp -= raw_damage;
+        return 0.0f;
+    } else {
+        // Shield partially absorbs
+        float leftover = raw_damage - target.shield_hp;
+        target.shield_hp = 0.0f;
+        return leftover;
+    }
+}
+
+bool shielder_has_barrier(const Entity& e) {
+    return e.shield_hp > 0.5f;
 }

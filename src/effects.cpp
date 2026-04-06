@@ -32,6 +32,22 @@ void EffectSystem::spawn_drone_explosion(HMM_Vec3 pos) {
     }
 }
 
+void EffectSystem::spawn_bomber_explosion(HMM_Vec3 pos) {
+    for (int i = 0; i < MAX_DEATH_EFFECTS; i++) {
+        if (!death_effects[i].alive) {
+            DeathEffect& e = death_effects[i];
+            e.position          = pos;
+            e.lifetime          = 0.6f;     // longer than drone
+            e.age               = 0.0f;
+            e.alive             = true;
+            e.ball_start_radius = 3.0f;     // big fireball
+            e.ring_max_radius   = 7.0f;     // big ring
+            e.ring_tube_radius  = 0.5f;
+            return;
+        }
+    }
+}
+
 // ============================================================
 //  Emissive icosphere (normals encode: X=alpha, length<0.5)
 // ============================================================
@@ -169,10 +185,20 @@ void EffectSystem::append_to_mesh(Mesh& out) const {
         {
             float ball_t = t * t;
             float ball_r = e.ball_start_radius * (1.0f - ball_t);
-            float white = t * 0.6f;
-            append_emissive_ball(out, e.position, ball_r,
-                                1.3f, 0.85f + white * 0.45f, 0.15f + white * 0.85f,
-                                0.0f, 1);
+            bool big = (e.ball_start_radius > 2.0f);  // bomber = red
+            if (big) {
+                // Red-orange fireball
+                float white = t * 0.3f;
+                append_emissive_ball(out, e.position, ball_r,
+                                    1.4f, 0.25f + white * 0.4f, 0.05f + white * 0.2f,
+                                    0.0f, 1);
+            } else {
+                // Yellow drone explosion
+                float white = t * 0.6f;
+                append_emissive_ball(out, e.position, ball_r,
+                                    1.3f, 0.85f + white * 0.45f, 0.15f + white * 0.85f,
+                                    0.0f, 1);
+            }
         }
     }
 }
@@ -189,23 +215,39 @@ void EffectSystem::append_transparent(Mesh& out) const {
 
         // Outer glow sphere — alpha fade
         {
+            bool big = (e.ball_start_radius > 2.0f);
             float outer_t = t * t;
             float outer_r = e.ball_start_radius * 1.8f * (1.0f - outer_t);
             float alpha = (1.0f - t) * 0.45f;
-            append_emissive_ball(out, e.position, outer_r,
-                                1.0f, 0.4f, 0.05f,
-                                alpha, 1);
+            if (big) {
+                // Red glow
+                append_emissive_ball(out, e.position, outer_r,
+                                    1.0f, 0.15f, 0.02f,
+                                    alpha, 1);
+            } else {
+                append_emissive_ball(out, e.position, outer_r,
+                                    1.0f, 0.4f, 0.05f,
+                                    alpha, 1);
+            }
         }
 
         // Expanding torus ring — full color, alpha fade out
         {
+            bool big = (e.ball_start_radius > 2.0f);
             float ring_t = 1.0f - (1.0f - t) * (1.0f - t);
             float major_r = e.ring_max_radius * ring_t;
             float tube_r = e.ring_tube_radius * (1.0f - t * 0.3f);
-            float alpha = 1.0f - t; // linear alpha fade
-            append_emissive_torus(out, e.position, major_r, tube_r,
-                                  1.0f, 0.7f, 0.1f,
-                                  alpha);
+            float alpha = 1.0f - t;
+            if (big) {
+                // Red-orange ring
+                append_emissive_torus(out, e.position, major_r, tube_r,
+                                      1.0f, 0.2f, 0.02f,
+                                      alpha);
+            } else {
+                append_emissive_torus(out, e.position, major_r, tube_r,
+                                      1.0f, 0.7f, 0.1f,
+                                      alpha);
+            }
         }
     }
 }

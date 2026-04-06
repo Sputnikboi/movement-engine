@@ -6,15 +6,15 @@
 
 // ============================================================
 //  Bomber AI states
-//  Flies high, circles area, drops projectiles from above.
-//  Forces player to keep moving.
+//  Flies high, then dive-bombs the player kamikaze-style.
+//  Explodes on ground impact in a big red fireball.
 // ============================================================
 
 enum BomberState : uint8_t {
     BOMBER_IDLE      = 0,
-    BOMBER_APPROACH  = 1,  // flying towards player area
-    BOMBER_BOMBING   = 2,  // circling + dropping bombs
-    BOMBER_RELOADING = 3,  // out of bombs, retreating briefly
+    BOMBER_APPROACH  = 1,  // flying towards player area at altitude
+    BOMBER_DIVING    = 2,  // kamikaze dive towards player
+    BOMBER_EXPLODING = 3,  // hit ground/player, exploding
     BOMBER_DYING     = 4,
     BOMBER_DEAD      = 5,
 };
@@ -29,8 +29,7 @@ struct BomberConfig {
 
     // Movement
     float approach_speed    = 8.0f;
-    float circle_speed      = 6.0f;
-    float circle_radius     = 12.0f;
+    float dive_speed        = 18.0f;  // fast dive
     float acceleration      = 5.0f;
     float hover_height      = 12.0f;  // flies very high
     float hover_force       = 8.0f;
@@ -39,16 +38,15 @@ struct BomberConfig {
     float health            = 25.0f;
     float radius            = 0.8f;
 
-    // Bombs
-    float bomb_damage       = 15.0f;
-    float bomb_interval     = 1.5f;   // seconds between drops
-    int   bombs_per_run     = 4;      // bombs before reloading
-    float bomb_speed        = 2.0f;   // slight forward velocity on drop
-    float bomb_gravity      = 12.0f;  // bombs fall fast
-    float bomb_aoe_radius   = 3.0f;   // explosion radius
-    float reload_time       = 3.0f;
+    // Explosion (on ground impact)
+    float explosion_damage  = 25.0f;
+    float explosion_radius  = 5.0f;
+    float explosion_knockback = 10.0f;
 
-    // Death
+    // Dive trigger
+    float dive_trigger_dist = 15.0f;  // starts dive when within this horizontal distance
+
+    // Death (when killed before diving)
     float death_gravity     = 15.0f;
     float death_drag        = 2.0f;
     float death_tumble_speed = 6.0f;
@@ -84,5 +82,10 @@ int bomber_spawn(Entity entities[], int max_entities,
 void bomber_update(Entity& bomber, Entity entities[], int max_entities,
                    HMM_Vec3 player_pos, const CollisionWorld& world,
                    const BomberConfig& config, float dt, float total_time);
+
+// Check if bomber just exploded near player. Returns true + damage/knockback.
+bool bomber_check_explosion(Entity& bomber, HMM_Vec3 player_pos,
+                            float player_radius, const BomberConfig& config,
+                            float& damage_out, HMM_Vec3& knockback_out);
 
 void bomber_tick_frame();

@@ -41,7 +41,7 @@ struct TankConfig {
     float stomp_range       = 6.0f;   // triggers stomp when within this
     float stomp_aoe_radius  = 8.0f;   // damage falloff radius
     float stomp_damage      = 20.0f;  // max damage at center
-    float stomp_knockback   = 15.0f;  // upward + outward force on player
+    float stomp_knockback   = 1.5f;   // upward + outward force on player
     float windup_time       = 0.8f;   // wind up before stomp
     float stomp_cooldown    = 3.0f;
 

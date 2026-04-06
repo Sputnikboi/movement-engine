@@ -397,10 +397,6 @@ void projectiles_update(Entity entities[], int max_entities,
             continue;
         }
 
-        // Bombs (owner == -2) have gravity
-        if (p.owner == -2) {
-            p.velocity.Y -= p.chase_speed * dt;
-        }
 
         // Check wall collision via raycast along travel direction
         HMM_Vec3 travel = HMM_MulV3F(p.velocity, dt);
@@ -410,11 +406,6 @@ void projectiles_update(Entity entities[], int max_entities,
             HitResult hit = world.raycast(p.position, travel_dir,
                                           travel_len + p.radius);
             if (hit.hit && hit.t <= travel_len + p.radius) {
-                // Bombs explode on impact — store explosion position for AoE check
-                if (p.owner == -2) {
-                    p.position = HMM_AddV3(p.position,
-                                           HMM_MulV3F(travel_dir, hit.t));
-                }
                 p.alive = false;
                 continue;
             }

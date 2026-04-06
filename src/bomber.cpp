@@ -44,47 +44,6 @@ static HMM_Vec3 bomber_wall_avoid(const Entity& e, HMM_Vec3 desired_dir,
 }
 
 // ============================================================
-//  Bomb drop — spawns a projectile that falls
-// ============================================================
-
-static void drop_bomb(Entity& bomber, Entity entities[], int max_entities,
-                      HMM_Vec3 player_pos, const BomberConfig& config) {
-    for (int i = 0; i < max_entities; i++) {
-        if (!entities[i].alive) {
-            Entity& p = entities[i];
-            p = Entity{};
-            p.type      = EntityType::Projectile;
-            p.alive     = true;
-            p.position  = bomber.position;
-            p.position.Y -= bomber.radius;  // drop from bottom
-            p.radius    = 0.25f;            // slightly bigger than drone projectiles
-            p.damage    = config.bomb_damage;
-            p.owner     = -2;               // -2 = bomb (for AoE check)
-            p.lifetime  = 8.0f;
-
-            // Slight forward velocity + gravity handled in projectile update
-            HMM_Vec3 hdir = HMM_SubV3(player_pos, bomber.position);
-            hdir.Y = 0;
-            float hlen = HMM_LenV3(hdir);
-            if (hlen > 0.1f) hdir = HMM_MulV3F(hdir, 1.0f / hlen);
-            else hdir = HMM_V3(0, 0, 0);
-
-            p.velocity = HMM_V3(
-                hdir.X * config.bomb_speed,
-                -2.0f,  // initial downward velocity
-                hdir.Z * config.bomb_speed
-            );
-
-            // Store bomb_gravity in chase_speed field for projectile update to use
-            p.chase_speed = config.bomb_gravity;
-            // Store AoE radius in circle_speed field
-            p.circle_speed = config.bomb_aoe_radius;
-            return;
-        }
-    }
-}
-
-// ============================================================
 //  Spawn
 // ============================================================
 
@@ -103,7 +62,7 @@ int bomber_spawn(Entity entities[], int max_entities,
             e.radius     = config.radius;
             e.ai_state   = BOMBER_IDLE;
             e.ai_timer   = 0.0f;
-            e.ai_timer2  = 0.0f;  // bombs dropped this run
+            e.ai_timer2  = 0.0f;
             e.ai_dir     = (rand() % 2) ? 1 : -1;
             e.owner      = -1;
 
@@ -112,7 +71,7 @@ int bomber_spawn(Entity entities[], int max_entities,
             e.bob_freq     = config.bob_freq;
             e.bob_seed     = randf(0.0f, 100.0f);
             e.chase_speed  = config.approach_speed;
-            e.circle_speed = config.circle_speed;
+            e.circle_speed = 0.0f;
 
             e.death_timer  = 0.0f;
             e.hit_flash    = 0.0f;
@@ -136,7 +95,7 @@ int bomber_spawn(Entity entities[], int max_entities,
 }
 
 // ============================================================
-//  Hover (high altitude)
+//  Hover (high altitude, only used while not diving)
 // ============================================================
 
 static void apply_bomber_hover(Entity& b, const CollisionWorld& world,
@@ -184,13 +143,7 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
 
     bool do_expensive = ((s_bomber_frame + bomber.ai_frame_id) % 4 == 0);
 
-    // Find bomber index for bomb ownership
-    int bomber_idx = -1;
-    for (int i = 0; i < max_entities; i++) {
-        if (&entities[i] == &bomber) { bomber_idx = i; break; }
-    }
-
-    // ------ DYING ------
+    // ------ DYING (killed by player before explosion) ------
     if (bomber.ai_state == BOMBER_DYING) {
         bomber.death_timer += dt;
         bomber.velocity.Y -= config.death_gravity * dt;
@@ -223,20 +176,30 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
         return;
     }
 
+    // ------ EXPLODING (hit ground during dive) ------
+    if (bomber.ai_state == BOMBER_EXPLODING) {
+        // Brief timer then die (explosion effect spawned by main loop)
+        bomber.ai_timer -= dt;
+        if (bomber.ai_timer <= 0.0f) {
+            bomber.ai_state = BOMBER_DEAD;
+            bomber.alive = false;
+        }
+        return;
+    }
+
     // ------ Live AI ------
     HMM_Vec3 to_player = HMM_SubV3(player_pos, bomber.position);
     float dist = HMM_LenV3(to_player);
     HMM_Vec3 dir_to_player = (dist > 0.01f)
         ? HMM_MulV3F(to_player, 1.0f / dist) : HMM_V3(0, 0, 1);
 
-    // Hover high
-    apply_bomber_hover(bomber, world, config, dt, total_time, do_expensive);
-
     HMM_Vec3 desired_hvel = HMM_V3(0, 0, 0);
 
     switch (bomber.ai_state) {
     case BOMBER_IDLE: {
-        // Wander at altitude
+        // Hover + wander
+        apply_bomber_hover(bomber, world, config, dt, total_time, do_expensive);
+
         HMM_Vec3 to_target = HMM_SubV3(bomber.wander_target, bomber.position);
         float target_dist = sqrtf(to_target.X * to_target.X + to_target.Z * to_target.Z);
 
@@ -258,80 +221,81 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
     } break;
 
     case BOMBER_APPROACH: {
-        // Fly towards player (horizontal only, hover handles altitude)
+        // Fly towards player at altitude
+        apply_bomber_hover(bomber, world, config, dt, total_time, do_expensive);
+
         HMM_Vec3 hdir = HMM_V3(dir_to_player.X, 0, dir_to_player.Z);
         float hlen = HMM_LenV3(hdir);
         if (hlen > 0.01f) hdir = HMM_MulV3F(hdir, 1.0f / hlen);
 
         desired_hvel = HMM_MulV3F(hdir, config.approach_speed);
 
-        // Close enough horizontally? Start bombing run
+        // Close enough horizontally? Start dive
         float hdist = sqrtf(to_player.X * to_player.X + to_player.Z * to_player.Z);
-        if (hdist < config.circle_radius * 1.2f) {
-            bomber.ai_state = BOMBER_BOMBING;
-            bomber.ai_timer = config.bomb_interval;
-            bomber.ai_timer2 = 0.0f;  // bombs dropped
+        if (hdist < config.dive_trigger_dist) {
+            bomber.ai_state = BOMBER_DIVING;
+            // Invalidate hover so it doesn't fight the dive
+            bomber.hover_cache_valid = false;
         }
     } break;
 
-    case BOMBER_BOMBING: {
-        // Circle above player while dropping bombs
-        HMM_Vec3 h_to_player = HMM_V3(to_player.X, 0, to_player.Z);
-        float hdist = HMM_LenV3(h_to_player);
-        if (hdist < 0.1f) hdist = 0.1f;
-        HMM_Vec3 radial = HMM_MulV3F(h_to_player, 1.0f / hdist);
+    case BOMBER_DIVING: {
+        // Kamikaze dive — aim directly at player, no hover
+        HMM_Vec3 dive_dir = HMM_NormV3(to_player);
 
-        // Tangent (perpendicular in XZ)
-        HMM_Vec3 tangent = HMM_V3(-radial.Z * bomber.ai_dir, 0,
-                                    radial.X * bomber.ai_dir);
-
-        // Maintain circle distance
-        float dist_error = hdist - config.circle_radius;
-        desired_hvel = HMM_AddV3(
-            HMM_MulV3F(tangent, config.circle_speed),
-            HMM_MulV3F(radial, dist_error * 2.0f)
-        );
-
-        // Drop bombs on interval
-        bomber.ai_timer -= dt;
-        if (bomber.ai_timer <= 0.0f) {
-            drop_bomb(bomber, entities, max_entities, player_pos, config);
-            bomber.ai_timer2 += 1.0f;
-            bomber.ai_timer = config.bomb_interval;
-
-            if ((int)bomber.ai_timer2 >= config.bombs_per_run) {
-                bomber.ai_state = BOMBER_RELOADING;
-                bomber.ai_timer = config.reload_time;
-            }
+        // Accelerate towards player in 3D
+        HMM_Vec3 desired_vel = HMM_MulV3F(dive_dir, config.dive_speed);
+        HMM_Vec3 diff = HMM_SubV3(desired_vel, bomber.velocity);
+        float diff_len = HMM_LenV3(diff);
+        if (diff_len > 0.01f) {
+            float step = config.acceleration * 3.0f * dt; // fast accel during dive
+            if (step > diff_len) step = diff_len;
+            bomber.velocity = HMM_AddV3(bomber.velocity,
+                                        HMM_MulV3F(diff, step / diff_len));
         }
-    } break;
 
-    case BOMBER_RELOADING: {
-        // Pull back from player
-        HMM_Vec3 hdir = HMM_V3(dir_to_player.X, 0, dir_to_player.Z);
-        float hlen = HMM_LenV3(hdir);
-        if (hlen > 0.01f) hdir = HMM_MulV3F(hdir, 1.0f / hlen);
+        // Move with collision
+        HMM_Vec3 old_pos = bomber.position;
+        bomber.position = world.slide_move(bomber.position, bomber.radius,
+                                           bomber.velocity, dt);
 
-        desired_hvel = HMM_MulV3F(hdir, -config.approach_speed * 0.5f);
+        // Check if we hit ground (velocity changed drastically = collision)
+        HMM_Vec3 actual_move = HMM_SubV3(bomber.position, old_pos);
+        float expected_move = HMM_LenV3(bomber.velocity) * dt;
+        float actual_move_len = HMM_LenV3(actual_move);
 
-        bomber.ai_timer -= dt;
-        if (bomber.ai_timer <= 0.0f) {
-            bomber.ai_state = BOMBER_APPROACH;
-            bomber.ai_timer2 = 0.0f;
+        // Also check ground ray
+        HitResult ground = world.raycast(bomber.position, HMM_V3(0, -1, 0),
+                                         bomber.radius + 0.5f);
+
+        if ((expected_move > 0.1f && actual_move_len < expected_move * 0.3f) ||
+            (ground.hit && ground.t < bomber.radius + 0.3f)) {
+            // Hit something — explode!
+            bomber.ai_state = BOMBER_EXPLODING;
+            bomber.ai_timer = 0.1f; // brief delay before death
+            bomber.velocity = HMM_V3(0, 0, 0);
         }
+
+        // Update yaw
+        float hspeed = sqrtf(bomber.velocity.X * bomber.velocity.X +
+                             bomber.velocity.Z * bomber.velocity.Z);
+        if (hspeed > 0.5f)
+            bomber.yaw = atan2f(bomber.velocity.X, bomber.velocity.Z);
+
+        return; // Skip normal movement below
     } break;
 
     default: break;
     }
 
-    // Wall avoidance
+    // Wall avoidance (only for non-diving states)
     if (do_expensive) {
         bomber.cached_avoid = bomber_wall_avoid(bomber, desired_hvel, world,
                                                 config.wall_avoid_dist, config.wall_avoid_force);
     }
     desired_hvel = HMM_AddV3(desired_hvel, bomber.cached_avoid);
 
-    // Accelerate
+    // Accelerate horizontal
     HMM_Vec3 hvel = HMM_V3(bomber.velocity.X, 0, bomber.velocity.Z);
     HMM_Vec3 diff = HMM_SubV3(desired_hvel, hvel);
     float diff_len = HMM_LenV3(diff);
@@ -353,4 +317,36 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
     if (hspeed > 0.5f) {
         bomber.yaw = atan2f(bomber.velocity.X, bomber.velocity.Z);
     }
+}
+
+// ============================================================
+//  Explosion check — call from main loop
+// ============================================================
+
+bool bomber_check_explosion(Entity& bomber, HMM_Vec3 player_pos,
+                            float player_radius, const BomberConfig& config,
+                            float& damage_out, HMM_Vec3& knockback_out) {
+    if (bomber.ai_state != BOMBER_EXPLODING) return false;
+    // Only on first frame of explosion
+    if (bomber.ai_timer < 0.05f) return false;
+
+    HMM_Vec3 delta = HMM_SubV3(player_pos, bomber.position);
+    float dist = HMM_LenV3(delta);
+
+    if (dist > config.explosion_radius) return false;
+
+    float falloff = 1.0f - (dist / config.explosion_radius);
+    if (falloff < 0.0f) falloff = 0.0f;
+
+    damage_out = config.explosion_damage * falloff;
+
+    HMM_Vec3 outward = (dist > 0.1f)
+        ? HMM_MulV3F(delta, 1.0f / dist)
+        : HMM_V3(0, 1, 0);
+    knockback_out = HMM_AddV3(
+        HMM_MulV3F(outward, config.explosion_knockback * falloff),
+        HMM_V3(0, config.explosion_knockback * falloff * 0.5f, 0)
+    );
+
+    return true;
 }

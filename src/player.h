@@ -33,8 +33,8 @@ struct Player {
     float holster_accel_scale = 1.0f;   // accel multiplier when holstered (auto-computed)
     float crouch_speed    = 4.0f;     // ground speed while crouched (not sliding)
     float air_wish_speed  = 0.76f;
-    float ground_accel    = 10.0f;
-    float air_accel       = 70.0f;
+    float ground_accel    = 8.0f;
+    float air_accel       = 120.0f;
     float friction        = 6.0f;
     float stop_speed      = 2.0f;
     float jump_speed      = 7.2f;
@@ -42,11 +42,11 @@ struct Player {
 
     // --- Slide parameters ---
     float slide_friction         = 0.8f;   // much lower than normal friction
-    float slide_boost            = 3.0f;   // speed burst on power slide start
+    float slide_boost            = 2.1f;   // speed burst on power slide start
     float slide_stop_speed       = 3.0f;   // auto-cancel slide below this speed
     float slide_boost_cooldown   = 1.5f;   // seconds between power slide boosts
     float slide_min_speed        = 6.0f;   // minimum speed to start a slide
-    float slide_jump_boost       = 4.0f;   // extra speed when jumping out of power slide
+    float slide_jump_boost       = 2.8f;   // extra speed when jumping out of power slide
     float slide_min_time_for_jump = 0.24f; // must slide this long for jump boost
     float slide_min_speed_for_jump = 5.0f; // must be this fast for slide-jump boost
 
@@ -55,7 +55,7 @@ struct Player {
     float soft_cap_drag     = 2.0f;   // drag rate (units/s²) above cap
 
     // --- Slope landing ---
-    float slope_landing_conversion = 0.5f; // fraction of fall speed converted to downhill speed
+    float slope_landing_conversion = 0.3f; // fraction of fall speed converted to downhill speed
 
     // --- Lurch parameters ---
     float lurch_window   = 0.5f;    // seconds after jump where lurch is active

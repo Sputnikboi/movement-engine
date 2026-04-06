@@ -63,6 +63,7 @@ struct Entity {
 
     // Hit feedback
     float    hit_flash    = 0.0f; // > 0 means flashing white
+    float    shield_hp    = 0.0f; // barrier HP from shielder aura
 
     // AI throttle
     uint8_t  ai_frame_id  = 0;     // assigned at spawn, used for staggering

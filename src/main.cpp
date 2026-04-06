@@ -722,10 +722,13 @@ int main(int argc, char* argv[]) {
                     else
                         hit_ent.hit_flash = drone_cfg.hit_flash_time;
 
-                    // Apply shielder damage reduction
-                    float dmg_mult = shielder_get_damage_mult(entities, MAX_ENTITIES,
-                                                              hit_ent.position, shielder_cfg);
-                    hit_ent.health += weapon.config.damage * (1.0f - dmg_mult); // undo part of damage
+                    // Apply shield barrier absorption
+                    {
+                        float raw_dmg = weapon.config.damage;
+                        float actual_dmg = shielder_absorb_damage(hit_ent, raw_dmg);
+                        // Refund the difference (damage was already fully applied above)
+                        hit_ent.health += (raw_dmg - actual_dmg);
+                    }
 
                     // Wake up idle enemies on hit
                     if (hit_ent.type == EntityType::Drone && hit_ent.ai_state == DRONE_IDLE)
@@ -833,9 +836,20 @@ int main(int argc, char* argv[]) {
                 if (e.type == EntityType::Bomber) {
                     if (e.ai_state == BOMBER_DYING)
                         dying[dying_count++] = {i, e.position, true};
-                    if (ai_enabled)
+                    // Track exploding bombers for death effect
+                    if (e.ai_state == BOMBER_EXPLODING)
+                        dying[dying_count++] = {i, e.position, true};
+                    if (ai_enabled) {
                         bomber_update(e, entities, MAX_ENTITIES,
                                       player.position, collision, bomber_cfg, dt, total_time);
+                        float bdmg = 0.0f;
+                        HMM_Vec3 bkb = {};
+                        if (bomber_check_explosion(e, player.position, player.radius,
+                                                   bomber_cfg, bdmg, bkb)) {
+                            player.velocity = HMM_AddV3(player.velocity, bkb);
+                            // TODO: player takes damage (bdmg)
+                        }
+                    }
                 }
                 if (e.type == EntityType::Shielder) {
                     if (e.ai_state == SHIELDER_DYING)
@@ -846,11 +860,19 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            // Apply shielder barriers to allies
+            if (!show_settings) {
+                shielder_apply_barriers(entities, MAX_ENTITIES, shielder_cfg, dt);
+            }
+
             // Check which dying enemies just expired → explosion
             for (int d = 0; d < dying_count; d++) {
                 Entity& e = entities[dying[d].idx];
                 if (!e.alive && dying[d].was_alive) {
-                    effects.spawn_drone_explosion(dying[d].pos);
+                    if (e.type == EntityType::Bomber)
+                        effects.spawn_bomber_explosion(dying[d].pos);
+                    else
+                        effects.spawn_drone_explosion(dying[d].pos);
                 }
             }
 
@@ -913,32 +935,12 @@ int main(int argc, char* argv[]) {
                 Entity& e = entities[i];
                 if (!e.alive || e.type != EntityType::Projectile) continue;
 
-                if (e.owner == -2) {
-                    // Bomb: AoE check (circle_speed stores AoE radius)
-                    HMM_Vec3 to_player = HMM_SubV3(player.position, e.position);
-                    float dist = HMM_LenV3(to_player);
-                    float aoe = e.circle_speed;
-                    if (dist < aoe) {
-                        float falloff = 1.0f - (dist / aoe);
-                        // TODO: player takes damage (e.damage * falloff)
-                        // Knockback from explosion
-                        if (dist > 0.1f) {
-                            HMM_Vec3 kb_dir = HMM_MulV3F(to_player, 1.0f / dist);
-                            player.velocity = HMM_AddV3(player.velocity,
-                                HMM_MulV3F(kb_dir, falloff * 8.0f));
-                            player.velocity.Y += falloff * 5.0f;
-                        }
-                        e.alive = false;
-                    }
-                } else {
-                    // Direct-hit projectile
-                    HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
-                    float dist_sq = HMM_DotV3(to_player, to_player);
-                    float hit_radius = e.radius + player.radius;
-                    if (dist_sq < hit_radius * hit_radius) {
-                        // TODO: player takes damage
-                        e.alive = false;
-                    }
+                HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
+                float dist_sq = HMM_DotV3(to_player, to_player);
+                float hit_radius = e.radius + player.radius;
+                if (dist_sq < hit_radius * hit_radius) {
+                    // TODO: player takes damage
+                    e.alive = false;
                 }
             }
         } // end !show_settings
@@ -1041,6 +1043,9 @@ int main(int argc, char* argv[]) {
         // Transparent death effects (outer glow)
         Mesh transparent_mesh;
         effects.append_transparent(transparent_mesh);
+
+        // Shield bubbles around shielded enemies
+        build_shield_bubbles(transparent_mesh, entities, MAX_ENTITIES, frustum);
 
         // Debug: visualize ladder volumes as transparent green boxes
         if (show_ladder_debug) {
@@ -1277,7 +1282,7 @@ int main(int argc, char* argv[]) {
                         auto ru = rusher_cfg;  ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
                         auto tu = turret_cfg;  tu.health *= hp_s; tu.hitscan_damage *= dm_s; tu.track_speed *= sp_s;
                         auto tk = tank_cfg;    tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
-                        auto bo = bomber_cfg;  bo.health *= hp_s; bo.bomb_damage *= dm_s; bo.approach_speed *= sp_s; bo.circle_speed *= sp_s;
+                        auto bo = bomber_cfg;  bo.health *= hp_s; bo.explosion_damage *= dm_s; bo.approach_speed *= sp_s; bo.dive_speed *= sp_s;
                         auto sh = shielder_cfg; sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
 
                         for (const auto& es : pld.enemy_spawns) {
@@ -1560,12 +1565,11 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Bo Radius",        &bomber_cfg.radius,          0.3f, 2.0f);
                 ImGui::SliderFloat("Bo Detect Range",  &bomber_cfg.detection_range, 10.0f, 60.0f);
                 ImGui::SliderFloat("Bo Hover Height",  &bomber_cfg.hover_height,    5.0f, 25.0f);
-                ImGui::SliderFloat("Bo Circle Speed",  &bomber_cfg.circle_speed,    2.0f, 15.0f);
-                ImGui::SliderFloat("Bo Circle Radius", &bomber_cfg.circle_radius,   5.0f, 25.0f);
-                ImGui::SliderFloat("Bo Bomb Damage",   &bomber_cfg.bomb_damage,     5.0f, 40.0f);
-                ImGui::SliderFloat("Bo Bomb Interval", &bomber_cfg.bomb_interval,   0.3f, 5.0f, "%.1fs");
-                ImGui::SliderFloat("Bo Bomb AoE",      &bomber_cfg.bomb_aoe_radius, 1.0f, 8.0f);
-                ImGui::SliderInt("Bo Bombs/Run",       &bomber_cfg.bombs_per_run,   1, 10);
+                ImGui::SliderFloat("Bo Dive Speed",    &bomber_cfg.dive_speed,         8.0f, 30.0f);
+                ImGui::SliderFloat("Bo Dive Trigger",  &bomber_cfg.dive_trigger_dist,  5.0f, 30.0f);
+                ImGui::SliderFloat("Bo Explode Dmg",   &bomber_cfg.explosion_damage,   5.0f, 50.0f);
+                ImGui::SliderFloat("Bo Explode Radius", &bomber_cfg.explosion_radius,  2.0f, 12.0f);
+                ImGui::SliderFloat("Bo Explode KB",    &bomber_cfg.explosion_knockback, 1.0f, 20.0f);
 
                 ImGui::Separator();
                 ImGui::Text("--- Shielder ---");
@@ -1579,7 +1583,8 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Sh Radius",        &shielder_cfg.radius,          0.3f, 2.0f);
                 ImGui::SliderFloat("Sh Detect Range",  &shielder_cfg.detection_range, 10.0f, 60.0f);
                 ImGui::SliderFloat("Sh Shield Radius", &shielder_cfg.shield_radius,   3.0f, 20.0f);
-                ImGui::SliderFloat("Sh Dmg Reduction", &shielder_cfg.damage_reduction, 0.1f, 0.9f, "%.2f");
+                ImGui::SliderFloat("Sh Shield HP",     &shielder_cfg.shield_hp,       5.0f, 50.0f);
+                ImGui::SliderFloat("Sh Recharge/s",    &shielder_cfg.shield_recharge, 1.0f, 20.0f);
                 ImGui::SliderFloat("Sh Flee Range",    &shielder_cfg.flee_range,      3.0f, 15.0f);
                 ImGui::SliderFloat("Sh Preferred Dist",&shielder_cfg.preferred_dist,  5.0f, 25.0f);
                 ImGui::SliderFloat("Sh Chase Speed",   &shielder_cfg.chase_speed,     2.0f, 15.0f);

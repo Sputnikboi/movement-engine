@@ -6,9 +6,9 @@
 
 // ============================================================
 //  Shielder AI states
-//  Medium enemy that projects a shield aura for nearby allies.
-//  Enemies within shield_radius take reduced damage.
-//  Must be prioritized by player.
+//  Medium enemy that projects a shield barrier for nearby allies.
+//  Enemies within shield_radius get a shield_hp barrier that
+//  absorbs hits. Must be prioritized by player.
 // ============================================================
 
 enum ShielderState : uint8_t {
@@ -41,7 +41,8 @@ struct ShielderConfig {
 
     // Shield aura
     float shield_radius     = 10.0f;  // allies within this get protection
-    float damage_reduction  = 0.5f;   // 0.5 = allies take 50% damage
+    float shield_hp         = 20.0f;  // barrier HP granted to each ally
+    float shield_recharge   = 5.0f;   // HP/s recharge rate while in aura
     float flee_range        = 6.0f;   // backs off if player gets this close
     float preferred_dist    = 12.0f;  // tries to stay this far from player
 
@@ -78,9 +79,17 @@ void shielder_update(Entity& shielder, Entity entities[], int max_entities,
                      HMM_Vec3 player_pos, const CollisionWorld& world,
                      const ShielderConfig& config, float dt, float total_time);
 
-// Check if an entity at `pos` is within any alive shielder's aura.
-// Returns the damage multiplier (1.0 = no shield, lower = shielded).
-float shielder_get_damage_mult(const Entity entities[], int max_entities,
-                               HMM_Vec3 target_pos, const ShielderConfig& config);
+// Apply shield barriers to allies in range (call once per frame after shielder updates).
+// Recharges shield_hp on entities within range of an active shielder.
+// Decays shield_hp on entities NOT in range.
+void shielder_apply_barriers(Entity entities[], int max_entities,
+                             const ShielderConfig& config, float dt);
+
+// Absorb damage through shield barrier. Returns actual HP damage after barrier.
+// Modifies entity's shield_hp in place.
+float shielder_absorb_damage(Entity& target, float raw_damage);
+
+// Check if an entity currently has an active shield barrier
+bool shielder_has_barrier(const Entity& e);
 
 void shielder_tick_frame();

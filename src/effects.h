@@ -48,6 +48,7 @@ struct EffectSystem {
 
     // Spawn death effect at position
     void spawn_drone_explosion(HMM_Vec3 pos);
+    void spawn_bomber_explosion(HMM_Vec3 pos);  // big red fireball
 
     // Append opaque death effect geometry (inner core + ring) into entity mesh.
     void append_to_mesh(Mesh& out) const;
