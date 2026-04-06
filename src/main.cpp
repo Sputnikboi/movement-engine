@@ -1125,7 +1125,8 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Room Height", &procgen_cfg.room_height, 5.0f, 25.0f, "%.0f");
                 ImGui::SliderInt("Boxes Min", &procgen_cfg.box_count_min, 0, 30);
                 ImGui::SliderInt("Boxes Max", &procgen_cfg.box_count_max, 0, 30);
-                ImGui::SliderInt("Platforms", &procgen_cfg.platform_count, 0, 6);
+                ImGui::SliderInt("Platforms Min", &procgen_cfg.platform_count_min, 0, 4);
+                ImGui::SliderInt("Platforms Max", &procgen_cfg.platform_count_max, 0, 4);
                 ImGui::Checkbox("Ramps", &procgen_cfg.gen_ramps);
                 ImGui::SliderInt("Tall Min", &procgen_cfg.tall_count_min, 0, 15);
                 ImGui::SliderInt("Tall Max", &procgen_cfg.tall_count_max, 0, 15);

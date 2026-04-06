@@ -246,7 +246,8 @@ LevelData generate_level(const ProcGenConfig& config,
     placed[placed_count++] = {exit_x,   hd - 2.0f, 2.5f}; // exit door
 
     // --- Platforms ---
-    for (int i = 0; i < config.platform_count && placed_count < MAX_PLACED; i++) {
+    int platform_count = (int)randf((float)config.platform_count_min, (float)config.platform_count_max + 0.99f);
+    for (int i = 0; i < platform_count && placed_count < MAX_PLACED; i++) {
         float pw = randf(config.platform_size_min, config.platform_size_max);
         float pd = randf(config.platform_size_min, config.platform_size_max);
         float ph = randf(config.platform_height_min, config.platform_height_max);
@@ -394,6 +395,21 @@ LevelData generate_level(const ProcGenConfig& config,
 
         add_box(m, {bx, 0, bz}, bw, bh, bd, col, yaw);
         placed[placed_count++] = {bx, bz, br};
+
+        // Chance to stack a smaller box on top
+        if (randf(0, 1) < config.box_stack_chance) {
+            float sw = randf(config.box_size_min, bw * 0.8f);
+            float sd = randf(config.box_size_min, bd * 0.8f);
+            float sh = randf(config.box_height_min, bh * 0.7f);
+            float syaw = yaw + randf(-0.4f, 0.4f); // slightly offset rotation
+            // Small random offset so it's not perfectly centered
+            float sox = randf(-0.3f, 0.3f);
+            float soz = randf(-0.3f, 0.3f);
+            HMM_Vec3 scol = col;
+            float svar = randf(-0.04f, 0.04f);
+            scol.X += svar; scol.Y += svar; scol.Z += svar;
+            add_box(m, {bx + sox, bh, bz + soz}, sw, sh, sd, scol, syaw);
+        }
     }
 
     // --- Tall structures (pillars, towers) ---
@@ -464,7 +480,7 @@ LevelData generate_level(const ProcGenConfig& config,
         spawn_enemy(EntityType::Rusher, 1.0f); // rushers on the ground
 
     printf("ProcGen: %zu verts, %zu indices, %d boxes, %d platforms, %d enemies\n",
-           m.vertices.size(), m.indices.size(), box_count, config.platform_count,
+           m.vertices.size(), m.indices.size(), box_count, platform_count,
            config.drone_count + config.rusher_count);
 
     return ld;

@@ -20,13 +20,15 @@ struct ProcGenConfig {
     float box_height_min   = 1.0f;
     float box_height_max   = 5.0f;
     float box_margin       = 2.0f;   // min distance from walls
+    float box_stack_chance = 0.3f;   // chance a box gets a smaller box stacked on top
 
     // Platforms / raised areas
-    int   platform_count   = 3;
+    int   platform_count_min = 1;
+    int   platform_count_max = 2;
     float platform_height_min = 2.0f;
-    float platform_height_max = 4.0f;
+    float platform_height_max = 5.0f;
     float platform_size_min   = 5.0f;
-    float platform_size_max   = 10.0f;
+    float platform_size_max   = 16.0f;
 
     // Tall structures (pillars, towers)
     int   tall_count_min   = 3;
