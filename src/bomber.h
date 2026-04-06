@@ -29,7 +29,7 @@ struct BomberConfig {
 
     // Movement
     float approach_speed    = 8.0f;
-    float dive_speed        = 18.0f;  // fast dive
+    float dive_speed        = 10.0f;  // fast dive
     float acceleration      = 5.0f;
     float hover_height      = 12.0f;  // flies very high
     float hover_force       = 8.0f;
@@ -41,7 +41,7 @@ struct BomberConfig {
     // Explosion (on ground impact)
     float explosion_damage  = 25.0f;
     float explosion_radius  = 5.0f;
-    float explosion_knockback = 10.0f;
+    float explosion_knockback = 2.0f;
 
     // Dive trigger
     float dive_trigger_dist = 15.0f;  // starts dive when within this horizontal distance
