@@ -201,7 +201,13 @@ void shielder_update(Entity& shielder, Entity entities[], int max_entities,
 
         bool was_falling = vel_before.Y < -1.0f;
         float speed_lost = speed_before - speed_after;
-        if (was_falling && speed_lost > speed_before * 0.4f) {
+        bool impact = was_falling && speed_lost > speed_before * 0.4f;
+        // Near-ground fast kill: if barely moving after 0.3s, just explode
+        if (!impact && shielder.death_timer > 0.3f) {
+            HitResult gnd = world.raycast(shielder.position, HMM_V3(0,-1,0), shielder.radius + 0.5f);
+            if (gnd.hit) impact = true;
+        }
+        if (impact) {
             shielder.ai_state = SHIELDER_DEAD;
             shielder.alive = false;
             return;
