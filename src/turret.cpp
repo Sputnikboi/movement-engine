@@ -139,8 +139,10 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
     HMM_Vec3 dir_to_player = (dist > 0.01f)
         ? HMM_MulV3F(to_player, 1.0f / dist) : HMM_V3(0, 0, 1);
 
-    // Desired yaw towards player
+    // Desired yaw/pitch towards player
     float desired_yaw = atan2f(dir_to_player.X, dir_to_player.Z);
+    float h_dist = sqrtf(dir_to_player.X * dir_to_player.X + dir_to_player.Z * dir_to_player.Z);
+    float desired_pitch = atan2f(dir_to_player.Y, h_dist);
 
     // Hover
     apply_turret_hover(turret, world, config, dt, do_expensive);
@@ -174,20 +176,26 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
     } break;
 
     case TURRET_TRACKING: {
-        // Rotate towards player
+        // Rotate towards player (yaw + pitch)
         float yaw_diff = desired_yaw - turret.yaw;
-        // Normalize to [-PI, PI]
         while (yaw_diff >  3.14159f) yaw_diff -= 6.28318f;
         while (yaw_diff < -3.14159f) yaw_diff += 6.28318f;
 
+        float pitch_diff = desired_pitch - turret.pitch;
+
         float max_rot = config.track_speed * dt;
-        if (fabsf(yaw_diff) < max_rot) {
-            turret.yaw = desired_yaw;
-            // Locked on — start windup
+        bool yaw_locked = (fabsf(yaw_diff) < max_rot);
+        bool pitch_locked = (fabsf(pitch_diff) < max_rot);
+
+        if (yaw_locked) turret.yaw = desired_yaw;
+        else turret.yaw += (yaw_diff > 0 ? max_rot : -max_rot);
+
+        if (pitch_locked) turret.pitch = desired_pitch;
+        else turret.pitch += (pitch_diff > 0 ? max_rot : -max_rot);
+
+        if (yaw_locked && pitch_locked) {
             turret.ai_state = TURRET_WINDUP;
             turret.ai_timer = config.windup_time;
-        } else {
-            turret.yaw += (yaw_diff > 0 ? max_rot : -max_rot);
         }
 
         // Lost target?
@@ -202,13 +210,20 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
         float yaw_diff = desired_yaw - turret.yaw;
         while (yaw_diff >  3.14159f) yaw_diff -= 6.28318f;
         while (yaw_diff < -3.14159f) yaw_diff += 6.28318f;
+        float pitch_diff = desired_pitch - turret.pitch;
+
         float charge_progress = 1.0f - (turret.ai_timer / config.windup_time);
-        float track_mult = 0.5f * (1.0f - charge_progress * 0.8f); // 0.5x → 0.1x
+        float track_mult = 0.5f * (1.0f - charge_progress * 0.8f);
         float max_rot = config.track_speed * track_mult * dt;
+
         if (fabsf(yaw_diff) > max_rot)
             turret.yaw += (yaw_diff > 0 ? max_rot : -max_rot);
         else
             turret.yaw = desired_yaw;
+        if (fabsf(pitch_diff) > max_rot)
+            turret.pitch += (pitch_diff > 0 ? max_rot : -max_rot);
+        else
+            turret.pitch = desired_pitch;
 
         turret.ai_timer -= dt;
         if (turret.ai_timer <= 0.0f) {
@@ -253,11 +268,17 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
         float yaw_diff = desired_yaw - turret.yaw;
         while (yaw_diff >  3.14159f) yaw_diff -= 6.28318f;
         while (yaw_diff < -3.14159f) yaw_diff += 6.28318f;
+        float pitch_diff = desired_pitch - turret.pitch;
+
         float max_rot = config.track_speed * 0.3f * dt;
         if (fabsf(yaw_diff) > max_rot)
             turret.yaw += (yaw_diff > 0 ? max_rot : -max_rot);
         else
             turret.yaw = desired_yaw;
+        if (fabsf(pitch_diff) > max_rot)
+            turret.pitch += (pitch_diff > 0 ? max_rot : -max_rot);
+        else
+            turret.pitch = desired_pitch;
 
         turret.ai_timer -= dt;
         if (turret.ai_timer <= 0.0f) {
@@ -325,6 +346,7 @@ bool turret_get_laser(const Entity& turret, HMM_Vec3& origin, HMM_Vec3& dir) {
         return false;
 
     origin = turret.position;
-    dir = HMM_V3(sinf(turret.yaw), 0.0f, cosf(turret.yaw));
+    float cp = cosf(turret.pitch);
+    dir = HMM_V3(sinf(turret.yaw) * cp, sinf(turret.pitch), cosf(turret.yaw) * cp);
     return true;
 }

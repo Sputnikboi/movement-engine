@@ -562,7 +562,8 @@ void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
 
         if (!frustum.sphere_visible(e.position, 50.0f)) continue;
 
-        HMM_Vec3 fwd = HMM_V3(sinf(e.yaw), 0.0f, cosf(e.yaw));
+        float cp = cosf(e.pitch);
+        HMM_Vec3 fwd = HMM_V3(sinf(e.yaw) * cp, sinf(e.pitch), cosf(e.yaw) * cp);
         HMM_Vec3 origin = e.position;
 
         // Raycast to find where laser hits geometry

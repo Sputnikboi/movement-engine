@@ -26,6 +26,7 @@ struct Entity {
     HMM_Vec3 position = {};
     HMM_Vec3 velocity = {};
     float    yaw      = 0.0f;   // facing direction (radians)
+    float    pitch    = 0.0f;   // vertical aim (radians, positive = up)
 
     float    health    = 0.0f;
     float    max_health = 0.0f;
