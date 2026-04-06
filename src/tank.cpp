@@ -243,6 +243,7 @@ void tank_update(Entity& tank, Entity entities[], int max_entities,
         tank.ai_timer -= dt;
         if (tank.ai_timer <= 0.0f) {
             tank.ai_state = TANK_STOMP;
+            tank.ai_dir = 1;  // reset stomp hit flag
             tank.ai_timer = 0.15f;  // brief stomp impact window
         }
     } break;
@@ -309,7 +310,9 @@ bool tank_check_player_hit(Entity& tank, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                            float& damage_out, HMM_Vec3& knockback_out) {
     // Only on the stomp frame (TANK_STOMP just entered)
     if (tank.ai_state != TANK_STOMP) return false;
-    if (tank.ai_timer < 0.10f) return false;  // only first frame
+    // Only trigger once (ai_dir used as stomped flag)
+    if (tank.ai_dir == 0) return false;
+    tank.ai_dir = 0;
 
     // Closest point on player capsule to tank
     HMM_Vec3 closest = closest_point_on_segment(tank.position, cap_bottom, cap_top);
