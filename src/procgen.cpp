@@ -742,12 +742,17 @@ LevelData generate_level(const ProcGenConfig& config,
         float heights[6] = {
             config.enemy_height, 1.0f, 1.5f, 2.0f, 12.0f, 3.0f
         };
+        int costs[6] = {
+            1, 1, 2, 5, 2, 3  // drone, rusher, turret, tank, bomber, shielder
+        };
 
-        for (int i = 0; i < budget; i++) {
+        int spent = 0;
+        while (spent < budget) {
             // Force shielder if guaranteed and not yet placed, near end of budget
-            if (shielder_guaranteed && !shielder_placed && i >= budget - 2) {
+            if (shielder_guaranteed && !shielder_placed && budget - spent <= 4) {
                 spawn_enemy(EntityType::Shielder, 3.0f);
                 shielder_placed = true;
+                spent += 3;
                 continue;
             }
 
@@ -758,8 +763,17 @@ LevelData generate_level(const ProcGenConfig& config,
                 cumulative += w[j];
                 if (roll <= cumulative) { picked = j; break; }
             }
+
+            // Skip if this enemy would exceed budget — pick a cheaper one
+            if (spent + costs[picked] > budget) {
+                // Fall back to cheapest (drone or rusher)
+                picked = (rand() % 2 == 0) ? 0 : 1;
+                if (spent + costs[picked] > budget) break;
+            }
+
             if (types[picked] == EntityType::Shielder) shielder_placed = true;
             spawn_enemy(types[picked], heights[picked]);
+            spent += costs[picked];
         }
 
         printf("ProcGen: Room %d, budget %d, difficulty %.2f\n",
