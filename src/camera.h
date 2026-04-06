@@ -31,7 +31,7 @@ struct Camera {
     }
 
     HMM_Vec3 right() const {
-        return HMM_NormV3(HMM_Cross(forward(), HMM_V3(0.0f, 1.0f, 0.0f)));
+        return HMM_NormV3(HMM_Cross(HMM_V3(0.0f, 1.0f, 0.0f), forward()));
     }
 
     // --- Matrices ---
