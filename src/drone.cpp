@@ -406,6 +406,9 @@ void projectiles_update(Entity entities[], int max_entities,
         // Tick render grace timer (player knife: avoid appearing inside camera)
         if (p.ai_timer > 0.0f) p.ai_timer -= dt;
 
+        // Stuck in wall — just count down linger timer
+        if (p.ai_state == 1) continue;
+
         // Check wall collision via raycast along travel direction
         // Skip wall collision for dummy visual projectiles (owner == -4)
         HMM_Vec3 travel = HMM_MulV3F(p.velocity, dt);
@@ -415,7 +418,15 @@ void projectiles_update(Entity entities[], int max_entities,
             HitResult hit = world.raycast(p.position, travel_dir,
                                           travel_len + p.radius);
             if (hit.hit && hit.t <= travel_len + p.radius) {
-                p.alive = false;
+                if (p.owner == -3) {
+                    // Player knife: stick in wall
+                    p.position = HMM_AddV3(p.position, HMM_MulV3F(travel_dir, hit.t - p.radius * 0.5f));
+                    p.velocity = {};
+                    p.ai_state = 1; // stuck
+                    p.lifetime = 3.0f; // linger time
+                } else {
+                    p.alive = false;
+                }
                 continue;
             }
         }

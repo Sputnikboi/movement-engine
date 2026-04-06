@@ -1088,6 +1088,7 @@ int main(int argc, char* argv[]) {
                 Entity& proj = entities[i];
                 if (!proj.alive || proj.type != EntityType::Projectile) continue;
                 if (proj.owner != -3) continue; // only real player projectiles (skip dummy -4)
+                if (proj.ai_state == 1) continue; // stuck in wall, no more hits
 
                 bool hit_something = false;
                 for (int j = 0; j < MAX_ENTITIES; j++) {
@@ -1141,7 +1142,7 @@ int main(int argc, char* argv[]) {
                         break; // one hit per projectile
                     }
                 }
-                if (hit_something) proj.alive = false;
+                if (hit_something) { if (proj.owner == -3) { proj.velocity = {}; proj.ai_state = 1; proj.lifetime = 1.5f; } else { proj.alive = false; } }
             }
 
             // --- Projectile-player collision (capsule hitbox) ---
