@@ -777,7 +777,7 @@ int main(int argc, char* argv[]) {
                         p.lifetime = weapon.config.proj_lifetime;
                         p.ai_timer = GRACE; // render grace period
                         p.yaw   = atan2f(fwd.X, fwd.Z) + HMM_PI32;
-                        p.pitch = -asinf(fwd.Y);
+                        p.pitch = asinf(fwd.Y);
                         real_idx = i;
                         break;
                     }
@@ -811,7 +811,7 @@ int main(int argc, char* argv[]) {
                             d.owner    = -4; // dummy visual projectile
                             d.lifetime = GRACE;
                             d.yaw   = atan2f(fwd.X, fwd.Z) + HMM_PI32;
-                            d.pitch = -asinf(fwd.Y);
+                            d.pitch = asinf(fwd.Y);
                             break;
                         }
                     }
