@@ -72,6 +72,7 @@ struct WeaponConfig {
     // Viewmodel scale + rotation correction (degrees)
     float model_scale     = 1.0f;
     HMM_Vec3 model_rotation = {0.0f, 90.0f, 0.0f};  // X, Y, Z degrees
+    const char* model_path = nullptr;  // if set, loads separate model
 
     // Reload animation — 3 phases (fractions of reload_time)
     float reload_phase1 = 0.25f;   // mag_out end (0..0.25)

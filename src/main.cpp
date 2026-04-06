@@ -398,6 +398,31 @@ int main(int argc, char* argv[]) {
         }
         if (!weapons[0].mesh_loaded)
             printf("WARNING: Could not load viewmodel (tried assets/, ../assets/, ./)\n");
+
+        // Load per-weapon models (overrides shared mesh)
+        const char* vm_prefixes[] = {"assets/", "../assets/", "../../assets/", ""};
+        for (int w = 0; w < MAX_WEAPONS; w++) {
+            if (!weapons[w].config.model_path) continue;
+            for (const char* pfx : vm_prefixes) {
+                std::string mp = std::string(pfx) + weapons[w].config.model_path;
+                LevelData wm = load_level_gltf(mp.c_str());
+                if (!wm.mesh.vertices.empty()) {
+                    weapons[w].viewmodel_mesh = std::move(wm.mesh);
+                    weapons[w].mesh_loaded = true;
+                    weapons[w].has_mag_submesh = false;
+                    for (const auto& sub : wm.submeshes) {
+                        if (strncmp(sub.name, "Mag", 3) == 0 || strncmp(sub.name, "mag", 3) == 0) {
+                            weapons[w].mag_index_start = sub.index_start;
+                            weapons[w].mag_index_count = sub.index_count;
+                            weapons[w].has_mag_submesh = true;
+                        }
+                    }
+                    printf("Loaded weapon model '%s': %zu verts\n",
+                           mp.c_str(), weapons[w].viewmodel_mesh.vertices.size());
+                    break;
+                }
+            }
+        }
     }
 
     // --- Fixed timestep ---

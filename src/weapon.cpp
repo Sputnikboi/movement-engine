@@ -33,6 +33,7 @@ void Weapon::init_wingman() {
 
     config.model_scale     = 1.0f;
     config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
+    config.model_path      = "Kunai.glb";
 
     config.reload_phase1    = 0.25f;
     config.reload_phase2    = 0.80f;
@@ -117,8 +118,8 @@ void Weapon::init_knife() {
     config.ads_sens_mult   = 0.8f;
     config.ads_speed       = 16.0f;
 
-    config.hip_offset      = HMM_V3(0.25f, -0.22f, 0.4f);
-    config.ads_offset      = HMM_V3(0.0f, -0.14f, 0.35f);
+    config.hip_offset      = HMM_V3(0.2f, -0.18f, 0.35f);
+    config.ads_offset      = HMM_V3(0.0f, -0.12f, 0.3f);
 
     config.recoil_kick     = 0.015f;
     config.recoil_pitch    = -3.0f;
