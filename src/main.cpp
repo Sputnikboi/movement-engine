@@ -776,7 +776,7 @@ int main(int argc, char* argv[]) {
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
                         p.ai_timer = GRACE; // render grace period
-                        p.yaw   = atan2f(fwd.X, fwd.Z);
+                        p.yaw   = atan2f(fwd.X, fwd.Z) + HMM_PI32;
                         p.pitch = -asinf(fwd.Y);
                         real_idx = i;
                         break;
@@ -810,7 +810,7 @@ int main(int argc, char* argv[]) {
                             d.damage   = 0.0f;
                             d.owner    = -4; // dummy visual projectile
                             d.lifetime = GRACE;
-                            d.yaw   = atan2f(fwd.X, fwd.Z);
+                            d.yaw   = atan2f(fwd.X, fwd.Z) + HMM_PI32;
                             d.pitch = -asinf(fwd.Y);
                             break;
                         }
