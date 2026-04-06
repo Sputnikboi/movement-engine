@@ -154,3 +154,12 @@ Organized by priority/impact.
 13. **Weapon switching / multiple weapons**
 14. **Rendering upgrades** (pending art style decision)
 15. **Mod system** (TBD)
+
+## Shop System (Planned)
+- Opens between rooms at exit door (before entering next room, or dedicated shop phase)
+- Currency earned from killing enemies (per type: drone=1, rusher=1, turret=3, tank=5, bomber=3, shielder=4)
+- **Buy weapons** — unlock new weapons to add to loadout
+- **Weapon upgrades** — damage, mag size, fire rate, reload speed (per weapon, stacking)
+- **Passive upgrades** — max HP, movement speed, slide boost, jump height
+- UI: ImGui window with categories, costs, descriptions
+- Upgrades persist across rooms until run ends (death resets)

@@ -7,6 +7,7 @@
 // ============================================================
 
 void Weapon::init_wingman() {
+    config.name            = "Wingman";
     config.damage          = 70.0f;
     config.fire_rate       = 1.5f;
     config.range           = 100.0f;
@@ -45,6 +46,66 @@ void Weapon::init_wingman() {
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
     reload_progress = 0.0f;
+}
+
+// ============================================================
+//  Glock preset
+// ============================================================
+
+void Weapon::init_glock() {
+    config.name            = "Glock";
+    config.damage          = 12.0f;
+    config.fire_rate       = 8.0f;
+    config.range           = 60.0f;
+    config.mag_size        = 17;
+    config.reload_time     = 1.2f;
+    config.crit_multiplier = 1.5f;
+
+    config.ads_fov_mult    = 0.8f;
+    config.ads_sens_mult   = 0.75f;
+    config.ads_speed       = 14.0f;
+
+    config.hip_offset      = HMM_V3(0.25f, -0.2f, 0.4f);
+    config.ads_offset      = HMM_V3(0.0f, -0.125f, 0.3f);
+
+    config.recoil_kick     = 0.02f;
+    config.recoil_pitch    = -6.0f;
+    config.recoil_roll     = 3.0f;
+    config.recoil_side     = 0.015f;
+    config.recoil_recovery = 14.0f;
+    config.recoil_tilt_dir = 1.0f;
+
+    config.reload_buffer_delay = 0.15f;
+
+    config.model_scale     = 1.0f;
+    config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
+
+    config.reload_phase1    = 0.20f;
+    config.reload_phase2    = 0.75f;
+    config.reload_drop_dist = 0.100f;
+    config.reload_tilt      = 15.0f;
+    config.mag_drop_dist    = 0.650f;
+    config.mag_insert_dist  = 0.5f;
+
+    ammo  = config.mag_size;
+    state = WeaponState::IDLE;
+    reload_buffered = false;
+    reload_phase = ReloadPhase::NONE;
+    reload_progress = 0.0f;
+}
+
+// ============================================================
+//  Begin weapon swap (lower current weapon)
+// ============================================================
+
+void Weapon::begin_swap() {
+    if (state == WeaponState::SWAPPING) return;
+    state = WeaponState::SWAPPING;
+    swap_timer = swap_duration;
+    swap_raising = false;  // lowering first
+    fire_timer = 0.0f;
+    reload_buffered = false;
+    reload_phase = ReloadPhase::NONE;
 }
 
 // ============================================================
@@ -132,6 +193,22 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
         break;
     }
 
+    case WeaponState::SWAPPING:
+        swap_timer -= dt;
+        if (swap_timer <= 0.0f) {
+            if (!swap_raising) {
+                // Lowered — caller should now switch weapon data
+                // Raise phase handled after weapon data swap in main.cpp
+                swap_timer = 0.0f;
+                // Stay in SWAPPING until caller sets swap_raising
+            } else {
+                // Raised — done
+                state = WeaponState::IDLE;
+                swap_timer = 0.0f;
+            }
+        }
+        break;
+
     case WeaponState::RELOADING:
         reload_timer -= dt;
         reload_progress = 1.0f - (reload_timer / config.reload_time);
@@ -162,6 +239,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
 bool Weapon::try_fire() {
     if (state == WeaponState::RELOADING) return false;
+    if (state == WeaponState::SWAPPING) return false;
     if (fire_timer > 0.0f) return false;
     if (ammo <= 0) return false;
 
@@ -198,6 +276,20 @@ HMM_Mat4 Weapon::build_base_transform(const Camera& cam, HMM_Vec3 local_offset,
     // Apply recoil displacement (camera-relative)
     offset.Z -= recoil_offset;        // kick backward
     offset.X += recoil_side;          // sideways shift
+
+    // Swap: gun drops down
+    float swap_blend = 0.0f;
+    if (state == WeaponState::SWAPPING) {
+        if (!swap_raising) {
+            // Lowering: 1.0 at start → 0.0 when timer reaches 0
+            swap_blend = swap_timer / swap_duration;
+            swap_blend = 1.0f - swap_blend; // 0→1 as it lowers
+        } else {
+            // Raising: timer counts down, 1→0 as it raises
+            swap_blend = swap_timer / swap_duration;
+        }
+        offset.Y -= 0.4f * swap_blend;
+    }
 
     // Reload: gun drops and tilts based on phase
     float drop_blend = 0.0f;

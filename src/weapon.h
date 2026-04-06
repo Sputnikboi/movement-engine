@@ -13,6 +13,7 @@ enum class WeaponState : uint8_t {
     IDLE,
     FIRING,
     RELOADING,
+    SWAPPING,   // lowering current weapon or raising new one
 };
 
 // Reload sub-phases
@@ -28,6 +29,7 @@ enum class ReloadPhase : uint8_t {
 // ============================================================
 
 struct WeaponConfig {
+    const char* name      = "Unknown";
     float damage          = 70.0f;
     float fire_rate       = 1.5f;     // shots per second
     float range           = 100.0f;
@@ -105,10 +107,17 @@ struct Weapon {
     ReloadPhase  reload_phase = ReloadPhase::NONE;
     float        reload_progress = 0.0f; // 0..1
 
+    // Swap animation
+    float        swap_timer   = 0.0f;
+    float        swap_duration = 0.35f;  // seconds per half (lower + raise)
+    bool         swap_raising  = false;  // false = lowering, true = raising
+
     // --- Methods ---
     void init_wingman();
+    void init_glock();
     void update(float dt, bool fire_pressed, bool reload_pressed, bool ads_held);
     bool try_fire();
+    void begin_swap();   // start lowering weapon for swap
 
     // Viewmodel matrices
     HMM_Mat4 get_viewmodel_matrix(const Camera& cam) const;

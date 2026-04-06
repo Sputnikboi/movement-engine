@@ -348,9 +348,16 @@ int main(int argc, char* argv[]) {
     if (!initial_enemy_spawns.empty())
         printf("Spawned %zu preplaced enemies\n", initial_enemy_spawns.size());
 
-    // --- Weapon ---
-    Weapon weapon;
-    weapon.init_wingman();
+    // --- Weapons ---
+    constexpr int MAX_WEAPONS = 4;
+    Weapon weapons[MAX_WEAPONS];
+    int    active_weapon = 0;
+    int    pending_weapon = -1;  // weapon to switch to after lowering
+    int    num_weapons = 2;      // weapons unlocked
+
+    weapons[0].init_wingman();
+    weapons[1].init_glock();
+
     {
         // Try several paths — exe might run from build/ or project root
         const char* vm_paths[] = {
@@ -362,26 +369,33 @@ int main(int argc, char* argv[]) {
         for (const char* vp : vm_paths) {
             LevelData vm_data = load_level_gltf(vp);
             if (!vm_data.mesh.vertices.empty()) {
-                weapon.viewmodel_mesh = std::move(vm_data.mesh);
-                weapon.mesh_loaded = true;
                 printf("Loaded viewmodel from '%s': %zu verts, %zu indices\n",
-                       vp, weapon.viewmodel_mesh.vertices.size(),
-                       weapon.viewmodel_mesh.indices.size());
-                // Find "Mag" sub-mesh
+                       vp, vm_data.mesh.vertices.size(),
+                       vm_data.mesh.indices.size());
+                // Share mesh with all weapons (until they get unique models)
+                uint32_t mag_start = 0, mag_count = 0;
+                bool has_mag = false;
                 for (const auto& sub : vm_data.submeshes) {
                     if (strncmp(sub.name, "Mag", 3) == 0 || strncmp(sub.name, "mag", 3) == 0) {
-                        weapon.mag_index_start = sub.index_start;
-                        weapon.mag_index_count = sub.index_count;
-                        weapon.has_mag_submesh = true;
+                        mag_start = sub.index_start;
+                        mag_count = sub.index_count;
+                        has_mag = true;
                         printf("  Found mag sub-mesh '%s': indices %u..%u (%u)\n",
                                sub.name, sub.index_start,
                                sub.index_start + sub.index_count, sub.index_count);
                     }
                 }
+                for (int w = 0; w < MAX_WEAPONS; w++) {
+                    weapons[w].viewmodel_mesh = vm_data.mesh; // copy
+                    weapons[w].mesh_loaded = true;
+                    weapons[w].mag_index_start = mag_start;
+                    weapons[w].mag_index_count = mag_count;
+                    weapons[w].has_mag_submesh = has_mag;
+                }
                 break;
             }
         }
-        if (!weapon.mesh_loaded)
+        if (!weapons[0].mesh_loaded)
             printf("WARNING: Could not load viewmodel (tried assets/, ../assets/, ./)\n");
     }
 
@@ -560,7 +574,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (!show_settings) {
-            float sens_scale = 1.0f - weapon.ads_blend * (1.0f - weapon.config.ads_sens_mult);
+            float sens_scale = 1.0f - weapons[active_weapon].ads_blend * (1.0f - weapons[active_weapon].config.ads_sens_mult);
             camera.mouse_look(mouse_dx * sens_scale, mouse_dy * sens_scale);
         }
 
@@ -647,8 +661,34 @@ int main(int argc, char* argv[]) {
 
         total_time += dt;
 
+        // --- Weapon switching ---
+        {
+            // Number keys to switch weapons
+            for (int w = 0; w < num_weapons && w < MAX_WEAPONS; w++) {
+                if (keys_frame[SDL_SCANCODE_1 + w] && w != active_weapon && !show_settings) {
+                    if (weapons[active_weapon].state != WeaponState::SWAPPING) {
+                        pending_weapon = w;
+                        weapons[active_weapon].begin_swap();
+                    }
+                }
+            }
+
+            // Check if lowering is done — swap weapon data and start raising
+            Weapon& aw = weapons[active_weapon];
+            if (aw.state == WeaponState::SWAPPING && !aw.swap_raising && aw.swap_timer <= 0.0f
+                && pending_weapon >= 0) {
+                active_weapon = pending_weapon;
+                pending_weapon = -1;
+                Weapon& nw = weapons[active_weapon];
+                nw.state = WeaponState::SWAPPING;
+                nw.swap_timer = nw.swap_duration;
+                nw.swap_raising = true;
+            }
+        }
+
         // --- Weapon update & shooting ---
         {
+            Weapon& weapon = weapons[active_weapon];
             bool holstered = player.weapon_holstered;
             bool fire_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Shoot, keys_frame);
             bool reload_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Reload, keys_frame);
@@ -997,6 +1037,12 @@ int main(int argc, char* argv[]) {
             rooms_cleared++;
             player.health = player.max_health;
             player.damage_accum = 0.0f;
+            // Refill all weapon ammo on room transition
+            for (int w = 0; w < MAX_WEAPONS; w++) {
+                weapons[w].ammo = weapons[w].config.mag_size;
+                weapons[w].state = WeaponState::IDLE;
+                weapons[w].reload_phase = ReloadPhase::NONE;
+            }
             printf("Entering room %d...\n", rooms_cleared + 1);
             procgen_cfg.seed = 0; // random seed each time
             procgen_cfg.room_number = rooms_cleared + 1;
@@ -1178,18 +1224,24 @@ int main(int argc, char* argv[]) {
 
             // --- Weapon HUD ---
             ImGui::Separator();
-            ImGui::Text("Wingman  %d / %d", weapon.ammo, weapon.config.mag_size);
-            if (weapon.state == WeaponState::RELOADING) {
-                float pct = 1.0f - weapon.reload_timer / weapon.config.reload_time;
-                ImGui::ProgressBar(pct, ImVec2(-1, 4), "");
-                const char* phase_name =
-                    weapon.reload_phase == ReloadPhase::MAG_OUT  ? "MAG OUT" :
-                    weapon.reload_phase == ReloadPhase::MAG_SWAP ? "MAG SWAP" :
-                    weapon.reload_phase == ReloadPhase::GUN_UP   ? "GUN UP" : "RELOADING";
-                ImGui::TextColored(ImVec4(1,1,0,1), "%s...", phase_name);
+            {
+                Weapon& w = weapons[active_weapon];
+                ImGui::Text("[%d] %s  %d / %d", active_weapon + 1, w.config.name,
+                            w.ammo, w.config.mag_size);
+                if (w.state == WeaponState::RELOADING) {
+                    float pct = 1.0f - w.reload_timer / w.config.reload_time;
+                    ImGui::ProgressBar(pct, ImVec2(-1, 4), "");
+                    const char* phase_name =
+                        w.reload_phase == ReloadPhase::MAG_OUT  ? "MAG OUT" :
+                        w.reload_phase == ReloadPhase::MAG_SWAP ? "MAG SWAP" :
+                        w.reload_phase == ReloadPhase::GUN_UP   ? "GUN UP" : "RELOADING";
+                    ImGui::TextColored(ImVec4(1,1,0,1), "%s...", phase_name);
+                }
+                if (w.state == WeaponState::SWAPPING)
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Swapping...");
+                if (w.ads_blend > 0.01f)
+                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "ADS");
             }
-            if (weapon.ads_blend > 0.01f)
-                ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "ADS");
 
             ImGui::Separator();
             ImGui::TextDisabled("ESC: settings  H: hide HUD  R: reload  RMB: aim");
@@ -1410,60 +1462,61 @@ int main(int argc, char* argv[]) {
             // --- Enemies ---
             if (ImGui::CollapsingHeader("Weapon")) {
                 ImGui::Text("State: %s",
-                    weapon.state == WeaponState::IDLE ? "Idle" :
-                    weapon.state == WeaponState::FIRING ? "Firing" :
-                    weapon.state == WeaponState::RELOADING ? "Reloading" : "?");
+                    weapons[active_weapon].state == WeaponState::IDLE ? "Idle" :
+                    weapons[active_weapon].state == WeaponState::FIRING ? "Firing" :
+                    weapons[active_weapon].state == WeaponState::RELOADING ? "Reloading" :
+                    weapons[active_weapon].state == WeaponState::SWAPPING ? "Swapping" : "?");
                 ImGui::Separator();
 
-                ImGui::SliderFloat("Damage",       &weapon.config.damage,     1.0f, 200.0f);
-                ImGui::SliderFloat("Fire Rate",    &weapon.config.fire_rate,  0.5f, 10.0f, "%.1f shots/s");
-                ImGui::SliderFloat("Range",        &weapon.config.range,      10.0f, 500.0f);
-                ImGui::SliderFloat("Reload Time",  &weapon.config.reload_time, 0.5f, 5.0f, "%.1fs");
-                ImGui::SliderFloat("Crit Multi",   &weapon.config.crit_multiplier, 1.0f, 5.0f, "%.1fx");
+                ImGui::SliderFloat("Damage",       &weapons[active_weapon].config.damage,     1.0f, 200.0f);
+                ImGui::SliderFloat("Fire Rate",    &weapons[active_weapon].config.fire_rate,  0.5f, 10.0f, "%.1f shots/s");
+                ImGui::SliderFloat("Range",        &weapons[active_weapon].config.range,      10.0f, 500.0f);
+                ImGui::SliderFloat("Reload Time",  &weapons[active_weapon].config.reload_time, 0.5f, 5.0f, "%.1fs");
+                ImGui::SliderFloat("Crit Multi",   &weapons[active_weapon].config.crit_multiplier, 1.0f, 5.0f, "%.1fx");
                 ImGui::Separator();
 
                 ImGui::Text("Viewmodel");
-                ImGui::SliderFloat("Model Scale",     &weapon.config.model_scale, 0.01f, 5.0f, "%.3f");
-                ImGui::SliderFloat3("Model Rotation", &weapon.config.model_rotation.X, -180.0f, 180.0f, "%.1f deg");
-                ImGui::SliderFloat3("Hip Offset",     &weapon.config.hip_offset.X, -1.0f, 1.0f, "%.3f");
-                ImGui::SliderFloat3("ADS Offset",     &weapon.config.ads_offset.X, -1.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat("Model Scale",     &weapons[active_weapon].config.model_scale, 0.01f, 5.0f, "%.3f");
+                ImGui::SliderFloat3("Model Rotation", &weapons[active_weapon].config.model_rotation.X, -180.0f, 180.0f, "%.1f deg");
+                ImGui::SliderFloat3("Hip Offset",     &weapons[active_weapon].config.hip_offset.X, -1.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat3("ADS Offset",     &weapons[active_weapon].config.ads_offset.X, -1.0f, 1.0f, "%.3f");
                 ImGui::Separator();
 
                 ImGui::Text("ADS");
-                ImGui::SliderFloat("ADS FOV Mult",  &weapon.config.ads_fov_mult,  0.5f, 1.0f, "%.2f");
-                ImGui::SliderFloat("ADS Sens Mult", &weapon.config.ads_sens_mult, 0.1f, 1.0f, "%.2f");
-                ImGui::SliderFloat("ADS Speed",     &weapon.config.ads_speed,     1.0f, 20.0f);
+                ImGui::SliderFloat("ADS FOV Mult",  &weapons[active_weapon].config.ads_fov_mult,  0.5f, 1.0f, "%.2f");
+                ImGui::SliderFloat("ADS Sens Mult", &weapons[active_weapon].config.ads_sens_mult, 0.1f, 1.0f, "%.2f");
+                ImGui::SliderFloat("ADS Speed",     &weapons[active_weapon].config.ads_speed,     1.0f, 20.0f);
                 ImGui::Separator();
 
                 ImGui::Text("Recoil");
-                ImGui::SliderFloat("Recoil Kick",     &weapon.config.recoil_kick,     0.0f, 0.2f, "%.3f");
-                ImGui::SliderFloat("Recoil Pitch",    &weapon.config.recoil_pitch,    -60.0f, 60.0f, "%.1f deg");
-                ImGui::SliderFloat("Recoil Roll",     &weapon.config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
-                ImGui::SliderFloat("Recoil Side",     &weapon.config.recoil_side,     0.0f, 0.1f, "%.3f");
-                ImGui::SliderFloat("Recoil Recovery", &weapon.config.recoil_recovery, 1.0f, 30.0f);
+                ImGui::SliderFloat("Recoil Kick",     &weapons[active_weapon].config.recoil_kick,     0.0f, 0.2f, "%.3f");
+                ImGui::SliderFloat("Recoil Pitch",    &weapons[active_weapon].config.recoil_pitch,    -60.0f, 60.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Roll",     &weapons[active_weapon].config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
+                ImGui::SliderFloat("Recoil Side",     &weapons[active_weapon].config.recoil_side,     0.0f, 0.1f, "%.3f");
+                ImGui::SliderFloat("Recoil Recovery", &weapons[active_weapon].config.recoil_recovery, 1.0f, 30.0f);
                 {
                     const char* tilt_items[] = { "Right", "Left" };
-                    int tilt_idx = (weapon.config.recoil_tilt_dir >= 0.0f) ? 0 : 1;
+                    int tilt_idx = (weapons[active_weapon].config.recoil_tilt_dir >= 0.0f) ? 0 : 1;
                     if (ImGui::Combo("Tilt Direction", &tilt_idx, tilt_items, 2))
-                        weapon.config.recoil_tilt_dir = (tilt_idx == 0) ? 1.0f : -1.0f;
+                        weapons[active_weapon].config.recoil_tilt_dir = (tilt_idx == 0) ? 1.0f : -1.0f;
                 }
-                ImGui::SliderFloat("Reload Buffer Delay", &weapon.config.reload_buffer_delay, 0.0f, 1.0f, "%.2fs");
+                ImGui::SliderFloat("Reload Buffer Delay", &weapons[active_weapon].config.reload_buffer_delay, 0.0f, 1.0f, "%.2fs");
                 ImGui::Separator();
 
                 ImGui::Text("Reload Anim (3-phase)");
-                ImGui::SliderFloat("Phase1 End (mag out)", &weapon.config.reload_phase1, 0.05f, 0.5f, "%.2f");
-                ImGui::SliderFloat("Phase2 End (mag swap)", &weapon.config.reload_phase2, 0.1f, 0.9f, "%.2f");
-                ImGui::SliderFloat("Reload Drop",     &weapon.config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
-                ImGui::SliderFloat("Reload Tilt",     &weapon.config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
-                ImGui::SliderFloat("Mag Drop Dist",   &weapon.config.mag_drop_dist,    0.0f, 1.0f, "%.3f");
-                ImGui::SliderFloat("Mag Insert Dist", &weapon.config.mag_insert_dist,  0.0f, 0.5f, "%.3f");
-                if (weapon.has_mag_submesh)
-                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Mag sub-mesh: found (%u indices)", weapon.mag_index_count);
+                ImGui::SliderFloat("Phase1 End (mag out)", &weapons[active_weapon].config.reload_phase1, 0.05f, 0.5f, "%.2f");
+                ImGui::SliderFloat("Phase2 End (mag swap)", &weapons[active_weapon].config.reload_phase2, 0.1f, 0.9f, "%.2f");
+                ImGui::SliderFloat("Reload Drop",     &weapons[active_weapon].config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
+                ImGui::SliderFloat("Reload Tilt",     &weapons[active_weapon].config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
+                ImGui::SliderFloat("Mag Drop Dist",   &weapons[active_weapon].config.mag_drop_dist,    0.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat("Mag Insert Dist", &weapons[active_weapon].config.mag_insert_dist,  0.0f, 0.5f, "%.3f");
+                if (weapons[active_weapon].has_mag_submesh)
+                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Mag sub-mesh: found (%u indices)", weapons[active_weapon].mag_index_count);
                 else
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "Mag sub-mesh: not found");
 
                 if (ImGui::Button("Reset Weapon Defaults")) {
-                    weapon.init_wingman();
+                    weapons[active_weapon].init_wingman();
                 }
             }
 
@@ -1797,7 +1850,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Use weapon's effective FOV (accounts for ADS)
-        float effective_fov = weapon.get_effective_fov(camera.fov);
+        float effective_fov = weapons[active_weapon].get_effective_fov(camera.fov);
         Camera render_cam = camera;
         render_cam.fov = effective_fov;
 
@@ -1808,9 +1861,9 @@ int main(int argc, char* argv[]) {
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
         // Viewmodel scene data — same view, but tighter near plane to prevent clipping
-        const Mesh* vm_mesh_ptr = (weapon.mesh_loaded && !player.weapon_holstered) ? &weapon.viewmodel_mesh : nullptr;
-        HMM_Mat4 vm_model = weapon.get_viewmodel_matrix(camera);
-        HMM_Mat4 vm_mag_model = weapon.get_mag_matrix(camera);
+        const Mesh* vm_mesh_ptr = (weapons[active_weapon].mesh_loaded && !player.weapon_holstered) ? &weapons[active_weapon].viewmodel_mesh : nullptr;
+        HMM_Mat4 vm_model = weapons[active_weapon].get_viewmodel_matrix(camera);
+        HMM_Mat4 vm_mag_model = weapons[active_weapon].get_mag_matrix(camera);
         SceneData vm_scene = scene;
         {
             Camera vm_cam = render_cam;
@@ -1818,9 +1871,9 @@ int main(int argc, char* argv[]) {
             vm_scene.projection = vm_cam.projection_matrix(aspect);
         }
 
-        const HMM_Mat4* mag_ptr = weapon.has_mag_submesh ? &vm_mag_model : nullptr;
-        uint32_t mag_start = weapon.has_mag_submesh ? weapon.mag_index_start : 0;
-        uint32_t mag_count = weapon.has_mag_submesh ? weapon.mag_index_count : 0;
+        const HMM_Mat4* mag_ptr = weapons[active_weapon].has_mag_submesh ? &vm_mag_model : nullptr;
+        uint32_t mag_start = weapons[active_weapon].has_mag_submesh ? weapons[active_weapon].mag_index_start : 0;
+        uint32_t mag_count = weapons[active_weapon].has_mag_submesh ? weapons[active_weapon].mag_index_count : 0;
 
         const Mesh* trans_ptr = transparent_mesh.indices.empty() ? nullptr : &transparent_mesh;
         renderer.draw_frame(scene, &entity_mesh, &particle_verts, &particle_indices,
