@@ -1142,7 +1142,7 @@ int main(int argc, char* argv[]) {
                         break; // one hit per projectile
                     }
                 }
-                if (hit_something) { if (proj.owner == -3) { proj.velocity = {}; proj.ai_state = 1; proj.lifetime = 1.5f; } else { proj.alive = false; } }
+                if (hit_something) proj.alive = false;
             }
 
             // --- Projectile-player collision (capsule hitbox) ---

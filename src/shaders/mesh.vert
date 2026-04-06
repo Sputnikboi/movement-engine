@@ -22,7 +22,7 @@ layout(location = 2) out vec3 frag_color;
 void main() {
     vec4 world_pos = pc.model * vec4(in_position, 1.0);
     frag_world_pos = world_pos.xyz;
-    frag_normal    = mat3(pc.model) * in_normal;  // correct for uniform scale
+    frag_normal    = normalize(mat3(pc.model) * in_normal);  // normalize to handle scaled models
     frag_color     = in_color;
     gl_Position    = scene.projection * scene.view * world_pos;
 }
