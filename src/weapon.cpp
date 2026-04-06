@@ -33,7 +33,7 @@ void Weapon::init_wingman() {
 
     config.model_scale     = 1.0f;
     config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
-    config.model_path      = "Kunai.glb";
+    config.model_path      = nullptr;
 
     config.reload_phase1    = 0.25f;
     config.reload_phase2    = 0.80f;
@@ -130,8 +130,9 @@ void Weapon::init_knife() {
 
     config.reload_buffer_delay = 0.0f;
 
-    config.model_scale     = 1.0f;
-    config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
+    config.model_scale     = 0.08f;
+    config.model_rotation  = HMM_V3(0.0f, 0.0f, 0.0f);
+    config.model_path      = "Kunai.glb";
 
     config.reload_phase1    = 0.0f;
     config.reload_phase2    = 0.0f;

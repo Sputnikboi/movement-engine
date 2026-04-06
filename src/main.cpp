@@ -1573,63 +1573,82 @@ int main(int argc, char* argv[]) {
             }
 
             // --- Enemies ---
-            if (ImGui::CollapsingHeader("Weapon")) {
-                ImGui::Text("State: %s",
-                    weapons[active_weapon].state == WeaponState::IDLE ? "Idle" :
-                    weapons[active_weapon].state == WeaponState::FIRING ? "Firing" :
-                    weapons[active_weapon].state == WeaponState::RELOADING ? "Reloading" :
-                    weapons[active_weapon].state == WeaponState::SWAPPING ? "Swapping" : "?");
-                ImGui::Separator();
+            if (ImGui::CollapsingHeader("Weapons")) {
+                for (int w = 0; w < num_weapons && w < MAX_WEAPONS; w++) {
+                    Weapon& wep = weapons[w];
+                    char label[64];
+                    snprintf(label, sizeof(label), "[%d] %s%s", w + 1, wep.config.name,
+                             (w == active_weapon) ? " (active)" : "");
+                    if (ImGui::TreeNode(label)) {
+                        ImGui::PushID(w);
+                        if (w == active_weapon) {
+                            ImGui::Text("State: %s",
+                                wep.state == WeaponState::IDLE ? "Idle" :
+                                wep.state == WeaponState::FIRING ? "Firing" :
+                                wep.state == WeaponState::RELOADING ? "Reloading" :
+                                wep.state == WeaponState::SWAPPING ? "Swapping" : "?");
+                        }
+                        ImGui::Separator();
 
-                ImGui::SliderFloat("Damage",       &weapons[active_weapon].config.damage,     1.0f, 200.0f);
-                ImGui::SliderFloat("Fire Rate",    &weapons[active_weapon].config.fire_rate,  0.5f, 10.0f, "%.1f shots/s");
-                ImGui::SliderFloat("Range",        &weapons[active_weapon].config.range,      10.0f, 500.0f);
-                ImGui::SliderFloat("Reload Time",  &weapons[active_weapon].config.reload_time, 0.5f, 5.0f, "%.1fs");
-                ImGui::SliderFloat("Crit Multi",   &weapons[active_weapon].config.crit_multiplier, 1.0f, 5.0f, "%.1fx");
-                ImGui::Separator();
+                        ImGui::SliderFloat("Damage",       &wep.config.damage,     1.0f, 200.0f);
+                        ImGui::SliderFloat("Fire Rate",    &wep.config.fire_rate,  0.5f, 10.0f, "%.1f shots/s");
+                        ImGui::SliderFloat("Range",        &wep.config.range,      10.0f, 500.0f);
+                        ImGui::SliderFloat("Reload Time",  &wep.config.reload_time, 0.5f, 5.0f, "%.1fs");
+                        ImGui::SliderFloat("Crit Multi",   &wep.config.crit_multiplier, 1.0f, 5.0f, "%.1fx");
+                        ImGui::Separator();
 
-                ImGui::Text("Viewmodel");
-                ImGui::SliderFloat("Model Scale",     &weapons[active_weapon].config.model_scale, 0.01f, 5.0f, "%.3f");
-                ImGui::SliderFloat3("Model Rotation", &weapons[active_weapon].config.model_rotation.X, -180.0f, 180.0f, "%.1f deg");
-                ImGui::SliderFloat3("Hip Offset",     &weapons[active_weapon].config.hip_offset.X, -1.0f, 1.0f, "%.3f");
-                ImGui::SliderFloat3("ADS Offset",     &weapons[active_weapon].config.ads_offset.X, -1.0f, 1.0f, "%.3f");
-                ImGui::Separator();
+                        ImGui::Text("Viewmodel");
+                        ImGui::SliderFloat("Model Scale",     &wep.config.model_scale, 0.001f, 5.0f, "%.3f");
+                        ImGui::SliderFloat3("Model Rotation", &wep.config.model_rotation.X, -180.0f, 180.0f, "%.1f deg");
+                        ImGui::SliderFloat3("Hip Offset",     &wep.config.hip_offset.X, -1.0f, 1.0f, "%.3f");
+                        ImGui::SliderFloat3("ADS Offset",     &wep.config.ads_offset.X, -1.0f, 1.0f, "%.3f");
+                        ImGui::Separator();
 
-                ImGui::Text("ADS");
-                ImGui::SliderFloat("ADS FOV Mult",  &weapons[active_weapon].config.ads_fov_mult,  0.5f, 1.0f, "%.2f");
-                ImGui::SliderFloat("ADS Sens Mult", &weapons[active_weapon].config.ads_sens_mult, 0.1f, 1.0f, "%.2f");
-                ImGui::SliderFloat("ADS Speed",     &weapons[active_weapon].config.ads_speed,     1.0f, 20.0f);
-                ImGui::Separator();
+                        ImGui::Text("ADS");
+                        ImGui::SliderFloat("ADS FOV Mult",  &wep.config.ads_fov_mult,  0.5f, 1.0f, "%.2f");
+                        ImGui::SliderFloat("ADS Sens Mult", &wep.config.ads_sens_mult, 0.1f, 1.0f, "%.2f");
+                        ImGui::SliderFloat("ADS Speed",     &wep.config.ads_speed,     1.0f, 20.0f);
+                        ImGui::Separator();
 
-                ImGui::Text("Recoil");
-                ImGui::SliderFloat("Recoil Kick",     &weapons[active_weapon].config.recoil_kick,     0.0f, 0.2f, "%.3f");
-                ImGui::SliderFloat("Recoil Pitch",    &weapons[active_weapon].config.recoil_pitch,    -60.0f, 60.0f, "%.1f deg");
-                ImGui::SliderFloat("Recoil Roll",     &weapons[active_weapon].config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
-                ImGui::SliderFloat("Recoil Side",     &weapons[active_weapon].config.recoil_side,     0.0f, 0.1f, "%.3f");
-                ImGui::SliderFloat("Recoil Recovery", &weapons[active_weapon].config.recoil_recovery, 1.0f, 30.0f);
-                {
-                    const char* tilt_items[] = { "Right", "Left" };
-                    int tilt_idx = (weapons[active_weapon].config.recoil_tilt_dir >= 0.0f) ? 0 : 1;
-                    if (ImGui::Combo("Tilt Direction", &tilt_idx, tilt_items, 2))
-                        weapons[active_weapon].config.recoil_tilt_dir = (tilt_idx == 0) ? 1.0f : -1.0f;
-                }
-                ImGui::SliderFloat("Reload Buffer Delay", &weapons[active_weapon].config.reload_buffer_delay, 0.0f, 1.0f, "%.2fs");
-                ImGui::Separator();
+                        ImGui::Text("Recoil");
+                        ImGui::SliderFloat("Recoil Kick",     &wep.config.recoil_kick,     0.0f, 0.2f, "%.3f");
+                        ImGui::SliderFloat("Recoil Pitch",    &wep.config.recoil_pitch,    -60.0f, 60.0f, "%.1f deg");
+                        ImGui::SliderFloat("Recoil Roll",     &wep.config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
+                        ImGui::SliderFloat("Recoil Side",     &wep.config.recoil_side,     0.0f, 0.1f, "%.3f");
+                        ImGui::SliderFloat("Recoil Recovery", &wep.config.recoil_recovery, 1.0f, 30.0f);
+                        {
+                            const char* tilt_items[] = { "Right", "Left" };
+                            int tilt_idx = (wep.config.recoil_tilt_dir >= 0.0f) ? 0 : 1;
+                            if (ImGui::Combo("Tilt Direction", &tilt_idx, tilt_items, 2))
+                                wep.config.recoil_tilt_dir = (tilt_idx == 0) ? 1.0f : -1.0f;
+                        }
+                        ImGui::SliderFloat("Reload Buffer Delay", &wep.config.reload_buffer_delay, 0.0f, 1.0f, "%.2fs");
+                        ImGui::Separator();
 
-                ImGui::Text("Reload Anim (3-phase)");
-                ImGui::SliderFloat("Phase1 End (mag out)", &weapons[active_weapon].config.reload_phase1, 0.05f, 0.5f, "%.2f");
-                ImGui::SliderFloat("Phase2 End (mag swap)", &weapons[active_weapon].config.reload_phase2, 0.1f, 0.9f, "%.2f");
-                ImGui::SliderFloat("Reload Drop",     &weapons[active_weapon].config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
-                ImGui::SliderFloat("Reload Tilt",     &weapons[active_weapon].config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
-                ImGui::SliderFloat("Mag Drop Dist",   &weapons[active_weapon].config.mag_drop_dist,    0.0f, 1.0f, "%.3f");
-                ImGui::SliderFloat("Mag Insert Dist", &weapons[active_weapon].config.mag_insert_dist,  0.0f, 0.5f, "%.3f");
-                if (weapons[active_weapon].has_mag_submesh)
-                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Mag sub-mesh: found (%u indices)", weapons[active_weapon].mag_index_count);
-                else
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "Mag sub-mesh: not found");
+                        ImGui::Text("Reload Anim (3-phase)");
+                        ImGui::SliderFloat("Phase1 End (mag out)", &wep.config.reload_phase1, 0.05f, 0.5f, "%.2f");
+                        ImGui::SliderFloat("Phase2 End (mag swap)", &wep.config.reload_phase2, 0.1f, 0.9f, "%.2f");
+                        ImGui::SliderFloat("Reload Drop",     &wep.config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
+                        ImGui::SliderFloat("Reload Tilt",     &wep.config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
+                        ImGui::SliderFloat("Mag Drop Dist",   &wep.config.mag_drop_dist,    0.0f, 1.0f, "%.3f");
+                        ImGui::SliderFloat("Mag Insert Dist", &wep.config.mag_insert_dist,  0.0f, 0.5f, "%.3f");
+                        if (wep.has_mag_submesh)
+                            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Mag sub-mesh: found (%u indices)", wep.mag_index_count);
+                        else
+                            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "Mag sub-mesh: not found");
 
-                if (ImGui::Button("Reset Weapon Defaults")) {
-                    weapons[active_weapon].init_wingman();
+                        char reset_label[64];
+                        snprintf(reset_label, sizeof(reset_label), "Reset %s Defaults", wep.config.name);
+                        if (ImGui::Button(reset_label)) {
+                            switch (w) {
+                                case 0: wep.init_wingman(); break;
+                                case 1: wep.init_glock();   break;
+                                case 2: wep.init_knife();   break;
+                            }
+                        }
+                        ImGui::PopID();
+                        ImGui::TreePop();
+                    }
                 }
             }
 
