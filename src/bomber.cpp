@@ -327,8 +327,9 @@ bool bomber_check_explosion(Entity& bomber, HMM_Vec3 cap_bottom, HMM_Vec3 cap_to
                             float player_radius, const BomberConfig& config,
                             float& damage_out, HMM_Vec3& knockback_out) {
     if (bomber.ai_state != BOMBER_EXPLODING) return false;
-    // Only on first frame of explosion
-    if (bomber.ai_timer < 0.05f) return false;
+    // Only trigger once (ai_dir used as exploded flag)
+    if (bomber.ai_dir == 0) return false;
+    bomber.ai_dir = 0;
 
     // Closest point on player capsule to bomber
     HMM_Vec3 closest = closest_point_on_segment(bomber.position, cap_bottom, cap_top);

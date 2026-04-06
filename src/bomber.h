@@ -39,7 +39,7 @@ struct BomberConfig {
     float radius            = 0.8f;
 
     // Explosion (on ground impact)
-    float explosion_damage  = 25.0f;
+    float explosion_damage  = 15.0f;
     float explosion_radius  = 5.0f;
     float explosion_knockback = 0.4f;
 
