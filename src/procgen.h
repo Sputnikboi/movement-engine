@@ -15,62 +15,60 @@ struct ProcGenConfig {
     // Boxes / cover
     int   box_count_min    = 8;
     int   box_count_max    = 20;
-    float box_size_min     = 1.0f;
-    float box_size_max     = 4.0f;
+    float box_size_min     = 1.5f;
+    float box_size_max     = 3.5f;
     float box_height_min   = 1.0f;
     float box_height_max   = 5.0f;
     float box_margin       = 2.0f;   // min distance from walls
     float box_stack_chance = 0.3f;   // chance a box gets a smaller box stacked on top
+    float box_tilt_max     = 0.15f;  // max pitch/roll tilt in radians (~8.5 deg)
 
-    // Platforms / raised areas
-    int   platform_count_min = 1;
-    int   platform_count_max = 2;
-    float platform_height_min = 2.0f;
-    float platform_height_max = 5.0f;
-    float platform_size_min   = 5.0f;
-    float platform_size_max   = 16.0f;
+    // Box clusters
+    float cluster_chance   = 0.4f;   // chance a box spawns as cluster center
+    int   cluster_size_min = 3;
+    int   cluster_size_max = 5;
+
+    // Floor terrain (smooth hills/depressions)
+    int   hill_count_min   = 2;
+    int   hill_count_max   = 5;
+    float hill_height_min  = 1.0f;
+    float hill_height_max  = 4.0f;
+    float hill_radius_min  = 8.0f;
+    float hill_radius_max  = 20.0f;
+    int   floor_grid_res   = 32;     // grid subdivisions
 
     // Tall structures (pillars, towers)
     int   tall_count_min   = 3;
     int   tall_count_max   = 6;
-    float tall_size_min    = 2.0f;   // footprint
+    float tall_size_min    = 2.0f;
     float tall_size_max    = 6.0f;
     float tall_height_min  = 10.0f;
     float tall_height_max  = 22.0f;
     HMM_Vec3 tall_color    = {0.28f, 0.28f, 0.33f};
 
-    // Ramps (connect floor to platforms)
-    bool  gen_ramps        = true;
-    float ramp_width       = 3.0f;
-
     // Enemies
     int   drone_count      = 5;
     int   rusher_count     = 4;
-    float enemy_height     = 3.0f;   // spawn height above floor
+    float enemy_height     = 3.0f;
 
     // Colors
     HMM_Vec3 floor_color   = {0.3f, 0.3f, 0.35f};
     HMM_Vec3 wall_color    = {0.25f, 0.25f, 0.3f};
     HMM_Vec3 ceiling_color = {0.2f, 0.2f, 0.25f};
     HMM_Vec3 box_color     = {0.4f, 0.35f, 0.3f};
-    HMM_Vec3 platform_color = {0.35f, 0.3f, 0.35f};
     HMM_Vec3 ramp_color    = {0.35f, 0.35f, 0.3f};
 
     // Seed (0 = random)
     unsigned int seed      = 0;
 };
 
-// Door placement info (returned with level)
 struct DoorInfo {
-    HMM_Vec3 position;     // bottom center
-    float    yaw;          // rotation to face into room (radians)
-    bool     is_exit;      // false = entry, true = exit
-    bool     locked;       // exit starts locked
+    HMM_Vec3 position;
+    float    yaw;
+    bool     is_exit;
+    bool     locked;
 };
 
-// Generate a procedural level. Returns LevelData with mesh,
-// spawn point, enemy spawn positions, and door info.
-// door_mesh: if non-null, the door model gets merged into the level mesh.
 LevelData generate_level(const ProcGenConfig& config,
                          const Mesh* door_mesh = nullptr,
                          std::vector<DoorInfo>* doors_out = nullptr);

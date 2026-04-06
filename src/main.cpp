@@ -1125,9 +1125,13 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Room Height", &procgen_cfg.room_height, 5.0f, 25.0f, "%.0f");
                 ImGui::SliderInt("Boxes Min", &procgen_cfg.box_count_min, 0, 30);
                 ImGui::SliderInt("Boxes Max", &procgen_cfg.box_count_max, 0, 30);
-                ImGui::SliderInt("Platforms Min", &procgen_cfg.platform_count_min, 0, 4);
-                ImGui::SliderInt("Platforms Max", &procgen_cfg.platform_count_max, 0, 4);
-                ImGui::Checkbox("Ramps", &procgen_cfg.gen_ramps);
+                ImGui::SliderInt("Hills Min", &procgen_cfg.hill_count_min, 0, 8);
+                ImGui::SliderInt("Hills Max", &procgen_cfg.hill_count_max, 0, 8);
+                ImGui::SliderFloat("Hill Height", &procgen_cfg.hill_height_max, 0.5f, 8.0f);
+                ImGui::SliderFloat("Hill Radius", &procgen_cfg.hill_radius_max, 4.0f, 30.0f);
+                ImGui::SliderFloat("Cluster Chance", &procgen_cfg.cluster_chance, 0.0f, 1.0f);
+                ImGui::SliderFloat("Stack Chance", &procgen_cfg.box_stack_chance, 0.0f, 1.0f);
+                ImGui::SliderFloat("Box Tilt", &procgen_cfg.box_tilt_max, 0.0f, 0.4f);
                 ImGui::SliderInt("Tall Min", &procgen_cfg.tall_count_min, 0, 15);
                 ImGui::SliderInt("Tall Max", &procgen_cfg.tall_count_max, 0, 15);
                 ImGui::SliderInt("Drones", &procgen_cfg.drone_count, 0, 20);
