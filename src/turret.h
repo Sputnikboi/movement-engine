@@ -41,7 +41,7 @@ struct TurretConfig {
     float burst_interval    = 0.12f;  // time between burst shots
     float cooldown_time     = 2.5f;   // time between bursts
     float accuracy          = 0.97f;  // 1.0 = perfect, lower = more spread
-    float track_speed       = 2.5f;   // radians/s rotation speed
+    float track_speed       = 1.2f;   // radians/s rotation speed
 
     // Death
     float death_gravity     = 15.0f;

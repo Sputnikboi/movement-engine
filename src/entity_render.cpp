@@ -521,6 +521,13 @@ static void append_emissive_quad(Mesh& out,
     out.indices.push_back(base + 0);
     out.indices.push_back(base + 2);
     out.indices.push_back(base + 3);
+    // Back face (double-sided)
+    out.indices.push_back(base + 2);
+    out.indices.push_back(base + 1);
+    out.indices.push_back(base + 0);
+    out.indices.push_back(base + 3);
+    out.indices.push_back(base + 2);
+    out.indices.push_back(base + 0);
 }
 
 // Build a camera-facing beam from `start` to `end` with given half-width
