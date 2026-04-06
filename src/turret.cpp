@@ -292,28 +292,21 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
 bool turret_check_player_hit(Entity& turret, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                              float player_radius, const CollisionWorld& world,
                              const TurretConfig& config, float& damage_out) {
+    // Continuous beam: deals DPS every frame while FIRING
     if (turret.ai_state != TURRET_FIRING) return false;
 
-    float time_since_shot = config.burst_interval - turret.ai_timer;
-    if (time_since_shot < 0.0f || time_since_shot > config.burst_interval * 0.15f) return false;
-    if (turret.ai_timer2 < 1.0f) return false;
-
-    // Aim direction: towards capsule center with spread
-    HMM_Vec3 cap_center = HMM_MulV3F(HMM_AddV3(cap_bottom, cap_top), 0.5f);
-    HMM_Vec3 to_player = HMM_SubV3(cap_center, turret.position);
-    float dist = HMM_LenV3(to_player);
-    if (dist < 0.1f) { damage_out = config.hitscan_damage; return true; }
-
-    HMM_Vec3 aim = HMM_MulV3F(to_player, 1.0f / dist);
+    // Beam direction from turret's current aim
+    float cp = cosf(turret.pitch);
+    HMM_Vec3 aim = HMM_V3(sinf(turret.yaw) * cp, sinf(turret.pitch), cosf(turret.yaw) * cp);
 
     // Add accuracy spread
-    float spread = (1.0f - config.accuracy) * 0.5f;
+    float spread = (1.0f - config.accuracy) * 0.3f;
     aim.X += randf(-spread, spread);
     aim.Y += randf(-spread * 0.5f, spread * 0.5f);
     aim.Z += randf(-spread, spread);
     aim = HMM_NormV3(aim);
 
-    // Hitscan: ray vs player capsule
+    // Ray vs player capsule
     float t = ray_capsule(turret.position, aim, config.detection_range,
                           cap_bottom, cap_top, player_radius);
     if (t < 0) return false;
@@ -322,7 +315,8 @@ bool turret_check_player_hit(Entity& turret, HMM_Vec3 cap_bottom, HMM_Vec3 cap_t
     HitResult wall = world.raycast(turret.position, aim, t);
     if (wall.hit) return false;
 
-    damage_out = config.hitscan_damage;
+    // damage_out will be multiplied by dt in caller
+    damage_out = config.beam_dps;
     return true;
 }
 

@@ -814,8 +814,9 @@ int main(int argc, char* argv[]) {
                         float tdmg = 0.0f;
                         if (turret_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
                                                     player.radius, collision, turret_cfg, tdmg)) {
-                            player.health -= tdmg;
-                            player.damage_accum += tdmg;
+                            float dmg = tdmg * dt;  // beam_dps * dt
+                            player.health -= dmg;
+                            player.damage_accum += dmg;
                         }
                     }
                 }
@@ -1332,7 +1333,7 @@ int main(int argc, char* argv[]) {
 
                         auto dr = drone_cfg;   dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
                         auto ru = rusher_cfg;  ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
-                        auto tu = turret_cfg;  tu.health *= hp_s; tu.hitscan_damage *= dm_s; tu.track_speed *= sp_s;
+                        auto tu = turret_cfg;  tu.health *= hp_s; tu.beam_dps *= dm_s; tu.track_speed *= sp_s;
                         auto tk = tank_cfg;    tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
                         auto bo = bomber_cfg;  bo.health *= hp_s; bo.explosion_damage *= dm_s; bo.approach_speed *= sp_s; bo.dive_speed *= sp_s;
                         auto sh = shielder_cfg; sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
@@ -1529,7 +1530,7 @@ int main(int argc, char* argv[]) {
                     ImGui::SliderFloat("Health",          &turret_cfg.health,          1.0f, 50.0f);
                     ImGui::SliderFloat("Radius",          &turret_cfg.radius,          0.3f, 2.0f);
                     ImGui::SliderFloat("Detection Range", &turret_cfg.detection_range, 10.0f, 80.0f);
-                    ImGui::SliderFloat("Hitscan Damage",  &turret_cfg.hitscan_damage,  1.0f, 30.0f);
+                    ImGui::SliderFloat("Beam DPS",        &turret_cfg.beam_dps,        5.0f, 100.0f);
                     ImGui::SliderFloat("Windup Time",     &turret_cfg.windup_time,     0.2f, 3.0f, "%.2fs");
                     ImGui::SliderFloat("Burst Count",     &turret_cfg.burst_count_f,   1.0f, 10.0f, "%.0f");
                     ImGui::SliderFloat("Burst Interval",  &turret_cfg.burst_interval,  0.05f, 0.5f, "%.2fs");

@@ -35,7 +35,7 @@ struct TurretConfig {
     float hover_force       = 10.0f;
 
     // Combat
-    float hitscan_damage    = 8.0f;
+    float beam_dps          = 30.0f;  // damage per second while firing
     float windup_time       = 1.2f;   // visible laser before shot
     float burst_count_f     = 3.0f;   // shots per burst (float for slider)
     float burst_interval    = 0.12f;  // time between burst shots
@@ -69,8 +69,8 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
                    HMM_Vec3 player_pos, const CollisionWorld& world,
                    const TurretConfig& config, float dt, float total_time);
 
-// Returns true if turret's hitscan hit the player this frame
-// (sets damage_out to the damage dealt)
+// Returns true if turret's beam is hitting the player this frame.
+// damage_out = beam_dps * dt (caller provides dt).
 bool turret_check_player_hit(Entity& turret, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                              float player_radius, const CollisionWorld& world,
                              const TurretConfig& config, float& damage_out);
