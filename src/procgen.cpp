@@ -260,7 +260,10 @@ LevelData generate_level(const ProcGenConfig& config,
         hl.angle = randf(0, HMM_PI32 * 2.0f);
         // 25% chance of crater (negative height)
         float sign = (randf(0,1) < 0.25f) ? -1.0f : 1.0f;
-        hl.height = sign * randf(config.hill_height_min, config.hill_height_max);
+        float h_max = config.hill_height_max;
+        // Ridges (elongated shapes) get reduced height
+        if (elong > 1.5f) h_max *= 0.4f;
+        hl.height = sign * randf(config.hill_height_min, h_max);
         // Sharpness: 1.0 = smooth parabolic, up to 3.0 = mesa/plateau edges
         hl.sharpness = randf(1.0f, 3.0f);
     }

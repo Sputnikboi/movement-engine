@@ -34,7 +34,7 @@ struct ProcGenConfig {
     float hill_height_max  = 4.0f;
     float hill_radius_min  = 8.0f;
     float hill_radius_max  = 20.0f;
-    int   floor_grid_res   = 64;     // grid subdivisions
+    int   floor_grid_res   = 96;     // grid subdivisions
 
     // Tall structures (pillars, towers)
     int   tall_count_min   = 3;
