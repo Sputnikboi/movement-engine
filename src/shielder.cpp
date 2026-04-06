@@ -393,10 +393,20 @@ void shielder_apply_barriers(Entity entities[], int max_entities,
     }
 
     // Recharge shields for entities in aura, decay for those out of range
+    // shield_hp encoding: >0 = active shield, <0 = on cooldown (counts up to 0)
     for (int i = 0; i < max_entities && i < 256; i++) {
         Entity& e = entities[i];
         if (!e.alive) continue;
         if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
+
+        if (e.shield_hp < 0.0f) {
+            // On cooldown — clamp to config cooldown, tick towards 0
+            if (e.shield_hp < -config.shield_apply_cd)
+                e.shield_hp = -config.shield_apply_cd;
+            e.shield_hp += dt;
+            if (e.shield_hp > 0.0f) e.shield_hp = 0.0f;
+            continue;
+        }
 
         if (in_aura[i]) {
             // Recharge towards max
@@ -419,9 +429,11 @@ float shielder_absorb_damage(Entity& target, float raw_damage) {
     if (target.shield_hp <= 0.0f) return raw_damage;
 
     // Shield blocks the ENTIRE hit — no bleed-through.
-    // Damage depletes shield HP, but health is untouched until shield breaks.
     target.shield_hp -= raw_damage;
-    if (target.shield_hp < 0.0f) target.shield_hp = 0.0f;
+    if (target.shield_hp <= 0.0f) {
+        // Shield broke — start cooldown (negative value = cooldown timer)
+        target.shield_hp = -3.0f;  // cooldown timer (config.shield_apply_cd applied via apply_barriers)
+    }
     return 0.0f;
 }
 

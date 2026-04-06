@@ -198,11 +198,13 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
     } break;
 
     case TURRET_WINDUP: {
-        // Keep tracking during windup
+        // Tracking slows down as charge progresses
         float yaw_diff = desired_yaw - turret.yaw;
         while (yaw_diff >  3.14159f) yaw_diff -= 6.28318f;
         while (yaw_diff < -3.14159f) yaw_diff += 6.28318f;
-        float max_rot = config.track_speed * 0.5f * dt;  // slower during windup
+        float charge_progress = 1.0f - (turret.ai_timer / config.windup_time);
+        float track_mult = 0.5f * (1.0f - charge_progress * 0.8f); // 0.5x → 0.1x
+        float max_rot = config.track_speed * track_mult * dt;
         if (fabsf(yaw_diff) > max_rot)
             turret.yaw += (yaw_diff > 0 ? max_rot : -max_rot);
         else

@@ -615,18 +615,19 @@ void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
 
         // === CHARGE-UP PARTICLES (during windup) ===
         if (e.ai_state == TURRET_WINDUP) {
-            // Small emissive dots orbiting the turret, converging as charge completes
+            // Particles orbit turret, slow spin, converge to center as charge completes
             float charge_t = 1.0f - (e.ai_timer / 1.2f); // 0→1 as charge completes
             if (charge_t < 0) charge_t = 0;
             if (charge_t > 1) charge_t = 1;
 
             int num_particles = 6;
-            float orbit_radius = e.radius * (1.5f - charge_t * 0.8f); // converge inward
-            float spin_speed = 4.0f + charge_t * 8.0f; // spin faster as charging
+            // Start wide, converge fully to center
+            float orbit_radius = e.radius * 2.0f * (1.0f - charge_t * charge_t);
+            float spin_speed = 1.5f + charge_t * 1.0f; // gentle spin, slight speedup
 
             for (int p = 0; p < num_particles; p++) {
                 float angle = total_time * spin_speed + (float)p * (6.2831853f / num_particles);
-                float y_off = sinf(total_time * 3.0f + (float)p * 1.5f) * 0.3f;
+                float y_off = sinf(total_time * 1.5f + (float)p * 1.5f) * 0.2f * (1.0f - charge_t);
 
                 HMM_Vec3 ppos = HMM_V3(
                     origin.X + cosf(angle) * orbit_radius,
@@ -634,14 +635,15 @@ void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
                     origin.Z + sinf(angle) * orbit_radius
                 );
 
-                float psize = 0.04f + charge_t * 0.04f;
+                float psize = 0.04f + charge_t * 0.03f;
 
                 // Two tiny crossed quads per particle
                 HMM_Vec3 pr = HMM_MulV3F(right, psize);
                 HMM_Vec3 pu = HMM_MulV3F(up, psize);
 
+                // Color: orange → bright red as converging
                 float pr_val = 0.8f + charge_t * 0.5f;
-                float pg_val = 0.2f * (1.0f - charge_t);
+                float pg_val = 0.3f * (1.0f - charge_t);
 
                 append_emissive_quad(opaque_out,
                     HMM_AddV3(ppos, pr), HMM_SubV3(ppos, pr),

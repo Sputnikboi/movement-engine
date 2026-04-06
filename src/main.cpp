@@ -1412,186 +1412,144 @@ int main(int argc, char* argv[]) {
 
             if (ImGui::CollapsingHeader("Enemies")) {
                 ImGui::Checkbox("AI Enabled", &ai_enabled);
-                ImGui::Separator();
-                if (ImGui::Button("Spawn Drone (in front of player)")) {
-                    HMM_Vec3 fwd = camera.forward_flat();
-                    HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
-                    spawn.Y += 3.0f;
-                    int idx = drone_spawn(entities, MAX_ENTITIES, spawn, drone_cfg);
-                    if (idx >= 0) entities[idx].ai_state = DRONE_CHASING; // immediate aggro
-                }
                 ImGui::SameLine();
                 if (ImGui::Button("Kill All")) {
                     for (int i = 0; i < MAX_ENTITIES; i++)
                         entities[i].alive = false;
                 }
 
-                // Count alive entities
-                int drone_count = 0, proj_count = 0;
-                for (int i = 0; i < MAX_ENTITIES; i++) {
-                    if (!entities[i].alive) continue;
-                    if (entities[i].type == EntityType::Drone) drone_count++;
-                    if (entities[i].type == EntityType::Projectile) proj_count++;
-                }
-                ImGui::Text("Drones: %d  Projectiles: %d", drone_count, proj_count);
-
-                ImGui::Separator();
-                ImGui::Text("Stats");
-                ImGui::SliderFloat("Drone Health",     &drone_cfg.drone_health,     1.0f, 200.0f);
-                ImGui::SliderFloat("Drone Radius",     &drone_cfg.drone_radius,     0.2f, 2.0f);
-                ImGui::SliderFloat("Detection Range",  &drone_cfg.detection_range,  5.0f, 100.0f);
-                ImGui::SliderFloat("Attack Range",     &drone_cfg.attack_range,     5.0f, 50.0f);
-                ImGui::SliderFloat("Circle Distance",  &drone_cfg.circle_distance,  3.0f, 20.0f);
-                ImGui::SliderFloat("Attack Windup",    &drone_cfg.attack_windup,    0.1f, 3.0f, "%.2fs");
-
-                ImGui::Separator();
-                ImGui::Text("Movement");
-                ImGui::SliderFloat("Acceleration",     &drone_cfg.acceleration,     1.0f, 20.0f);
-                ImGui::SliderFloat("Chase Speed Min",  &drone_cfg.chase_speed_min,  1.0f, 20.0f);
-                ImGui::SliderFloat("Chase Speed Max",  &drone_cfg.chase_speed_max,  1.0f, 20.0f);
-                ImGui::SliderFloat("Circle Speed Min", &drone_cfg.circle_speed_min, 1.0f, 20.0f);
-                ImGui::SliderFloat("Circle Speed Max", &drone_cfg.circle_speed_max, 1.0f, 20.0f);
-
-                ImGui::Separator();
-                ImGui::Text("Hover");
-                ImGui::SliderFloat("Hover Force",      &drone_cfg.hover_force,      1.0f, 30.0f);
-                ImGui::SliderFloat("Hover Height Min", &drone_cfg.hover_height_min, 0.5f, 5.0f);
-                ImGui::SliderFloat("Hover Height Max", &drone_cfg.hover_height_max, 0.5f, 5.0f);
-                ImGui::SliderFloat("Bob Amplitude",    &drone_cfg.bob_amp_min,      0.0f, 2.0f);
-                ImGui::SliderFloat("Bob Frequency",    &drone_cfg.bob_freq_min,     0.1f, 3.0f);
-
-                ImGui::Separator();
-                ImGui::Text("Wander (idle)");
-                ImGui::SliderFloat("Wander Radius",    &drone_cfg.wander_radius,    2.0f, 20.0f);
-                ImGui::SliderFloat("Wander Speed",     &drone_cfg.wander_speed,     0.5f, 10.0f);
-                ImGui::SliderFloat("Wall Avoid Dist",  &drone_cfg.wall_avoid_dist,  0.5f, 5.0f);
-                ImGui::SliderFloat("Wall Avoid Force", &drone_cfg.wall_avoid_force, 1.0f, 20.0f);
-
-                ImGui::Separator();
-                ImGui::Text("Projectile");
-                ImGui::SliderFloat("Proj Speed",       &drone_cfg.projectile_speed,  5.0f, 50.0f);
-                ImGui::SliderFloat("Proj Damage",      &drone_cfg.projectile_damage, 1.0f, 50.0f);
-
-                ImGui::Separator();
-                ImGui::Text("Death");
-                ImGui::SliderFloat("Death Gravity",    &drone_cfg.death_gravity,     5.0f, 30.0f);
-                ImGui::SliderFloat("Tumble Speed",     &drone_cfg.death_tumble_speed,1.0f, 20.0f);
-                ImGui::SliderFloat("Hit Flash Time",   &drone_cfg.hit_flash_time,    0.05f, 0.5f, "%.2fs");
-
-                ImGui::Separator();
-                ImGui::Separator();
-                ImGui::Text("=== RUSHER ===");
-                if (ImGui::Button("Spawn Rusher (in front of player)")) {
-                    HMM_Vec3 fwd = camera.forward_flat();
-                    HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
-                    spawn.Y += 3.0f;
-                    int idx = rusher_spawn(entities, MAX_ENTITIES, spawn, rusher_cfg);
-                    if (idx >= 0) entities[idx].ai_state = RUSHER_CHASING;
+                if (ImGui::TreeNode("Drone")) {
+                    if (ImGui::Button("Spawn Drone")) {
+                        HMM_Vec3 fwd = camera.forward_flat();
+                        HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
+                        spawn.Y += 3.0f;
+                        int idx = drone_spawn(entities, MAX_ENTITIES, spawn, drone_cfg);
+                        if (idx >= 0) entities[idx].ai_state = DRONE_CHASING;
+                    }
+                    ImGui::SliderFloat("Health",          &drone_cfg.drone_health,     1.0f, 200.0f);
+                    ImGui::SliderFloat("Radius",          &drone_cfg.drone_radius,     0.2f, 2.0f);
+                    ImGui::SliderFloat("Detection Range", &drone_cfg.detection_range,  5.0f, 100.0f);
+                    ImGui::SliderFloat("Attack Range",    &drone_cfg.attack_range,     5.0f, 50.0f);
+                    ImGui::SliderFloat("Circle Distance", &drone_cfg.circle_distance,  3.0f, 20.0f);
+                    ImGui::SliderFloat("Attack Windup",   &drone_cfg.attack_windup,    0.1f, 3.0f, "%.2fs");
+                    ImGui::SliderFloat("Acceleration",    &drone_cfg.acceleration,     1.0f, 20.0f);
+                    ImGui::SliderFloat("Chase Speed Min", &drone_cfg.chase_speed_min,  1.0f, 20.0f);
+                    ImGui::SliderFloat("Chase Speed Max", &drone_cfg.chase_speed_max,  1.0f, 20.0f);
+                    ImGui::SliderFloat("Circle Speed Min",&drone_cfg.circle_speed_min, 1.0f, 20.0f);
+                    ImGui::SliderFloat("Circle Speed Max",&drone_cfg.circle_speed_max, 1.0f, 20.0f);
+                    ImGui::SliderFloat("Hover Force",     &drone_cfg.hover_force,      1.0f, 30.0f);
+                    ImGui::SliderFloat("Hover Height Min",&drone_cfg.hover_height_min, 0.5f, 5.0f);
+                    ImGui::SliderFloat("Hover Height Max",&drone_cfg.hover_height_max, 0.5f, 5.0f);
+                    ImGui::SliderFloat("Proj Speed",      &drone_cfg.projectile_speed, 5.0f, 50.0f);
+                    ImGui::SliderFloat("Proj Damage",     &drone_cfg.projectile_damage,1.0f, 50.0f);
+                    ImGui::SliderFloat("Wander Radius",   &drone_cfg.wander_radius,    2.0f, 20.0f);
+                    ImGui::SliderFloat("Wall Avoid Dist", &drone_cfg.wall_avoid_dist,  0.5f, 5.0f);
+                    ImGui::TreePop();
                 }
 
-                int rusher_count = 0;
-                for (int i = 0; i < MAX_ENTITIES; i++)
-                    if (entities[i].alive && entities[i].type == EntityType::Rusher) rusher_count++;
-                ImGui::Text("Rushers: %d", rusher_count);
-
-                ImGui::Separator();
-                ImGui::Text("Stats");
-                ImGui::SliderFloat("Rusher Health",      &rusher_cfg.health,         1.0f, 100.0f);
-                ImGui::SliderFloat("Rusher Radius",      &rusher_cfg.radius,         0.2f, 2.0f);
-                ImGui::SliderFloat("R Detection Range",  &rusher_cfg.detection_range, 5.0f, 100.0f);
-                ImGui::SliderFloat("Melee Damage",       &rusher_cfg.melee_damage,   1.0f, 100.0f);
-
-                ImGui::Separator();
-                ImGui::Text("Movement");
-                ImGui::SliderFloat("R Chase Speed",      &rusher_cfg.chase_speed,    5.0f, 30.0f);
-                ImGui::SliderFloat("R Acceleration",     &rusher_cfg.acceleration,   1.0f, 20.0f);
-                ImGui::SliderFloat("R Hover Height",     &rusher_cfg.hover_height,   0.5f, 6.0f);
-                ImGui::SliderFloat("R Hover Force",      &rusher_cfg.hover_force,    1.0f, 30.0f);
-
-                ImGui::Separator();
-                ImGui::Text("Dash Attack");
-                ImGui::SliderFloat("R Attack Range",     &rusher_cfg.attack_range,   2.0f, 20.0f);
-                ImGui::SliderFloat("Charge Up Time",     &rusher_cfg.charge_up_time, 0.1f, 3.0f, "%.2fs");
-                ImGui::SliderFloat("Braking Force",      &rusher_cfg.braking_force,  1.0f, 30.0f);
-                ImGui::SliderFloat("Dash Force",         &rusher_cfg.dash_force,     10.0f, 100.0f);
-                ImGui::SliderFloat("Dash Duration",      &rusher_cfg.dash_duration,  0.1f, 2.0f, "%.2fs");
-                ImGui::SliderFloat("Dash Cooldown",      &rusher_cfg.dash_cooldown,  0.1f, 5.0f, "%.2fs");
-
-                ImGui::Separator();
-                ImGui::Text("--- Turret ---");
-                if (ImGui::Button("Spawn Turret")) {
-                    HMM_Vec3 spawn = HMM_AddV3(player.position,
-                        HMM_MulV3F(camera.forward(), 8.0f));
-                    int idx = turret_spawn(entities, MAX_ENTITIES, spawn, turret_cfg);
-                    if (idx >= 0) entities[idx].ai_state = TURRET_TRACKING;
+                if (ImGui::TreeNode("Rusher")) {
+                    if (ImGui::Button("Spawn Rusher")) {
+                        HMM_Vec3 fwd = camera.forward_flat();
+                        HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
+                        spawn.Y += 3.0f;
+                        int idx = rusher_spawn(entities, MAX_ENTITIES, spawn, rusher_cfg);
+                        if (idx >= 0) entities[idx].ai_state = RUSHER_CHASING;
+                    }
+                    ImGui::SliderFloat("Health",          &rusher_cfg.health,          1.0f, 100.0f);
+                    ImGui::SliderFloat("Radius",          &rusher_cfg.radius,          0.2f, 2.0f);
+                    ImGui::SliderFloat("Detection Range", &rusher_cfg.detection_range, 5.0f, 100.0f);
+                    ImGui::SliderFloat("Melee Damage",    &rusher_cfg.melee_damage,    1.0f, 100.0f);
+                    ImGui::SliderFloat("Chase Speed",     &rusher_cfg.chase_speed,     5.0f, 30.0f);
+                    ImGui::SliderFloat("Acceleration",    &rusher_cfg.acceleration,    1.0f, 20.0f);
+                    ImGui::SliderFloat("Hover Height",    &rusher_cfg.hover_height,    0.5f, 6.0f);
+                    ImGui::SliderFloat("Attack Range",    &rusher_cfg.attack_range,    2.0f, 20.0f);
+                    ImGui::SliderFloat("Charge Up Time",  &rusher_cfg.charge_up_time,  0.1f, 3.0f, "%.2fs");
+                    ImGui::SliderFloat("Dash Force",      &rusher_cfg.dash_force,      10.0f, 100.0f);
+                    ImGui::SliderFloat("Dash Duration",   &rusher_cfg.dash_duration,   0.1f, 2.0f, "%.2fs");
+                    ImGui::SliderFloat("Dash Cooldown",   &rusher_cfg.dash_cooldown,   0.1f, 5.0f, "%.2fs");
+                    ImGui::TreePop();
                 }
-                ImGui::SliderFloat("Tu Health",       &turret_cfg.health,          1.0f, 50.0f);
-                ImGui::SliderFloat("Tu Radius",       &turret_cfg.radius,          0.3f, 2.0f);
-                ImGui::SliderFloat("Tu Detect Range", &turret_cfg.detection_range, 10.0f, 80.0f);
-                ImGui::SliderFloat("Tu Hitscan Dmg",  &turret_cfg.hitscan_damage,  1.0f, 30.0f);
-                ImGui::SliderFloat("Tu Windup",       &turret_cfg.windup_time,     0.2f, 3.0f, "%.2fs");
-                ImGui::SliderFloat("Tu Burst Count",  &turret_cfg.burst_count_f,   1.0f, 10.0f, "%.0f");
-                ImGui::SliderFloat("Tu Burst Interval",&turret_cfg.burst_interval, 0.05f, 0.5f, "%.2fs");
-                ImGui::SliderFloat("Tu Cooldown",     &turret_cfg.cooldown_time,   0.5f, 5.0f, "%.1fs");
-                ImGui::SliderFloat("Tu Accuracy",     &turret_cfg.accuracy,        0.5f, 1.0f, "%.2f");
-                ImGui::SliderFloat("Tu Track Speed",  &turret_cfg.track_speed,     0.5f, 10.0f);
 
-                ImGui::Separator();
-                ImGui::Text("--- Tank ---");
-                if (ImGui::Button("Spawn Tank")) {
-                    HMM_Vec3 spawn = HMM_AddV3(player.position,
-                        HMM_MulV3F(camera.forward(), 10.0f));
-                    int idx = tank_spawn(entities, MAX_ENTITIES, spawn, tank_cfg);
-                    if (idx >= 0) entities[idx].ai_state = TANK_CHASING;
+                if (ImGui::TreeNode("Turret")) {
+                    if (ImGui::Button("Spawn Turret")) {
+                        HMM_Vec3 spawn = HMM_AddV3(player.position,
+                            HMM_MulV3F(camera.forward(), 8.0f));
+                        int idx = turret_spawn(entities, MAX_ENTITIES, spawn, turret_cfg);
+                        if (idx >= 0) entities[idx].ai_state = TURRET_TRACKING;
+                    }
+                    ImGui::SliderFloat("Health",          &turret_cfg.health,          1.0f, 50.0f);
+                    ImGui::SliderFloat("Radius",          &turret_cfg.radius,          0.3f, 2.0f);
+                    ImGui::SliderFloat("Detection Range", &turret_cfg.detection_range, 10.0f, 80.0f);
+                    ImGui::SliderFloat("Hitscan Damage",  &turret_cfg.hitscan_damage,  1.0f, 30.0f);
+                    ImGui::SliderFloat("Windup Time",     &turret_cfg.windup_time,     0.2f, 3.0f, "%.2fs");
+                    ImGui::SliderFloat("Burst Count",     &turret_cfg.burst_count_f,   1.0f, 10.0f, "%.0f");
+                    ImGui::SliderFloat("Burst Interval",  &turret_cfg.burst_interval,  0.05f, 0.5f, "%.2fs");
+                    ImGui::SliderFloat("Cooldown",        &turret_cfg.cooldown_time,   0.5f, 5.0f, "%.1fs");
+                    ImGui::SliderFloat("Accuracy",        &turret_cfg.accuracy,        0.5f, 1.0f, "%.2f");
+                    ImGui::SliderFloat("Track Speed",     &turret_cfg.track_speed,     0.5f, 10.0f);
+                    ImGui::TreePop();
                 }
-                ImGui::SliderFloat("Tk Health",       &tank_cfg.health,            10.0f, 200.0f);
-                ImGui::SliderFloat("Tk Radius",       &tank_cfg.radius,            0.5f, 3.0f);
-                ImGui::SliderFloat("Tk Detect Range", &tank_cfg.detection_range,   10.0f, 60.0f);
-                ImGui::SliderFloat("Tk Chase Speed",  &tank_cfg.chase_speed,       1.0f, 15.0f);
-                ImGui::SliderFloat("Tk Stomp Range",  &tank_cfg.stomp_range,       3.0f, 15.0f);
-                ImGui::SliderFloat("Tk Stomp AoE",    &tank_cfg.stomp_aoe_radius,  3.0f, 15.0f);
-                ImGui::SliderFloat("Tk Stomp Damage", &tank_cfg.stomp_damage,      5.0f, 50.0f);
-                ImGui::SliderFloat("Tk Stomp KB",     &tank_cfg.stomp_knockback,   5.0f, 30.0f);
-                ImGui::SliderFloat("Tk Windup",       &tank_cfg.windup_time,       0.3f, 2.0f, "%.2fs");
-                ImGui::SliderFloat("Tk Cooldown",     &tank_cfg.stomp_cooldown,    1.0f, 8.0f, "%.1fs");
 
-                ImGui::Separator();
-                ImGui::Text("--- Bomber ---");
-                if (ImGui::Button("Spawn Bomber")) {
-                    HMM_Vec3 spawn = HMM_AddV3(player.position,
-                        HMM_MulV3F(camera.forward(), 12.0f));
-                    spawn.Y += 10.0f;
-                    int idx = bomber_spawn(entities, MAX_ENTITIES, spawn, bomber_cfg);
-                    if (idx >= 0) entities[idx].ai_state = BOMBER_APPROACH;
+                if (ImGui::TreeNode("Tank")) {
+                    if (ImGui::Button("Spawn Tank")) {
+                        HMM_Vec3 spawn = HMM_AddV3(player.position,
+                            HMM_MulV3F(camera.forward(), 10.0f));
+                        int idx = tank_spawn(entities, MAX_ENTITIES, spawn, tank_cfg);
+                        if (idx >= 0) entities[idx].ai_state = TANK_CHASING;
+                    }
+                    ImGui::SliderFloat("Health",          &tank_cfg.health,            10.0f, 200.0f);
+                    ImGui::SliderFloat("Radius",          &tank_cfg.radius,            0.5f, 3.0f);
+                    ImGui::SliderFloat("Detection Range", &tank_cfg.detection_range,   10.0f, 60.0f);
+                    ImGui::SliderFloat("Chase Speed",     &tank_cfg.chase_speed,       1.0f, 15.0f);
+                    ImGui::SliderFloat("Stomp Range",     &tank_cfg.stomp_range,       3.0f, 15.0f);
+                    ImGui::SliderFloat("Stomp AoE",       &tank_cfg.stomp_aoe_radius,  3.0f, 15.0f);
+                    ImGui::SliderFloat("Stomp Damage",    &tank_cfg.stomp_damage,      5.0f, 50.0f);
+                    ImGui::SliderFloat("Stomp KB",        &tank_cfg.stomp_knockback,   0.0f, 5.0f, "%.2f");
+                    ImGui::SliderFloat("Windup Time",     &tank_cfg.windup_time,       0.3f, 2.0f, "%.2fs");
+                    ImGui::SliderFloat("Cooldown",        &tank_cfg.stomp_cooldown,    1.0f, 8.0f, "%.1fs");
+                    ImGui::TreePop();
                 }
-                ImGui::SliderFloat("Bo Health",        &bomber_cfg.health,          5.0f, 100.0f);
-                ImGui::SliderFloat("Bo Radius",        &bomber_cfg.radius,          0.3f, 2.0f);
-                ImGui::SliderFloat("Bo Detect Range",  &bomber_cfg.detection_range, 10.0f, 60.0f);
-                ImGui::SliderFloat("Bo Hover Height",  &bomber_cfg.hover_height,    5.0f, 25.0f);
-                ImGui::SliderFloat("Bo Dive Speed",    &bomber_cfg.dive_speed,         8.0f, 30.0f);
-                ImGui::SliderFloat("Bo Dive Trigger",  &bomber_cfg.dive_trigger_dist,  5.0f, 30.0f);
-                ImGui::SliderFloat("Bo Explode Dmg",   &bomber_cfg.explosion_damage,   5.0f, 50.0f);
-                ImGui::SliderFloat("Bo Explode Radius", &bomber_cfg.explosion_radius,  2.0f, 12.0f);
-                ImGui::SliderFloat("Bo Explode KB",    &bomber_cfg.explosion_knockback, 1.0f, 20.0f);
 
-                ImGui::Separator();
-                ImGui::Text("--- Shielder ---");
-                if (ImGui::Button("Spawn Shielder")) {
-                    HMM_Vec3 spawn = HMM_AddV3(player.position,
-                        HMM_MulV3F(camera.forward(), 8.0f));
-                    int idx = shielder_spawn(entities, MAX_ENTITIES, spawn, shielder_cfg);
-                    if (idx >= 0) entities[idx].ai_state = SHIELDER_CHASING;
+                if (ImGui::TreeNode("Bomber")) {
+                    if (ImGui::Button("Spawn Bomber")) {
+                        HMM_Vec3 spawn = HMM_AddV3(player.position,
+                            HMM_MulV3F(camera.forward(), 12.0f));
+                        spawn.Y += 10.0f;
+                        int idx = bomber_spawn(entities, MAX_ENTITIES, spawn, bomber_cfg);
+                        if (idx >= 0) entities[idx].ai_state = BOMBER_APPROACH;
+                    }
+                    ImGui::SliderFloat("Health",          &bomber_cfg.health,              5.0f, 100.0f);
+                    ImGui::SliderFloat("Radius",          &bomber_cfg.radius,              0.3f, 2.0f);
+                    ImGui::SliderFloat("Detection Range", &bomber_cfg.detection_range,     10.0f, 60.0f);
+                    ImGui::SliderFloat("Hover Height",    &bomber_cfg.hover_height,        5.0f, 25.0f);
+                    ImGui::SliderFloat("Dive Speed",      &bomber_cfg.dive_speed,          3.0f, 30.0f);
+                    ImGui::SliderFloat("Dive Trigger",    &bomber_cfg.dive_trigger_dist,   5.0f, 30.0f);
+                    ImGui::SliderFloat("Explode Damage",  &bomber_cfg.explosion_damage,    5.0f, 50.0f);
+                    ImGui::SliderFloat("Explode Radius",  &bomber_cfg.explosion_radius,    2.0f, 12.0f);
+                    ImGui::SliderFloat("Explode KB",      &bomber_cfg.explosion_knockback, 0.0f, 5.0f, "%.2f");
+                    ImGui::TreePop();
                 }
-                ImGui::SliderFloat("Sh Health",        &shielder_cfg.health,          5.0f, 100.0f);
-                ImGui::SliderFloat("Sh Radius",        &shielder_cfg.radius,          0.3f, 2.0f);
-                ImGui::SliderFloat("Sh Detect Range",  &shielder_cfg.detection_range, 10.0f, 60.0f);
-                ImGui::SliderFloat("Sh Shield Radius", &shielder_cfg.shield_radius,   3.0f, 20.0f);
-                ImGui::SliderFloat("Sh Shield HP",     &shielder_cfg.shield_hp,       5.0f, 50.0f);
-                ImGui::SliderFloat("Sh Recharge/s",    &shielder_cfg.shield_recharge, 1.0f, 20.0f);
-                ImGui::SliderFloat("Sh Flee Range",    &shielder_cfg.flee_range,      3.0f, 15.0f);
-                ImGui::SliderFloat("Sh Preferred Dist",&shielder_cfg.preferred_dist,  5.0f, 25.0f);
-                ImGui::SliderFloat("Sh Chase Speed",   &shielder_cfg.chase_speed,     2.0f, 15.0f);
-                ImGui::SliderFloat("Sh Flee Speed",    &shielder_cfg.flee_speed,      3.0f, 15.0f);
+
+                if (ImGui::TreeNode("Shielder")) {
+                    if (ImGui::Button("Spawn Shielder")) {
+                        HMM_Vec3 spawn = HMM_AddV3(player.position,
+                            HMM_MulV3F(camera.forward(), 8.0f));
+                        int idx = shielder_spawn(entities, MAX_ENTITIES, spawn, shielder_cfg);
+                        if (idx >= 0) entities[idx].ai_state = SHIELDER_CHASING;
+                    }
+                    ImGui::SliderFloat("Health",          &shielder_cfg.health,          5.0f, 100.0f);
+                    ImGui::SliderFloat("Radius",          &shielder_cfg.radius,          0.3f, 2.0f);
+                    ImGui::SliderFloat("Detection Range", &shielder_cfg.detection_range, 10.0f, 60.0f);
+                    ImGui::SliderFloat("Shield Radius",   &shielder_cfg.shield_radius,   3.0f, 20.0f);
+                    ImGui::SliderFloat("Shield HP",       &shielder_cfg.shield_hp,       5.0f, 50.0f);
+                    ImGui::SliderFloat("Recharge/s",      &shielder_cfg.shield_recharge, 1.0f, 20.0f);
+                    ImGui::SliderFloat("Apply Cooldown",  &shielder_cfg.shield_apply_cd, 0.5f, 10.0f, "%.1fs");
+                    ImGui::SliderFloat("Flee Range",      &shielder_cfg.flee_range,      3.0f, 15.0f);
+                    ImGui::SliderFloat("Preferred Dist",  &shielder_cfg.preferred_dist,  5.0f, 25.0f);
+                    ImGui::SliderFloat("Chase Speed",     &shielder_cfg.chase_speed,     2.0f, 15.0f);
+                    ImGui::SliderFloat("Flee Speed",      &shielder_cfg.flee_speed,      3.0f, 15.0f);
+                    ImGui::TreePop();
+                }
             }
 
             // --- Mouse ---
