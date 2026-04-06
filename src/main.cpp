@@ -1209,7 +1209,7 @@ int main(int argc, char* argv[]) {
             if (enemy_count_hud > 0)
                 ImGui::Text("Enemies: %d", enemy_count_hud);
             if (rooms_cleared > 0)
-                ImGui::Text("Room: %d", rooms_cleared + 1);
+                ImGui::Text("Room: %d  Diff: %.2f", rooms_cleared + 1, procgen_cfg.difficulty);
             for (const auto& d : active_doors) {
                 if (d.is_exit) {
                     if (d.locked)
