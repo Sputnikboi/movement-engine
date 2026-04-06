@@ -154,6 +154,25 @@ struct HeightMap {
         float h01 = at(ix, iz+1), h11 = at(ix+1, iz+1);
         return h00*(1-tx)*(1-tz) + h10*tx*(1-tz) + h01*(1-tx)*tz + h11*tx*tz;
     }
+
+    // Surface normal via finite differences
+    HMM_Vec3 sample_normal(float x, float z) const {
+        float eps = cell_w() * 0.5f;
+        float hL = sample(x - eps, z), hR = sample(x + eps, z);
+        float hD = sample(x, z - eps), hU = sample(x, z + eps);
+        HMM_Vec3 n = {-(hR - hL), 2.0f * eps, -(hU - hD)};
+        return HMM_NormV3(n);
+    }
+
+    // Derive pitch and roll to align a yaw-rotated box with terrain
+    void normal_to_tilt(float x, float z, float yaw, float* pitch, float* roll) const {
+        HMM_Vec3 n = sample_normal(x, z);
+        float cy = cosf(yaw), sy = sinf(yaw);
+        float n_fwd  =  n.X * sy + n.Z * cy;
+        float n_right =  n.X * cy - n.Z * sy;
+        *pitch = atan2f(n_fwd, n.Y);
+        *roll  = -atan2f(n_right, n.Y);
+    }
 };
 
 static void emit_terrain(Mesh& m, const HeightMap& hm, HMM_Vec3 color) {
@@ -368,8 +387,10 @@ LevelData generate_level(const ProcGenConfig& config,
                 float bd = base_sz * randf(0.85f, 1.15f);
                 float bh = randf(config.box_height_min, config.box_height_max);
                 float yaw = cluster_yaw + randf(-0.5f, 0.5f);
-                float pitch = randf(-config.box_tilt_max, config.box_tilt_max);
-                float roll  = randf(-config.box_tilt_max, config.box_tilt_max);
+                float pitch, roll;
+                hm.normal_to_tilt(bx, bz, yaw, &pitch, &roll);
+
+
                 float base_y = hm.sample(bx, bz);
 
                 HMM_Vec3 col = config.box_color;
@@ -401,8 +422,8 @@ LevelData generate_level(const ProcGenConfig& config,
             float bd = base_sz * randf(0.85f, 1.15f);
             float bh = randf(config.box_height_min, config.box_height_max);
             float yaw = randf(0, HMM_PI32 * 2.0f);
-            float pitch = randf(-config.box_tilt_max, config.box_tilt_max);
-            float roll  = randf(-config.box_tilt_max, config.box_tilt_max);
+            float pitch, roll;
+            hm.normal_to_tilt(cx, cz, yaw, &pitch, &roll);
             float base_y = hm.sample(cx, cz);
             float br = sqrtf(bw * bw + bd * bd) * 0.5f;
 

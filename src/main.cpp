@@ -1131,7 +1131,6 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Hill Radius", &procgen_cfg.hill_radius_max, 4.0f, 30.0f);
                 ImGui::SliderFloat("Cluster Chance", &procgen_cfg.cluster_chance, 0.0f, 1.0f);
                 ImGui::SliderFloat("Stack Chance", &procgen_cfg.box_stack_chance, 0.0f, 1.0f);
-                ImGui::SliderFloat("Box Tilt", &procgen_cfg.box_tilt_max, 0.0f, 0.4f);
                 ImGui::SliderInt("Tall Min", &procgen_cfg.tall_count_min, 0, 15);
                 ImGui::SliderInt("Tall Max", &procgen_cfg.tall_count_max, 0, 15);
                 ImGui::SliderInt("Drones", &procgen_cfg.drone_count, 0, 20);

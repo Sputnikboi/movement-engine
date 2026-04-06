@@ -21,7 +21,6 @@ struct ProcGenConfig {
     float box_height_max   = 5.0f;
     float box_margin       = 2.0f;   // min distance from walls
     float box_stack_chance = 0.3f;   // chance a box gets a smaller box stacked on top
-    float box_tilt_max     = 0.15f;  // max pitch/roll tilt in radians (~8.5 deg)
 
     // Box clusters
     float cluster_chance   = 0.4f;   // chance a box spawns as cluster center
