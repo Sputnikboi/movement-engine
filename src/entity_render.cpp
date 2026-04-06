@@ -135,6 +135,39 @@ Mesh create_icosphere(int subdivisions) {
 }
 
 // ============================================================
+//  Append a transformed mesh (for knife projectiles, etc.)
+// ============================================================
+static void append_mesh_transformed(Mesh& out, const Mesh& src,
+                                    HMM_Vec3 pos, float yaw, float pitch,
+                                    float scale) {
+    uint32_t base = static_cast<uint32_t>(out.vertices.size());
+
+    // Build rotation: first pitch (around X), then yaw (around Y)
+    HMM_Mat4 rot_yaw   = HMM_Rotate_RH(yaw,   HMM_V3(0, 1, 0));
+    HMM_Mat4 rot_pitch = HMM_Rotate_RH(pitch,  HMM_V3(1, 0, 0));
+    HMM_Mat4 rot = HMM_MulM4(rot_yaw, rot_pitch);
+
+    for (const auto& sv : src.vertices) {
+        Vertex3D v = sv;
+        HMM_Vec3 p = HMM_V3(sv.pos[0] * scale, sv.pos[1] * scale, sv.pos[2] * scale);
+        HMM_Vec4 rp = HMM_MulM4V4(rot, HMM_V4(p.X, p.Y, p.Z, 1.0f));
+        v.pos[0] = rp.X + pos.X;
+        v.pos[1] = rp.Y + pos.Y;
+        v.pos[2] = rp.Z + pos.Z;
+
+        HMM_Vec4 rn = HMM_MulM4V4(rot, HMM_V4(sv.normal[0], sv.normal[1], sv.normal[2], 0.0f));
+        v.normal[0] = rn.X;
+        v.normal[1] = rn.Y;
+        v.normal[2] = rn.Z;
+
+        out.vertices.push_back(v);
+    }
+    for (uint32_t idx : src.indices) {
+        out.indices.push_back(base + idx);
+    }
+}
+
+// ============================================================
 //  Build entity mesh for rendering
 // ============================================================
 
@@ -183,7 +216,8 @@ static void append_sphere(Mesh& out, const Mesh& sphere,
 }
 
 Mesh build_entity_mesh(const Entity entities[], int max_entities,
-                       const Frustum& frustum) {
+                       const Frustum& frustum,
+                       const Mesh* knife_mesh) {
     static Mesh sphere = create_icosphere(0);
 
     // Count alive entities for reserve
@@ -353,8 +387,11 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
         } break;
 
         case EntityType::Projectile: {
-            if (e.owner == -3) {
-                // Player knife projectile — bright white
+            if (e.owner == -3 && knife_mesh && !knife_mesh->vertices.empty()) {
+                // Player knife projectile — render actual Kunai model
+                append_mesh_transformed(out, *knife_mesh, e.position, e.yaw, e.pitch, 0.08f);
+            } else if (e.owner == -3) {
+                // Fallback sphere
                 append_sphere(out, sphere, e.position, e.radius, 1.0f, 1.0f, 0.9f);
             } else if (e.owner == -2) {
                 // Bomb (from bomber) — red-orange

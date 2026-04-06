@@ -770,6 +770,9 @@ int main(int argc, char* argv[]) {
                         p.damage   = weapon.config.damage;
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
+                        // Orient knife model to face travel direction
+                        p.yaw   = atan2f(fwd.X, fwd.Z);
+                        p.pitch = -asinf(fwd.Y);
                         break;
                     }
                 }
@@ -1217,7 +1220,8 @@ int main(int argc, char* argv[]) {
         }
 
         // Build entity mesh + opaque death effects (frustum-culled)
-        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);
+        const Mesh* knife_proj_mesh = (weapons[2].mesh_loaded) ? &weapons[2].viewmodel_mesh : nullptr;
+        Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum, knife_proj_mesh);
         effects.append_to_mesh(entity_mesh);
 
         // Transparent death effects (outer glow)

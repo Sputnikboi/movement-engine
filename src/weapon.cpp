@@ -103,7 +103,7 @@ void Weapon::init_knife() {
     config.name            = "Throwing Knife";
     config.fire_mode       = FireMode::PROJECTILE;
     config.damage          = 60.0f;
-    config.fire_rate       = 1.0f;
+    config.fire_rate       = 1.5f;
     config.range           = 200.0f;
     config.mag_size        = 1;
     config.reload_time     = 0.0f;
