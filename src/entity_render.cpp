@@ -387,6 +387,9 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
         } break;
 
         case EntityType::Projectile: {
+            // Skip rendering during grace period (avoids appearing inside camera)
+            if (e.ai_timer > 0.0f) break;
+
             if (e.owner == -3 && knife_mesh && !knife_mesh->vertices.empty()) {
                 // Player knife projectile — render actual Kunai model
                 append_mesh_transformed(out, *knife_mesh, e.position, e.yaw, e.pitch, 0.08f);

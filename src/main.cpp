@@ -764,12 +764,13 @@ int main(int argc, char* argv[]) {
                         p = Entity{};
                         p.type     = EntityType::Projectile;
                         p.alive    = true;
-                        p.position = camera.position;
+                        p.position = HMM_AddV3(camera.position, HMM_MulV3F(fwd, 1.5f));
                         p.velocity = HMM_MulV3F(fwd, weapon.config.proj_speed);
                         p.radius   = weapon.config.proj_radius;
                         p.damage   = weapon.config.damage;
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
+                        p.ai_timer = 0.05f; // render grace period
                         // Orient knife model to face travel direction
                         p.yaw   = atan2f(fwd.X, fwd.Z);
                         p.pitch = -asinf(fwd.Y);

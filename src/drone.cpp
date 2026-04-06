@@ -403,6 +403,8 @@ void projectiles_update(Entity entities[], int max_entities,
             continue;
         }
 
+        // Tick render grace timer (player knife: avoid appearing inside camera)
+        if (p.ai_timer > 0.0f) p.ai_timer -= dt;
 
         // Check wall collision via raycast along travel direction
         HMM_Vec3 travel = HMM_MulV3F(p.velocity, dt);
