@@ -353,11 +353,30 @@ int main(int argc, char* argv[]) {
     Weapon weapons[MAX_WEAPONS];
     int    active_weapon = 0;
     int    pending_weapon = -1;  // weapon to switch to after lowering
-    int    num_weapons = 3;      // weapons unlocked
+    int    num_weapons = 1;      // weapons unlocked (start with 1)
 
-    weapons[0].init_wingman();
-    weapons[1].init_glock();
+    // All weapon templates initialised (for shop/model loading), only slot 0 active at start
+    weapons[0].init_glock();
+    weapons[1].init_wingman();
     weapons[2].init_knife();
+
+    // Shop system
+    int    currency = 0;
+    bool   show_shop = false;
+    int    weapon_cost[MAX_WEAPONS] = {0, 150, 100, 0};  // glock free, wingman 150, knife 100
+    bool   weapon_owned[MAX_WEAPONS] = {true, false, false, false};
+
+    auto kill_reward = [](EntityType t) -> int {
+        switch (t) {
+            case EntityType::Drone:    return 10;
+            case EntityType::Rusher:   return 10;
+            case EntityType::Turret:   return 20;
+            case EntityType::Tank:     return 40;
+            case EntityType::Bomber:   return 20;
+            case EntityType::Shielder: return 25;
+            default: return 0;
+        }
+    };
 
     {
         // Try several paths — exe might run from build/ or project root
@@ -695,9 +714,9 @@ int main(int argc, char* argv[]) {
 
         // --- Weapon switching ---
         {
-            // Number keys to switch weapons
-            for (int w = 0; w < num_weapons && w < MAX_WEAPONS; w++) {
-                if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings) {
+            // Number keys to switch weapons (only owned)
+            for (int w = 0; w < MAX_WEAPONS; w++) {
+                if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings && weapon_owned[w] && !show_shop) {
                     // Unholster if holstered
                     if (player.weapon_holstered)
                         player.weapon_holstered = false;
@@ -896,6 +915,7 @@ int main(int argc, char* argv[]) {
                     if (hit_ent.health <= 0 && hit_ent.ai_state != dying_state) {
                         hit_ent.ai_state = dying_state;
                         hit_ent.death_timer = 0.0f;
+                        currency += kill_reward(hit_ent.type);
                         hit_ent.velocity.Y += 3.0f;
                         HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
                         hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
@@ -911,7 +931,7 @@ int main(int argc, char* argv[]) {
         }
 
         // --- Update entities (only when not paused) ---
-        if (!show_settings) {
+        if (!show_settings && !show_shop) {
             // --- Player damage decay ---
             if (player.damage_accum > 0.0f) {
                 player.damage_accum -= player.damage_accum * (2.0f / player.damage_decay) * dt;
@@ -1130,6 +1150,7 @@ int main(int argc, char* argv[]) {
                         if (e.health <= 0 && e.ai_state != dying_state) {
                             e.ai_state = dying_state;
                             e.death_timer = 0.0f;
+                            currency += kill_reward(e.type);
                             e.velocity.Y += 3.0f;
                             HMM_Vec3 kb = HMM_NormV3(proj.velocity);
                             e.velocity = HMM_AddV3(e.velocity, HMM_MulV3F(kb, 5.0f));
@@ -1196,8 +1217,17 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Door interaction: pressing interact near unlocked exit → new room
-        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings) {
+        // Door interaction: pressing interact near unlocked exit -> open shop
+        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !show_shop) {
+            show_shop = true;
+            SDL_SetWindowRelativeMouseMode(window, false);
+            interact_pressed = false;
+        }
+
+        // Shop continue -> transition to next room
+        auto do_room_transition = [&]() {
+            show_shop = false;
+            SDL_SetWindowRelativeMouseMode(window, true);
             rooms_cleared++;
             player.health = player.max_health;
             player.damage_accum = 0.0f;
@@ -1238,18 +1268,18 @@ int main(int argc, char* argv[]) {
                     drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
                 else if (es.type == EntityType::Rusher)
                     rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
-        else if (es.type == EntityType::Turret)
-            turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
-        else if (es.type == EntityType::Tank)
-            tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
-        else if (es.type == EntityType::Bomber)
-            bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
-        else if (es.type == EntityType::Shielder)
-            shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
+                else if (es.type == EntityType::Turret)
+                    turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
+                else if (es.type == EntityType::Tank)
+                    tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
+                else if (es.type == EntityType::Bomber)
+                    bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
+                else if (es.type == EntityType::Shielder)
+                    shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
             }
 
             current_level_name = "Procedural";
-        }
+        }; // end do_room_transition
         interact_pressed = false; // consume
 
         // Build frustum from current camera for culling
@@ -1374,12 +1404,13 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Enemies: %d", enemy_count_hud);
             if (rooms_cleared > 0)
                 ImGui::Text("Room: %d  Diff: %.2f", rooms_cleared + 1, procgen_cfg.difficulty);
+            ImGui::Text("Currency: %d", currency);
             for (const auto& d : active_doors) {
                 if (d.is_exit) {
                     if (d.locked)
                         ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", enemy_count_hud);
                     else if (near_exit_door)
-                        ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to enter next room",
+                        ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to open shop",
                                            input_code_name(kb.get(Action::Interact, 0)));
                     else
                         ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "EXIT: UNLOCKED");
@@ -1411,7 +1442,60 @@ int main(int argc, char* argv[]) {
             ImGui::TextDisabled("ESC: settings  H: hide HUD  R: reload  RMB: aim");
 
             ImGui::End();
+        }
 
+        // --- Shop window ---
+        if (show_shop) {
+            ImVec2 center(renderer.swapchain_width() * 0.5f, renderer.swapchain_height() * 0.5f);
+            ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(400, 0));
+            ImGui::Begin("Shop", nullptr,
+                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+
+            ImGui::Text("Currency: %d", currency);
+            ImGui::Separator();
+
+            const char* weapon_names[] = {"Glock", "Wingman", "Throwing Knife", "Slot 4"};
+            for (int w = 0; w < 3; w++) {
+                ImGui::PushID(w);
+                if (weapon_owned[w]) {
+                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s  OWNED", weapon_names[w]);
+                    if (w != active_weapon) {
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Equip")) {
+                            pending_weapon = w;
+                            weapons[active_weapon].begin_swap();
+                        }
+                    } else {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(equipped)");
+                    }
+                } else {
+                    ImGui::Text("%s  %d coins", weapon_names[w], weapon_cost[w]);
+                    ImGui::SameLine();
+                    if (currency >= weapon_cost[w]) {
+                        if (ImGui::SmallButton("Buy")) {
+                            currency -= weapon_cost[w];
+                            weapon_owned[w] = true;
+                            num_weapons = 0;
+                            for (int i = 0; i < MAX_WEAPONS; i++)
+                                if (weapon_owned[i]) num_weapons = i + 1;
+                        }
+                    } else {
+                        ImGui::TextDisabled("(not enough)");
+                    }
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Continue to next room", ImVec2(-1, 30))) {
+                do_room_transition();
+            }
+            ImGui::End();
+        }
+
+        if (show_hud && !show_settings) {
             // --- Damage vignette ---
             {
                 float intensity = player.damage_accum / 40.0f; // 40 dmg = full intensity
@@ -1625,7 +1709,7 @@ int main(int argc, char* argv[]) {
 
             // --- Enemies ---
             if (ImGui::CollapsingHeader("Weapons")) {
-                for (int w = 0; w < num_weapons && w < MAX_WEAPONS; w++) {
+                for (int w = 0; w < 3; w++) {
                     Weapon& wep = weapons[w];
                     char label[64];
                     snprintf(label, sizeof(label), "[%d] %s%s", w + 1, wep.config.name,
