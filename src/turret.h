@@ -35,7 +35,7 @@ struct TurretConfig {
     float hover_force       = 10.0f;
 
     // Combat
-    float beam_dps          = 30.0f;  // damage per second while firing
+    float beam_dps          = 90.0f;  // damage per second while firing
     float windup_time       = 1.2f;   // visible laser before shot
     float burst_count_f     = 3.0f;   // shots per burst (float for slider)
     float burst_interval    = 0.12f;  // time between burst shots
