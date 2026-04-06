@@ -758,23 +758,62 @@ int main(int argc, char* argv[]) {
               if (weapon.config.fire_mode == FireMode::PROJECTILE) {
                 // Spawn a player projectile
                 HMM_Vec3 fwd = camera.forward();
+                constexpr float GRACE = 0.07f;
+                constexpr float SPAWN_FWD = 1.5f;
+
+                // Real projectile — spawns ahead, invisible during grace period
+                int real_idx = -1;
                 for (int i = 0; i < MAX_ENTITIES; i++) {
                     if (!entities[i].alive) {
                         Entity& p = entities[i];
                         p = Entity{};
                         p.type     = EntityType::Projectile;
                         p.alive    = true;
-                        p.position = HMM_AddV3(camera.position, HMM_MulV3F(fwd, 1.5f));
+                        p.position = HMM_AddV3(camera.position, HMM_MulV3F(fwd, SPAWN_FWD));
                         p.velocity = HMM_MulV3F(fwd, weapon.config.proj_speed);
                         p.radius   = weapon.config.proj_radius;
                         p.damage   = weapon.config.damage;
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
-                        p.ai_timer = 0.05f; // render grace period
-                        // Orient knife model to face travel direction
+                        p.ai_timer = GRACE; // render grace period
                         p.yaw   = atan2f(fwd.X, fwd.Z);
                         p.pitch = -asinf(fwd.Y);
+                        real_idx = i;
                         break;
+                    }
+                }
+
+                // Dummy projectile — visual only, travels from hand to where real one appears
+                if (real_idx >= 0) {
+                    HMM_Vec3 cam_right = camera.right();
+                    HMM_Vec3 cam_up    = HMM_V3(0.0f, 1.0f, 0.0f);
+                    HMM_Vec3 hip = weapon.config.hip_offset;
+                    HMM_Vec3 hand_pos = HMM_AddV3(camera.position,
+                        HMM_AddV3(HMM_MulV3F(cam_right, hip.X),
+                        HMM_AddV3(HMM_MulV3F(cam_up, hip.Y),
+                                  HMM_MulV3F(fwd, hip.Z))));
+                    // Target: where real projectile will be when grace ends
+                    HMM_Vec3 target = HMM_AddV3(
+                        HMM_AddV3(camera.position, HMM_MulV3F(fwd, SPAWN_FWD)),
+                        HMM_MulV3F(fwd, weapon.config.proj_speed * GRACE));
+                    HMM_Vec3 dummy_vel = HMM_MulV3F(HMM_SubV3(target, hand_pos), 1.0f / GRACE);
+
+                    for (int i = 0; i < MAX_ENTITIES; i++) {
+                        if (!entities[i].alive) {
+                            Entity& d = entities[i];
+                            d = Entity{};
+                            d.type     = EntityType::Projectile;
+                            d.alive    = true;
+                            d.position = hand_pos;
+                            d.velocity = dummy_vel;
+                            d.radius   = weapon.config.proj_radius;
+                            d.damage   = 0.0f;
+                            d.owner    = -4; // dummy visual projectile
+                            d.lifetime = GRACE;
+                            d.yaw   = atan2f(fwd.X, fwd.Z);
+                            d.pitch = -asinf(fwd.Y);
+                            break;
+                        }
                     }
                 }
               } else {
@@ -1048,7 +1087,7 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& proj = entities[i];
                 if (!proj.alive || proj.type != EntityType::Projectile) continue;
-                if (proj.owner != -3) continue; // only player projectiles
+                if (proj.owner != -3) continue; // only real player projectiles (skip dummy -4)
 
                 bool hit_something = false;
                 for (int j = 0; j < MAX_ENTITIES; j++) {
@@ -1110,7 +1149,7 @@ int main(int argc, char* argv[]) {
                 Entity& e = entities[i];
                 if (!e.alive || e.type != EntityType::Projectile) continue;
 
-                if (e.owner == -3) continue; // skip player projectiles
+                if (e.owner == -3 || e.owner == -4) continue; // skip player projectiles + dummy
                 if (sphere_capsule_overlap(e.position, e.radius,
                                            player.capsule_bottom(), player.capsule_top(),
                                            player.radius)) {

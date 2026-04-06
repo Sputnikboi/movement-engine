@@ -387,13 +387,13 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
         } break;
 
         case EntityType::Projectile: {
-            // Skip rendering during grace period (avoids appearing inside camera)
-            if (e.ai_timer > 0.0f) break;
+            // Skip rendering real knife during grace period (avoids appearing inside camera)
+            if (e.owner == -3 && e.ai_timer > 0.0f) break;
 
-            if (e.owner == -3 && knife_mesh && !knife_mesh->vertices.empty()) {
-                // Player knife projectile — render actual Kunai model
+            if ((e.owner == -3 || e.owner == -4) && knife_mesh && !knife_mesh->vertices.empty()) {
+                // Player knife projectile (real or dummy) — render Kunai model
                 append_mesh_transformed(out, *knife_mesh, e.position, e.yaw, e.pitch, 0.08f);
-            } else if (e.owner == -3) {
+            } else if (e.owner == -3 || e.owner == -4) {
                 // Fallback sphere
                 append_sphere(out, sphere, e.position, e.radius, 1.0f, 1.0f, 0.9f);
             } else if (e.owner == -2) {

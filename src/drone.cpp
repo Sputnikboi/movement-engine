@@ -407,9 +407,10 @@ void projectiles_update(Entity entities[], int max_entities,
         if (p.ai_timer > 0.0f) p.ai_timer -= dt;
 
         // Check wall collision via raycast along travel direction
+        // Skip wall collision for dummy visual projectiles (owner == -4)
         HMM_Vec3 travel = HMM_MulV3F(p.velocity, dt);
         float travel_len = HMM_LenV3(travel);
-        if (travel_len > 0.001f) {
+        if (p.owner != -4 && travel_len > 0.001f) {
             HMM_Vec3 travel_dir = HMM_MulV3F(travel, 1.0f / travel_len);
             HitResult hit = world.raycast(p.position, travel_dir,
                                           travel_len + p.radius);
