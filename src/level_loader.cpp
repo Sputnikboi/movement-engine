@@ -194,6 +194,38 @@ static void process_node(const cgltf_node* node, LevelData& out) {
         fprintf(stdout, "  Found rusher spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
                 es.position.X, es.position.Y, es.position.Z, node->name);
     }
+    if (name_starts_with(node->name, "spawnturret")) {
+        EnemySpawn es;
+        es.position = HMM_V3(transform[12], transform[13], transform[14]);
+        es.type = EntityType::Turret;
+        out.enemy_spawns.push_back(es);
+        fprintf(stdout, "  Found turret spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
+                es.position.X, es.position.Y, es.position.Z, node->name);
+    }
+    if (name_starts_with(node->name, "spawntank")) {
+        EnemySpawn es;
+        es.position = HMM_V3(transform[12], transform[13], transform[14]);
+        es.type = EntityType::Tank;
+        out.enemy_spawns.push_back(es);
+        fprintf(stdout, "  Found tank spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
+                es.position.X, es.position.Y, es.position.Z, node->name);
+    }
+    if (name_starts_with(node->name, "spawnbomber")) {
+        EnemySpawn es;
+        es.position = HMM_V3(transform[12], transform[13], transform[14]);
+        es.type = EntityType::Bomber;
+        out.enemy_spawns.push_back(es);
+        fprintf(stdout, "  Found bomber spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
+                es.position.X, es.position.Y, es.position.Z, node->name);
+    }
+    if (name_starts_with(node->name, "spawnshielder")) {
+        EnemySpawn es;
+        es.position = HMM_V3(transform[12], transform[13], transform[14]);
+        es.type = EntityType::Shielder;
+        out.enemy_spawns.push_back(es);
+        fprintf(stdout, "  Found shielder spawn: (%.1f, %.1f, %.1f) [node: %s]\n",
+                es.position.X, es.position.Y, es.position.Z, node->name);
+    }
 
     if (node->mesh) {
         // "Ladder" or "Ladder.001" → trigger volume (invisible, collision only).

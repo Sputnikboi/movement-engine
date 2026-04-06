@@ -12,6 +12,10 @@ enum class EntityType : uint8_t {
     None,
     Drone,
     Rusher,
+    Turret,
+    Tank,
+    Bomber,
+    Shielder,
     Projectile,
 };
 

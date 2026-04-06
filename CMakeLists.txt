@@ -85,6 +85,10 @@ add_executable(${PROJECT_NAME}
     src/bvh.cpp
     src/drone.cpp
     src/rusher.cpp
+    src/turret.cpp
+    src/tank.cpp
+    src/bomber.cpp
+    src/shielder.cpp
     src/procgen.cpp
     src/entity_render.cpp
     src/effects.cpp

@@ -694,10 +694,77 @@ LevelData generate_level(const ProcGenConfig& config,
         es.type = type;
         ld.enemy_spawns.push_back(es);
     };
-    for (int i = 0; i < config.drone_count; i++)
-        spawn_enemy(EntityType::Drone, config.enemy_height);
-    for (int i = 0; i < config.rusher_count; i++)
-        spawn_enemy(EntityType::Rusher, 1.0f);
+    // Check for manual overrides (any fixed count > 0 uses old system)
+    bool use_manual = (config.drone_count > 0 || config.rusher_count > 0 ||
+                       config.turret_count > 0 || config.tank_count > 0 ||
+                       config.bomber_count > 0 || config.shielder_count > 0);
+
+    if (use_manual) {
+        for (int i = 0; i < config.drone_count; i++)
+            spawn_enemy(EntityType::Drone, config.enemy_height);
+        for (int i = 0; i < config.rusher_count; i++)
+            spawn_enemy(EntityType::Rusher, 1.0f);
+        for (int i = 0; i < config.turret_count; i++)
+            spawn_enemy(EntityType::Turret, 1.5f);
+        for (int i = 0; i < config.tank_count; i++)
+            spawn_enemy(EntityType::Tank, 2.0f);
+        for (int i = 0; i < config.bomber_count; i++)
+            spawn_enemy(EntityType::Bomber, 12.0f);
+        for (int i = 0; i < config.shielder_count; i++)
+            spawn_enemy(EntityType::Shielder, 3.0f);
+    } else {
+        // Budget system: total count scales with room number
+        int budget = config.enemy_budget_base +
+                     (config.room_number - 1) * config.enemy_budget_per_room;
+        if (budget > config.enemy_budget_max) budget = config.enemy_budget_max;
+
+        // Weighted random selection
+        // Weights shift with difficulty: tougher types become more common
+        float diff = config.difficulty;
+        float w[6] = {
+            config.weight_drone,                              // always common
+            config.weight_rusher,                             // always common
+            config.weight_turret  * (0.5f + diff * 0.5f),    // ramps up
+            config.weight_tank    * (0.2f + diff * 0.8f),    // rare early, common late
+            config.weight_bomber  * (0.3f + diff * 0.7f),    // ramps up
+            config.weight_shielder* (0.1f + diff * 0.9f),    // very rare early
+        };
+        float total_w = w[0] + w[1] + w[2] + w[3] + w[4] + w[5];
+
+        // Guarantee at least 1 shielder after room 3
+        bool shielder_guaranteed = (config.room_number >= 3);
+        bool shielder_placed = false;
+
+        EntityType types[6] = {
+            EntityType::Drone, EntityType::Rusher, EntityType::Turret,
+            EntityType::Tank, EntityType::Bomber, EntityType::Shielder
+        };
+        float heights[6] = {
+            config.enemy_height, 1.0f, 1.5f, 2.0f, 12.0f, 3.0f
+        };
+
+        for (int i = 0; i < budget; i++) {
+            // Force shielder if guaranteed and not yet placed, near end of budget
+            if (shielder_guaranteed && !shielder_placed && i >= budget - 2) {
+                spawn_enemy(EntityType::Shielder, 3.0f);
+                shielder_placed = true;
+                continue;
+            }
+
+            float roll = randf(0.0f, total_w);
+            float cumulative = 0.0f;
+            int picked = 0;
+            for (int j = 0; j < 6; j++) {
+                cumulative += w[j];
+                if (roll <= cumulative) { picked = j; break; }
+            }
+            if (types[picked] == EntityType::Shielder) shielder_placed = true;
+            spawn_enemy(types[picked], heights[picked]);
+        }
+
+        printf("ProcGen: Room %d, budget %d, difficulty %.2f\n",
+               config.room_number, budget, diff);
+    }
 
     printf("ProcGen: %zu verts, %zu indices, %d boxes, %d tall, %d hills\n",
            m.vertices.size(), m.indices.size(), boxes_placed, tall_count, hill_count);

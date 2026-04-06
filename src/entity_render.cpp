@@ -246,9 +246,116 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
                           e.tumble_x, e.tumble_z);
         } break;
 
+        case EntityType::Turret: {
+            // Steel blue-gray, reddens when firing
+            float hp_frac = (e.max_health > 0) ? e.health / e.max_health : 0.0f;
+            float r = 0.4f + (1.0f - hp_frac) * 0.3f;
+            float g = 0.4f * hp_frac + 0.2f;
+            float b = 0.5f + hp_frac * 0.2f;
+
+            // Windup/firing glow: red
+            if (e.ai_state == 2 || e.ai_state == 3) { // WINDUP or FIRING
+                float pulse = (e.ai_state == 3) ? 1.0f : 0.5f;
+                r = r + (1.0f - r) * pulse;
+                g *= (1.0f - pulse * 0.5f);
+                b *= (1.0f - pulse * 0.5f);
+            }
+
+            if (e.hit_flash > 0.0f) {
+                float flash = fminf(e.hit_flash * 6.0f, 1.0f);
+                r = r + (1.0f - r) * flash;
+                g = g + (1.0f - g) * flash;
+                b = b + (1.0f - b) * flash;
+            }
+
+            append_sphere(out, sphere, e.position, e.radius, r, g, b,
+                          e.tumble_x, e.tumble_z);
+        } break;
+
+        case EntityType::Tank: {
+            // Dark brown/gray, large
+            float hp_frac = (e.max_health > 0) ? e.health / e.max_health : 0.0f;
+            float r = 0.5f + (1.0f - hp_frac) * 0.3f;
+            float g = 0.35f * hp_frac + 0.15f;
+            float b = 0.2f;
+
+            // Windup: glows orange-red before stomp
+            if (e.ai_state == 2) { // TANK_WINDUP
+                r = 1.0f; g = 0.5f; b = 0.1f;
+            }
+            // Stomp impact: bright flash
+            if (e.ai_state == 3) { // TANK_STOMP
+                r = 1.0f; g = 0.8f; b = 0.3f;
+            }
+
+            if (e.hit_flash > 0.0f) {
+                float flash = fminf(e.hit_flash * 6.0f, 1.0f);
+                r = r + (1.0f - r) * flash;
+                g = g + (1.0f - g) * flash;
+                b = b + (1.0f - b) * flash;
+            }
+
+            append_sphere(out, sphere, e.position, e.radius, r, g, b,
+                          e.tumble_x, e.tumble_z);
+        } break;
+
+        case EntityType::Bomber: {
+            // Dark green, glows when bombing
+            float hp_frac = (e.max_health > 0) ? e.health / e.max_health : 0.0f;
+            float r = 0.2f + (1.0f - hp_frac) * 0.3f;
+            float g = 0.5f + hp_frac * 0.2f;
+            float b = 0.2f;
+
+            // Bombing run: orange glow
+            if (e.ai_state == 2) { // BOMBER_BOMBING
+                r = 0.9f; g = 0.6f; b = 0.1f;
+            }
+
+            if (e.hit_flash > 0.0f) {
+                float flash = fminf(e.hit_flash * 6.0f, 1.0f);
+                r = r + (1.0f - r) * flash;
+                g = g + (1.0f - g) * flash;
+                b = b + (1.0f - b) * flash;
+            }
+
+            append_sphere(out, sphere, e.position, e.radius, r, g, b,
+                          e.tumble_x, e.tumble_z);
+        } break;
+
+        case EntityType::Shielder: {
+            // Cyan/blue, pulses when shielding
+            float hp_frac = (e.max_health > 0) ? e.health / e.max_health : 0.0f;
+            float r = 0.1f;
+            float g = 0.4f + hp_frac * 0.3f;
+            float b = 0.8f + hp_frac * 0.2f;
+
+            // Shielding: bright cyan pulse
+            if (e.ai_state == 2) { // SHIELDER_SHIELDING
+                float pulse = sinf(e.bob_seed + e.position.Y * 3.0f) * 0.3f + 0.7f;
+                r = 0.2f * pulse;
+                g = 0.8f * pulse;
+                b = 1.0f * pulse;
+            }
+
+            if (e.hit_flash > 0.0f) {
+                float flash = fminf(e.hit_flash * 6.0f, 1.0f);
+                r = r + (1.0f - r) * flash;
+                g = g + (1.0f - g) * flash;
+                b = b + (1.0f - b) * flash;
+            }
+
+            append_sphere(out, sphere, e.position, e.radius, r, g, b,
+                          e.tumble_x, e.tumble_z);
+        } break;
+
         case EntityType::Projectile: {
-            // Bright orange-yellow
-            append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.7f, 0.1f);
+            // Bright orange-yellow for drone projectiles, red for bombs
+            if (e.owner == -2) {
+                // Bomb (from bomber) — red-orange
+                append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.3f, 0.1f);
+            } else {
+                append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.7f, 0.1f);
+            }
         } break;
 
         default: break;

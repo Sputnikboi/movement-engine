@@ -17,6 +17,10 @@
 #include "entity.h"
 #include "drone.h"
 #include "rusher.h"
+#include "turret.h"
+#include "tank.h"
+#include "bomber.h"
+#include "shielder.h"
 #include "procgen.h"
 #include "entity_render.h"
 #include "effects.h"
@@ -53,7 +57,11 @@ static bool load_level(const std::string& path,
                        bool& noclip, std::string& current_level_name,
                        Entity entities[] = nullptr, int max_entities = 0,
                        const DroneConfig* drone_cfg = nullptr,
-                       const RusherConfig* rusher_cfg = nullptr)
+                       const RusherConfig* rusher_cfg = nullptr,
+                       const TurretConfig* turret_cfg = nullptr,
+                       const TankConfig* tank_cfg = nullptr,
+                       const BomberConfig* bomber_cfg = nullptr,
+                       const ShielderConfig* shielder_cfg = nullptr)
 {
     LevelData ld = load_level_gltf(path);
     if (ld.mesh.vertices.empty()) {
@@ -107,6 +115,14 @@ static bool load_level(const std::string& path,
                 drone_spawn(entities, max_entities, es.position, *drone_cfg);
             else if (es.type == EntityType::Rusher && rusher_cfg)
                 rusher_spawn(entities, max_entities, es.position, *rusher_cfg);
+            else if (es.type == EntityType::Turret && turret_cfg)
+                turret_spawn(entities, max_entities, es.position, *turret_cfg);
+            else if (es.type == EntityType::Tank && tank_cfg)
+                tank_spawn(entities, max_entities, es.position, *tank_cfg);
+            else if (es.type == EntityType::Bomber && bomber_cfg)
+                bomber_spawn(entities, max_entities, es.position, *bomber_cfg);
+            else if (es.type == EntityType::Shielder && shielder_cfg)
+                shielder_spawn(entities, max_entities, es.position, *shielder_cfg);
         }
         if (!ld.enemy_spawns.empty())
             printf("Spawned %zu preplaced enemies\n", ld.enemy_spawns.size());
@@ -214,6 +230,8 @@ int main(int argc, char* argv[]) {
     } else {
         printf("No level file found, generating procedural level\n");
         ProcGenConfig pg_cfg;
+        pg_cfg.room_number = 1;
+        pg_cfg.difficulty = 1.0f;
         ld = generate_level(pg_cfg, door_mesh_ptr, &active_doors);
         spawn_pos = ld.spawn_pos;
         has_spawn = ld.has_spawn;
@@ -295,6 +313,7 @@ int main(int argc, char* argv[]) {
                                    : custom_level              ? "Room1.glb"
                                    :                             "Procedural";
     ProcGenConfig procgen_cfg;
+    int rooms_cleared = 0;
     std::vector<std::string> level_files;
     bool levels_scanned = false;
     char level_path_buf[512] = "";
@@ -303,6 +322,10 @@ int main(int argc, char* argv[]) {
     Entity entities[MAX_ENTITIES] = {};
     DroneConfig drone_cfg;
     RusherConfig rusher_cfg;
+    TurretConfig turret_cfg;
+    TankConfig tank_cfg;
+    BomberConfig bomber_cfg;
+    ShielderConfig shielder_cfg;
     EffectSystem effects;
     effects.init();
     float total_time = 0.0f;
@@ -313,6 +336,14 @@ int main(int argc, char* argv[]) {
             drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
         else if (es.type == EntityType::Rusher)
             rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+        else if (es.type == EntityType::Turret)
+            turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
+        else if (es.type == EntityType::Tank)
+            tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
+        else if (es.type == EntityType::Bomber)
+            bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
+        else if (es.type == EntityType::Shielder)
+            shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
     }
     if (!initial_enemy_spawns.empty())
         printf("Spawned %zu preplaced enemies\n", initial_enemy_spawns.size());
@@ -637,6 +668,14 @@ int main(int argc, char* argv[]) {
                         e.ai_state = DRONE_CHASING;
                     if (e.type == EntityType::Rusher && e.ai_state == RUSHER_IDLE)
                         e.ai_state = RUSHER_CHASING;
+                    if (e.type == EntityType::Turret && e.ai_state == TURRET_IDLE)
+                        e.ai_state = TURRET_TRACKING;
+                    if (e.type == EntityType::Tank && e.ai_state == TANK_IDLE)
+                        e.ai_state = TANK_CHASING;
+                    if (e.type == EntityType::Bomber && e.ai_state == BOMBER_IDLE)
+                        e.ai_state = BOMBER_APPROACH;
+                    if (e.type == EntityType::Shielder && e.ai_state == SHIELDER_IDLE)
+                        e.ai_state = SHIELDER_CHASING;
                 }
 
                 HMM_Vec3 ray_origin = camera.position;
@@ -648,7 +687,7 @@ int main(int argc, char* argv[]) {
                 for (int i = 0; i < MAX_ENTITIES; i++) {
                     Entity& e = entities[i];
                     if (!e.alive) continue;
-                    if (e.type != EntityType::Drone && e.type != EntityType::Rusher) continue;
+                    if (e.type == EntityType::Projectile || e.type == EntityType::None) continue;
 
                     // Ray-sphere intersection
                     HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
@@ -671,19 +710,45 @@ int main(int argc, char* argv[]) {
                 if (best_idx >= 0) {
                     Entity& hit_ent = entities[best_idx];
                     hit_ent.health -= weapon.config.damage;
-                    hit_ent.hit_flash = drone_cfg.hit_flash_time;
+                    // Set hit flash per type
+                    if (hit_ent.type == EntityType::Turret)
+                        hit_ent.hit_flash = turret_cfg.hit_flash_time;
+                    else if (hit_ent.type == EntityType::Tank)
+                        hit_ent.hit_flash = tank_cfg.hit_flash_time;
+                    else if (hit_ent.type == EntityType::Bomber)
+                        hit_ent.hit_flash = bomber_cfg.hit_flash_time;
+                    else if (hit_ent.type == EntityType::Shielder)
+                        hit_ent.hit_flash = shielder_cfg.hit_flash_time;
+                    else
+                        hit_ent.hit_flash = drone_cfg.hit_flash_time;
+
+                    // Apply shielder damage reduction
+                    float dmg_mult = shielder_get_damage_mult(entities, MAX_ENTITIES,
+                                                              hit_ent.position, shielder_cfg);
+                    hit_ent.health += weapon.config.damage * (1.0f - dmg_mult); // undo part of damage
 
                     // Wake up idle enemies on hit
                     if (hit_ent.type == EntityType::Drone && hit_ent.ai_state == DRONE_IDLE)
                         hit_ent.ai_state = DRONE_CHASING;
                     if (hit_ent.type == EntityType::Rusher && hit_ent.ai_state == RUSHER_IDLE)
                         hit_ent.ai_state = RUSHER_CHASING;
+                    if (hit_ent.type == EntityType::Turret && hit_ent.ai_state == TURRET_IDLE)
+                        hit_ent.ai_state = TURRET_TRACKING;
+                    if (hit_ent.type == EntityType::Tank && hit_ent.ai_state == TANK_IDLE)
+                        hit_ent.ai_state = TANK_CHASING;
+                    if (hit_ent.type == EntityType::Bomber && hit_ent.ai_state == BOMBER_IDLE)
+                        hit_ent.ai_state = BOMBER_APPROACH;
+                    if (hit_ent.type == EntityType::Shielder && hit_ent.ai_state == SHIELDER_IDLE)
+                        hit_ent.ai_state = SHIELDER_CHASING;
 
                     // Determine dying state for this entity type
-                    uint8_t dying_state = (hit_ent.type == EntityType::Rusher)
-                                          ? (uint8_t)RUSHER_DYING : (uint8_t)DRONE_DYING;
-                    float tumble = (hit_ent.type == EntityType::Rusher)
-                                   ? rusher_cfg.death_tumble_speed : drone_cfg.death_tumble_speed;
+                    uint8_t dying_state = (uint8_t)DRONE_DYING;
+                    float tumble = drone_cfg.death_tumble_speed;
+                    if (hit_ent.type == EntityType::Rusher)  { dying_state = RUSHER_DYING;  tumble = rusher_cfg.death_tumble_speed; }
+                    if (hit_ent.type == EntityType::Turret)  { dying_state = TURRET_DYING;  tumble = turret_cfg.death_tumble_speed; }
+                    if (hit_ent.type == EntityType::Tank)    { dying_state = TANK_DYING;    tumble = tank_cfg.death_tumble_speed; }
+                    if (hit_ent.type == EntityType::Bomber)  { dying_state = BOMBER_DYING;  tumble = bomber_cfg.death_tumble_speed; }
+                    if (hit_ent.type == EntityType::Shielder){ dying_state = SHIELDER_DYING; tumble = shielder_cfg.death_tumble_speed; }
 
                     if (hit_ent.health <= 0 && hit_ent.ai_state != dying_state) {
                         hit_ent.ai_state = dying_state;
@@ -707,6 +772,10 @@ int main(int argc, char* argv[]) {
             struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
             drone_tick_frame();
             rusher_tick_frame();
+            turret_tick_frame();
+            tank_tick_frame();
+            bomber_tick_frame();
+            shielder_tick_frame();
 
             DyingEnemy dying[MAX_ENTITIES];
             int dying_count = 0;
@@ -732,6 +801,49 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 }
+                if (e.type == EntityType::Turret) {
+                    if (e.ai_state == TURRET_DYING)
+                        dying[dying_count++] = {i, e.position, true};
+                    if (ai_enabled) {
+                        turret_update(e, entities, MAX_ENTITIES,
+                                      player.position, collision, turret_cfg, dt, total_time);
+                        float tdmg = 0.0f;
+                        if (turret_check_player_hit(e, player.position, player.radius,
+                                                    collision, turret_cfg, tdmg)) {
+                            // TODO: player takes damage (tdmg)
+                        }
+                    }
+                }
+                if (e.type == EntityType::Tank) {
+                    if (e.ai_state == TANK_DYING)
+                        dying[dying_count++] = {i, e.position, true};
+                    if (ai_enabled) {
+                        tank_update(e, entities, MAX_ENTITIES,
+                                    player.position, collision, tank_cfg, dt, total_time);
+                        float tdmg = 0.0f;
+                        HMM_Vec3 kb = {};
+                        if (tank_check_player_hit(e, player.position, player.radius,
+                                                  tank_cfg, tdmg, kb)) {
+                            // Apply knockback to player
+                            player.velocity = HMM_AddV3(player.velocity, kb);
+                            // TODO: player takes damage (tdmg)
+                        }
+                    }
+                }
+                if (e.type == EntityType::Bomber) {
+                    if (e.ai_state == BOMBER_DYING)
+                        dying[dying_count++] = {i, e.position, true};
+                    if (ai_enabled)
+                        bomber_update(e, entities, MAX_ENTITIES,
+                                      player.position, collision, bomber_cfg, dt, total_time);
+                }
+                if (e.type == EntityType::Shielder) {
+                    if (e.ai_state == SHIELDER_DYING)
+                        dying[dying_count++] = {i, e.position, true};
+                    if (ai_enabled)
+                        shielder_update(e, entities, MAX_ENTITIES,
+                                        player.position, collision, shielder_cfg, dt, total_time);
+                }
             }
 
             // Check which dying enemies just expired → explosion
@@ -747,8 +859,12 @@ int main(int argc, char* argv[]) {
             // Helper: is entity a live (non-dying) enemy?
             auto is_live_enemy = [](const Entity& e) -> bool {
                 if (!e.alive) return false;
-                if (e.type == EntityType::Drone)  return e.ai_state != DRONE_DYING && e.ai_state != DRONE_DEAD;
-                if (e.type == EntityType::Rusher) return e.ai_state != RUSHER_DYING && e.ai_state != RUSHER_DEAD;
+                if (e.type == EntityType::Drone)    return e.ai_state != DRONE_DYING    && e.ai_state != DRONE_DEAD;
+                if (e.type == EntityType::Rusher)   return e.ai_state != RUSHER_DYING   && e.ai_state != RUSHER_DEAD;
+                if (e.type == EntityType::Turret)   return e.ai_state != TURRET_DYING   && e.ai_state != TURRET_DEAD;
+                if (e.type == EntityType::Tank)     return e.ai_state != TANK_DYING     && e.ai_state != TANK_DEAD;
+                if (e.type == EntityType::Bomber)   return e.ai_state != BOMBER_DYING   && e.ai_state != BOMBER_DEAD;
+                if (e.type == EntityType::Shielder) return e.ai_state != SHIELDER_DYING && e.ai_state != SHIELDER_DEAD;
                 return false;
             };
 
@@ -796,12 +912,33 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& e = entities[i];
                 if (!e.alive || e.type != EntityType::Projectile) continue;
-                HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
-                float dist_sq = HMM_DotV3(to_player, to_player);
-                float hit_radius = e.radius + player.radius;
-                if (dist_sq < hit_radius * hit_radius) {
-                    // TODO: player takes damage
-                    e.alive = false;
+
+                if (e.owner == -2) {
+                    // Bomb: AoE check (circle_speed stores AoE radius)
+                    HMM_Vec3 to_player = HMM_SubV3(player.position, e.position);
+                    float dist = HMM_LenV3(to_player);
+                    float aoe = e.circle_speed;
+                    if (dist < aoe) {
+                        float falloff = 1.0f - (dist / aoe);
+                        // TODO: player takes damage (e.damage * falloff)
+                        // Knockback from explosion
+                        if (dist > 0.1f) {
+                            HMM_Vec3 kb_dir = HMM_MulV3F(to_player, 1.0f / dist);
+                            player.velocity = HMM_AddV3(player.velocity,
+                                HMM_MulV3F(kb_dir, falloff * 8.0f));
+                            player.velocity.Y += falloff * 5.0f;
+                        }
+                        e.alive = false;
+                    }
+                } else {
+                    // Direct-hit projectile
+                    HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
+                    float dist_sq = HMM_DotV3(to_player, to_player);
+                    float hit_radius = e.radius + player.radius;
+                    if (dist_sq < hit_radius * hit_radius) {
+                        // TODO: player takes damage
+                        e.alive = false;
+                    }
                 }
             }
         } // end !show_settings
@@ -817,7 +954,9 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 const Entity& e = entities[i];
                 if (!e.alive) continue;
-                if (e.type == EntityType::Drone || e.type == EntityType::Rusher) {
+                if (e.type == EntityType::Drone || e.type == EntityType::Rusher ||
+                    e.type == EntityType::Turret || e.type == EntityType::Tank ||
+                    e.type == EntityType::Bomber || e.type == EntityType::Shielder) {
                     any_alive = true;
                     break;
                 }
@@ -841,8 +980,11 @@ int main(int argc, char* argv[]) {
 
         // Door interaction: pressing interact near unlocked exit → new room
         if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings) {
-            printf("Entering next room...\n");
+            rooms_cleared++;
+            printf("Entering room %d...\n", rooms_cleared + 1);
             procgen_cfg.seed = 0; // random seed each time
+            procgen_cfg.room_number = rooms_cleared + 1;
+            procgen_cfg.difficulty = 1.0f + rooms_cleared * 0.15f;
 
             LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
 
@@ -870,6 +1012,14 @@ int main(int argc, char* argv[]) {
                     drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
                 else if (es.type == EntityType::Rusher)
                     rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+        else if (es.type == EntityType::Turret)
+            turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
+        else if (es.type == EntityType::Tank)
+            tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
+        else if (es.type == EntityType::Bomber)
+            bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
+        else if (es.type == EntityType::Shielder)
+            shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
             }
 
             current_level_name = "Procedural";
@@ -963,18 +1113,23 @@ int main(int argc, char* argv[]) {
             }
             if (noclip) ImGui::Text("NOCLIP");
             // Count alive enemies
-            int drone_count = 0, rusher_count_hud = 0;
+            int enemy_count_hud = 0;
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 if (!entities[i].alive) continue;
-                if (entities[i].type == EntityType::Drone) drone_count++;
-                if (entities[i].type == EntityType::Rusher) rusher_count_hud++;
+                auto t = entities[i].type;
+                if (t == EntityType::Drone || t == EntityType::Rusher ||
+                    t == EntityType::Turret || t == EntityType::Tank ||
+                    t == EntityType::Bomber || t == EntityType::Shielder)
+                    enemy_count_hud++;
             }
-            if (drone_count > 0 || rusher_count_hud > 0)
-                ImGui::Text("Enemies: %d", drone_count + rusher_count_hud);
+            if (enemy_count_hud > 0)
+                ImGui::Text("Enemies: %d", enemy_count_hud);
+            if (rooms_cleared > 0)
+                ImGui::Text("Room: %d", rooms_cleared + 1);
             for (const auto& d : active_doors) {
                 if (d.is_exit) {
                     if (d.locked)
-                        ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", drone_count + rusher_count_hud);
+                        ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", enemy_count_hud);
                     else if (near_exit_door)
                         ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to enter next room",
                                            input_code_name(kb.get(Action::Interact, 0)));
@@ -1065,7 +1220,8 @@ int main(int argc, char* argv[]) {
                         if (ImGui::Selectable(name.c_str())) {
                             load_level(path, renderer, collision, player, camera,
                                        noclip, current_level_name,
-                                       entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg);
+                                       entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg,
+                                       &turret_cfg, &tank_cfg, &bomber_cfg, &shielder_cfg);
                         }
                     }
                     ImGui::EndChild();
@@ -1081,12 +1237,15 @@ int main(int argc, char* argv[]) {
                 if (ImGui::Button("Load") && level_path_buf[0]) {
                     load_level(level_path_buf, renderer, collision, player, camera,
                                noclip, current_level_name,
-                               entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg);
+                               entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg,
+                                       &turret_cfg, &tank_cfg, &bomber_cfg, &shielder_cfg);
                 }
 
                 ImGui::Separator();
                 ImGui::Text("Procedural Generation");
                 if (ImGui::Button("Generate New Level")) {
+                    procgen_cfg.room_number = rooms_cleared + 1;
+                    procgen_cfg.difficulty = 1.0f + rooms_cleared * 0.15f;
                     LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
 
                     // Clear entities + effects
@@ -1107,12 +1266,34 @@ int main(int argc, char* argv[]) {
                     camera.yaw = HMM_PI32 / 2.0f; camera.pitch = 0;
                     noclip = false;
 
-                    // Spawn enemies
-                    for (const auto& es : pld.enemy_spawns) {
-                        if (es.type == EntityType::Drone)
-                            drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
-                        else if (es.type == EntityType::Rusher)
-                            rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+                    // Spawn enemies with difficulty scaling
+                    {
+                        float diff = procgen_cfg.difficulty;
+                        float hp_s = 1.0f + (diff - 1.0f) * (procgen_cfg.hp_scale_per_room / 0.15f);
+                        float dm_s = 1.0f + (diff - 1.0f) * (procgen_cfg.dmg_scale_per_room / 0.15f);
+                        float sp_s = 1.0f + (diff - 1.0f) * (procgen_cfg.spd_scale_per_room / 0.15f);
+
+                        auto dr = drone_cfg;   dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
+                        auto ru = rusher_cfg;  ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
+                        auto tu = turret_cfg;  tu.health *= hp_s; tu.hitscan_damage *= dm_s; tu.track_speed *= sp_s;
+                        auto tk = tank_cfg;    tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
+                        auto bo = bomber_cfg;  bo.health *= hp_s; bo.bomb_damage *= dm_s; bo.approach_speed *= sp_s; bo.circle_speed *= sp_s;
+                        auto sh = shielder_cfg; sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
+
+                        for (const auto& es : pld.enemy_spawns) {
+                            if (es.type == EntityType::Drone)
+                                drone_spawn(entities, MAX_ENTITIES, es.position, dr);
+                            else if (es.type == EntityType::Rusher)
+                                rusher_spawn(entities, MAX_ENTITIES, es.position, ru);
+                            else if (es.type == EntityType::Turret)
+                                turret_spawn(entities, MAX_ENTITIES, es.position, tu);
+                            else if (es.type == EntityType::Tank)
+                                tank_spawn(entities, MAX_ENTITIES, es.position, tk);
+                            else if (es.type == EntityType::Bomber)
+                                bomber_spawn(entities, MAX_ENTITIES, es.position, bo);
+                            else if (es.type == EntityType::Shielder)
+                                shielder_spawn(entities, MAX_ENTITIES, es.position, sh);
+                        }
                     }
 
                     current_level_name = "Procedural";
@@ -1133,8 +1314,32 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Stack Chance", &procgen_cfg.box_stack_chance, 0.0f, 1.0f);
                 ImGui::SliderInt("Tall Min", &procgen_cfg.tall_count_min, 0, 15);
                 ImGui::SliderInt("Tall Max", &procgen_cfg.tall_count_max, 0, 15);
+                ImGui::Text("Room: %d  Difficulty: %.2f", rooms_cleared + 1,
+                            procgen_cfg.difficulty);
+                ImGui::Separator();
+                ImGui::Text("Enemy Budget (0 overrides = random)");
+                ImGui::SliderInt("Budget Base", &procgen_cfg.enemy_budget_base, 3, 30);
+                ImGui::SliderInt("Budget/Room", &procgen_cfg.enemy_budget_per_room, 0, 5);
+                ImGui::SliderInt("Budget Max", &procgen_cfg.enemy_budget_max, 5, 60);
+                ImGui::SliderFloat("HP Scale/Room", &procgen_cfg.hp_scale_per_room, 0.0f, 0.2f, "%.2f");
+                ImGui::SliderFloat("Dmg Scale/Room", &procgen_cfg.dmg_scale_per_room, 0.0f, 0.2f, "%.2f");
+                ImGui::SliderFloat("Spd Scale/Room", &procgen_cfg.spd_scale_per_room, 0.0f, 0.1f, "%.2f");
+                ImGui::Separator();
+                ImGui::Text("Spawn Weights");
+                ImGui::SliderFloat("W Drone", &procgen_cfg.weight_drone, 0.0f, 10.0f);
+                ImGui::SliderFloat("W Rusher", &procgen_cfg.weight_rusher, 0.0f, 10.0f);
+                ImGui::SliderFloat("W Turret", &procgen_cfg.weight_turret, 0.0f, 10.0f);
+                ImGui::SliderFloat("W Tank", &procgen_cfg.weight_tank, 0.0f, 10.0f);
+                ImGui::SliderFloat("W Bomber", &procgen_cfg.weight_bomber, 0.0f, 10.0f);
+                ImGui::SliderFloat("W Shielder", &procgen_cfg.weight_shielder, 0.0f, 10.0f);
+                ImGui::Separator();
+                ImGui::Text("Fixed Overrides (all 0 = use budget)");
                 ImGui::SliderInt("Drones", &procgen_cfg.drone_count, 0, 20);
                 ImGui::SliderInt("Rushers", &procgen_cfg.rusher_count, 0, 20);
+                ImGui::SliderInt("Turrets", &procgen_cfg.turret_count, 0, 10);
+                ImGui::SliderInt("Tanks", &procgen_cfg.tank_count, 0, 10);
+                ImGui::SliderInt("Bombers", &procgen_cfg.bomber_count, 0, 10);
+                ImGui::SliderInt("Shielders", &procgen_cfg.shielder_count, 0, 10);
             }
 
             // --- Enemies ---
@@ -1303,6 +1508,82 @@ int main(int argc, char* argv[]) {
                 ImGui::SliderFloat("Dash Force",         &rusher_cfg.dash_force,     10.0f, 100.0f);
                 ImGui::SliderFloat("Dash Duration",      &rusher_cfg.dash_duration,  0.1f, 2.0f, "%.2fs");
                 ImGui::SliderFloat("Dash Cooldown",      &rusher_cfg.dash_cooldown,  0.1f, 5.0f, "%.2fs");
+
+                ImGui::Separator();
+                ImGui::Text("--- Turret ---");
+                if (ImGui::Button("Spawn Turret")) {
+                    HMM_Vec3 spawn = HMM_AddV3(player.position,
+                        HMM_MulV3F(camera.forward(), 8.0f));
+                    int idx = turret_spawn(entities, MAX_ENTITIES, spawn, turret_cfg);
+                    if (idx >= 0) entities[idx].ai_state = TURRET_TRACKING;
+                }
+                ImGui::SliderFloat("Tu Health",       &turret_cfg.health,          1.0f, 50.0f);
+                ImGui::SliderFloat("Tu Radius",       &turret_cfg.radius,          0.3f, 2.0f);
+                ImGui::SliderFloat("Tu Detect Range", &turret_cfg.detection_range, 10.0f, 80.0f);
+                ImGui::SliderFloat("Tu Hitscan Dmg",  &turret_cfg.hitscan_damage,  1.0f, 30.0f);
+                ImGui::SliderFloat("Tu Windup",       &turret_cfg.windup_time,     0.2f, 3.0f, "%.2fs");
+                ImGui::SliderFloat("Tu Burst Count",  &turret_cfg.burst_count_f,   1.0f, 10.0f, "%.0f");
+                ImGui::SliderFloat("Tu Burst Interval",&turret_cfg.burst_interval, 0.05f, 0.5f, "%.2fs");
+                ImGui::SliderFloat("Tu Cooldown",     &turret_cfg.cooldown_time,   0.5f, 5.0f, "%.1fs");
+                ImGui::SliderFloat("Tu Accuracy",     &turret_cfg.accuracy,        0.5f, 1.0f, "%.2f");
+                ImGui::SliderFloat("Tu Track Speed",  &turret_cfg.track_speed,     0.5f, 10.0f);
+
+                ImGui::Separator();
+                ImGui::Text("--- Tank ---");
+                if (ImGui::Button("Spawn Tank")) {
+                    HMM_Vec3 spawn = HMM_AddV3(player.position,
+                        HMM_MulV3F(camera.forward(), 10.0f));
+                    int idx = tank_spawn(entities, MAX_ENTITIES, spawn, tank_cfg);
+                    if (idx >= 0) entities[idx].ai_state = TANK_CHASING;
+                }
+                ImGui::SliderFloat("Tk Health",       &tank_cfg.health,            10.0f, 200.0f);
+                ImGui::SliderFloat("Tk Radius",       &tank_cfg.radius,            0.5f, 3.0f);
+                ImGui::SliderFloat("Tk Detect Range", &tank_cfg.detection_range,   10.0f, 60.0f);
+                ImGui::SliderFloat("Tk Chase Speed",  &tank_cfg.chase_speed,       1.0f, 15.0f);
+                ImGui::SliderFloat("Tk Stomp Range",  &tank_cfg.stomp_range,       3.0f, 15.0f);
+                ImGui::SliderFloat("Tk Stomp AoE",    &tank_cfg.stomp_aoe_radius,  3.0f, 15.0f);
+                ImGui::SliderFloat("Tk Stomp Damage", &tank_cfg.stomp_damage,      5.0f, 50.0f);
+                ImGui::SliderFloat("Tk Stomp KB",     &tank_cfg.stomp_knockback,   5.0f, 30.0f);
+                ImGui::SliderFloat("Tk Windup",       &tank_cfg.windup_time,       0.3f, 2.0f, "%.2fs");
+                ImGui::SliderFloat("Tk Cooldown",     &tank_cfg.stomp_cooldown,    1.0f, 8.0f, "%.1fs");
+
+                ImGui::Separator();
+                ImGui::Text("--- Bomber ---");
+                if (ImGui::Button("Spawn Bomber")) {
+                    HMM_Vec3 spawn = HMM_AddV3(player.position,
+                        HMM_MulV3F(camera.forward(), 12.0f));
+                    spawn.Y += 10.0f;
+                    int idx = bomber_spawn(entities, MAX_ENTITIES, spawn, bomber_cfg);
+                    if (idx >= 0) entities[idx].ai_state = BOMBER_APPROACH;
+                }
+                ImGui::SliderFloat("Bo Health",        &bomber_cfg.health,          5.0f, 100.0f);
+                ImGui::SliderFloat("Bo Radius",        &bomber_cfg.radius,          0.3f, 2.0f);
+                ImGui::SliderFloat("Bo Detect Range",  &bomber_cfg.detection_range, 10.0f, 60.0f);
+                ImGui::SliderFloat("Bo Hover Height",  &bomber_cfg.hover_height,    5.0f, 25.0f);
+                ImGui::SliderFloat("Bo Circle Speed",  &bomber_cfg.circle_speed,    2.0f, 15.0f);
+                ImGui::SliderFloat("Bo Circle Radius", &bomber_cfg.circle_radius,   5.0f, 25.0f);
+                ImGui::SliderFloat("Bo Bomb Damage",   &bomber_cfg.bomb_damage,     5.0f, 40.0f);
+                ImGui::SliderFloat("Bo Bomb Interval", &bomber_cfg.bomb_interval,   0.3f, 5.0f, "%.1fs");
+                ImGui::SliderFloat("Bo Bomb AoE",      &bomber_cfg.bomb_aoe_radius, 1.0f, 8.0f);
+                ImGui::SliderInt("Bo Bombs/Run",       &bomber_cfg.bombs_per_run,   1, 10);
+
+                ImGui::Separator();
+                ImGui::Text("--- Shielder ---");
+                if (ImGui::Button("Spawn Shielder")) {
+                    HMM_Vec3 spawn = HMM_AddV3(player.position,
+                        HMM_MulV3F(camera.forward(), 8.0f));
+                    int idx = shielder_spawn(entities, MAX_ENTITIES, spawn, shielder_cfg);
+                    if (idx >= 0) entities[idx].ai_state = SHIELDER_CHASING;
+                }
+                ImGui::SliderFloat("Sh Health",        &shielder_cfg.health,          5.0f, 100.0f);
+                ImGui::SliderFloat("Sh Radius",        &shielder_cfg.radius,          0.3f, 2.0f);
+                ImGui::SliderFloat("Sh Detect Range",  &shielder_cfg.detection_range, 10.0f, 60.0f);
+                ImGui::SliderFloat("Sh Shield Radius", &shielder_cfg.shield_radius,   3.0f, 20.0f);
+                ImGui::SliderFloat("Sh Dmg Reduction", &shielder_cfg.damage_reduction, 0.1f, 0.9f, "%.2f");
+                ImGui::SliderFloat("Sh Flee Range",    &shielder_cfg.flee_range,      3.0f, 15.0f);
+                ImGui::SliderFloat("Sh Preferred Dist",&shielder_cfg.preferred_dist,  5.0f, 25.0f);
+                ImGui::SliderFloat("Sh Chase Speed",   &shielder_cfg.chase_speed,     2.0f, 15.0f);
+                ImGui::SliderFloat("Sh Flee Speed",    &shielder_cfg.flee_speed,      3.0f, 15.0f);
             }
 
             // --- Mouse ---

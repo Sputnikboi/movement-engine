@@ -45,10 +45,35 @@ struct ProcGenConfig {
     float tall_height_max  = 22.0f;
     HMM_Vec3 tall_color    = {0.28f, 0.28f, 0.33f};
 
-    // Enemies
-    int   drone_count      = 5;
-    int   rusher_count     = 4;
+    // Enemies — budget system
+    int   enemy_budget_base = 8;     // starting enemy count (room 1)
+    int   enemy_budget_per_room = 2; // extra enemies per room cleared
+    int   enemy_budget_max  = 40;    // hard cap
+    int   room_number       = 1;     // current room (set before generate)
+
+    // Spawn weights (relative probability per type, shifted by difficulty)
+    float weight_drone     = 5.0f;
+    float weight_rusher    = 4.0f;
+    float weight_turret    = 1.5f;
+    float weight_tank      = 0.5f;   // rare early, scales up
+    float weight_bomber    = 1.0f;
+    float weight_shielder  = 0.5f;   // rare early
+
     float enemy_height     = 3.0f;
+
+    // Difficulty scaling (applied per room)
+    float difficulty        = 1.0f;  // computed from room_number
+    float hp_scale_per_room = 0.06f; // +6% HP per room
+    float dmg_scale_per_room= 0.04f; // +4% damage per room
+    float spd_scale_per_room= 0.02f; // +2% speed per room
+
+    // Manual overrides (if > 0, ignores budget and uses fixed counts)
+    int   drone_count      = 0;
+    int   rusher_count     = 0;
+    int   turret_count     = 0;
+    int   tank_count       = 0;
+    int   bomber_count     = 0;
+    int   shielder_count   = 0;
 
     // Colors
     HMM_Vec3 floor_color   = {0.3f, 0.3f, 0.35f};
