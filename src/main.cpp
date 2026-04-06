@@ -799,7 +799,7 @@ int main(int argc, char* argv[]) {
                     if (ai_enabled) {
                         rusher_update(e, entities, MAX_ENTITIES,
                                       player.position, collision, rusher_cfg, dt, total_time);
-                        if (rusher_check_player_hit(e, player.position, player.radius, rusher_cfg)) {
+                        if (rusher_check_player_hit(e, player.capsule_bottom(), player.capsule_top(), player.radius, rusher_cfg)) {
                             // TODO: player takes damage
                         }
                     }
@@ -811,8 +811,8 @@ int main(int argc, char* argv[]) {
                         turret_update(e, entities, MAX_ENTITIES,
                                       player.position, collision, turret_cfg, dt, total_time);
                         float tdmg = 0.0f;
-                        if (turret_check_player_hit(e, player.position, player.radius,
-                                                    collision, turret_cfg, tdmg)) {
+                        if (turret_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
+                                                    player.radius, collision, turret_cfg, tdmg)) {
                             // TODO: player takes damage (tdmg)
                         }
                     }
@@ -825,8 +825,8 @@ int main(int argc, char* argv[]) {
                                     player.position, collision, tank_cfg, dt, total_time);
                         float tdmg = 0.0f;
                         HMM_Vec3 kb = {};
-                        if (tank_check_player_hit(e, player.position, player.radius,
-                                                  tank_cfg, tdmg, kb)) {
+                        if (tank_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
+                                                  player.radius, tank_cfg, tdmg, kb)) {
                             // Apply knockback to player
                             player.velocity = HMM_AddV3(player.velocity, kb);
                             // TODO: player takes damage (tdmg)
@@ -844,8 +844,8 @@ int main(int argc, char* argv[]) {
                                       player.position, collision, bomber_cfg, dt, total_time);
                         float bdmg = 0.0f;
                         HMM_Vec3 bkb = {};
-                        if (bomber_check_explosion(e, player.position, player.radius,
-                                                   bomber_cfg, bdmg, bkb)) {
+                        if (bomber_check_explosion(e, player.capsule_bottom(), player.capsule_top(),
+                                                   player.radius, bomber_cfg, bdmg, bkb)) {
                             player.velocity = HMM_AddV3(player.velocity, bkb);
                             // TODO: player takes damage (bdmg)
                         }
@@ -930,15 +930,14 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // --- Projectile-player collision ---
+            // --- Projectile-player collision (capsule hitbox) ---
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& e = entities[i];
                 if (!e.alive || e.type != EntityType::Projectile) continue;
 
-                HMM_Vec3 to_player = HMM_SubV3(player.eye_position(), e.position);
-                float dist_sq = HMM_DotV3(to_player, to_player);
-                float hit_radius = e.radius + player.radius;
-                if (dist_sq < hit_radius * hit_radius) {
+                if (sphere_capsule_overlap(e.position, e.radius,
+                                           player.capsule_bottom(), player.capsule_top(),
+                                           player.radius)) {
                     // TODO: player takes damage
                     e.alive = false;
                 }
@@ -1046,6 +1045,10 @@ int main(int argc, char* argv[]) {
 
         // Shield bubbles around shielded enemies
         build_shield_bubbles(transparent_mesh, entities, MAX_ENTITIES, frustum);
+
+        // Turret laser/beam/particle effects
+        build_turret_effects(entity_mesh, transparent_mesh,
+                             entities, MAX_ENTITIES, collision, frustum, total_time);
 
         // Debug: visualize ladder volumes as transparent green boxes
         if (show_ladder_debug) {

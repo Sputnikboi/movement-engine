@@ -80,7 +80,7 @@ void tank_update(Entity& tank, Entity entities[], int max_entities,
 
 // Returns true if tank's ground stomp hit the player this frame.
 // knockback_out is the force to apply to player.
-bool tank_check_player_hit(Entity& tank, HMM_Vec3 player_pos,
+bool tank_check_player_hit(Entity& tank, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                            float player_radius, const TankConfig& config,
                            float& damage_out, HMM_Vec3& knockback_out);
 

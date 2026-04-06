@@ -373,21 +373,72 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
 //  Shield bubble rendering (transparent)
 // ============================================================
 
+// Helper: append a shield link beam quad between two points
+static void append_shield_beam(Mesh& out, HMM_Vec3 start, HMM_Vec3 end,
+                               float half_width, float alpha) {
+    // Use a fixed up vector, cross with beam dir for width
+    HMM_Vec3 beam = HMM_SubV3(end, start);
+    float beam_len = HMM_LenV3(beam);
+    if (beam_len < 0.1f) return;
+
+    HMM_Vec3 beam_dir = HMM_MulV3F(beam, 1.0f / beam_len);
+    HMM_Vec3 up = HMM_V3(0, 1, 0);
+    HMM_Vec3 right = HMM_Cross(beam_dir, up);
+    float rlen = HMM_LenV3(right);
+    if (rlen < 0.01f) {
+        up = HMM_V3(1, 0, 0);
+        right = HMM_Cross(beam_dir, up);
+        rlen = HMM_LenV3(right);
+    }
+    right = HMM_MulV3F(right, half_width / rlen);
+    up = HMM_NormV3(HMM_Cross(right, beam_dir));
+    up = HMM_MulV3F(up, half_width);
+
+    // Two crossed quads for visibility from any angle
+    uint32_t base = (uint32_t)out.vertices.size();
+    HMM_Vec3 corners[8] = {
+        HMM_AddV3(start, right), HMM_SubV3(start, right),
+        HMM_SubV3(end, right),   HMM_AddV3(end, right),
+        HMM_AddV3(start, up),    HMM_SubV3(start, up),
+        HMM_SubV3(end, up),      HMM_AddV3(end, up),
+    };
+    for (int i = 0; i < 8; i++) {
+        Vertex3D v;
+        v.pos[0] = corners[i].X;
+        v.pos[1] = corners[i].Y;
+        v.pos[2] = corners[i].Z;
+        v.normal[0] = alpha;
+        v.normal[1] = 0.0f;
+        v.normal[2] = 0.0f;
+        v.color[0] = 0.1f;
+        v.color[1] = 0.4f;
+        v.color[2] = 0.9f;
+        out.vertices.push_back(v);
+    }
+    // Quad 1
+    out.indices.push_back(base + 0); out.indices.push_back(base + 1); out.indices.push_back(base + 2);
+    out.indices.push_back(base + 0); out.indices.push_back(base + 2); out.indices.push_back(base + 3);
+    // Quad 2
+    out.indices.push_back(base + 4); out.indices.push_back(base + 5); out.indices.push_back(base + 6);
+    out.indices.push_back(base + 4); out.indices.push_back(base + 6); out.indices.push_back(base + 7);
+}
+
 void build_shield_bubbles(Mesh& out,
                           const Entity entities[], int max_entities,
                           const Frustum& frustum) {
     static Mesh bubble_sphere = create_icosphere(1); // subdivision 1 for smoother bubble
 
+    // --- Shield bubbles on shielded entities ---
     for (int i = 0; i < max_entities; i++) {
         const Entity& e = entities[i];
         if (!e.alive) continue;
-        if (e.shield_hp < 0.5f) continue; // no visible barrier
+        if (e.shield_hp < 0.5f) continue;
         if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
 
         if (!frustum.sphere_visible(e.position, e.radius * 1.8f)) continue;
 
         float bubble_radius = e.radius * 1.6f;
-        float alpha = 0.25f + (e.shield_hp / 20.0f) * 0.15f; // brighter with more HP
+        float alpha = 0.25f + (e.shield_hp / 20.0f) * 0.15f;
         if (alpha > 0.4f) alpha = 0.4f;
 
         uint32_t base = static_cast<uint32_t>(out.vertices.size());
@@ -397,11 +448,9 @@ void build_shield_bubbles(Mesh& out,
             v.pos[0] = sv.pos[0] * bubble_radius + e.position.X;
             v.pos[1] = sv.pos[1] * bubble_radius + e.position.Y;
             v.pos[2] = sv.pos[2] * bubble_radius + e.position.Z;
-            // Emissive path: zero-length normal, normal.x = alpha
             v.normal[0] = alpha;
             v.normal[1] = 0.0f;
             v.normal[2] = 0.0f;
-            // Cyan-blue color
             v.color[0] = 0.15f;
             v.color[1] = 0.5f;
             v.color[2] = 0.9f;
@@ -410,5 +459,267 @@ void build_shield_bubbles(Mesh& out,
 
         for (auto idx : bubble_sphere.indices)
             out.indices.push_back(base + idx);
+    }
+
+    // --- Shield link beams from shielders to shielded allies ---
+    for (int i = 0; i < max_entities; i++) {
+        const Entity& s = entities[i];
+        if (!s.alive || s.type != EntityType::Shielder) continue;
+        if (s.ai_state != 2) continue; // SHIELDER_SHIELDING = 2
+
+        if (!frustum.sphere_visible(s.position, 15.0f)) continue;
+
+        // Draw beam to each shielded ally in range
+        for (int j = 0; j < max_entities; j++) {
+            if (j == i) continue;
+            const Entity& e = entities[j];
+            if (!e.alive) continue;
+            if (e.shield_hp < 0.5f) continue;
+            if (e.type == EntityType::Projectile || e.type == EntityType::Shielder) continue;
+
+            float dist = HMM_LenV3(HMM_SubV3(e.position, s.position));
+            if (dist > 12.0f) continue; // slightly beyond shield_radius
+
+            // Beam width and alpha scale with distance (thinner when further)
+            float t = dist / 12.0f;
+            float beam_width = 0.06f * (1.0f - t * 0.5f);
+            float beam_alpha = 0.2f * (1.0f - t * 0.4f);
+
+            append_shield_beam(out, s.position, e.position, beam_width, beam_alpha);
+        }
+    }
+}
+
+// ============================================================
+//  Turret laser/beam/particle effects
+// ============================================================
+#include "collision.h"
+#include "turret.h"
+
+// Helper: append a quad (2 triangles) with emissive material
+static void append_emissive_quad(Mesh& out,
+                                 HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 d,
+                                 float r, float g, float bl, float alpha) {
+    uint32_t base = (uint32_t)out.vertices.size();
+    HMM_Vec3 corners[4] = {a, b, c, d};
+    for (int i = 0; i < 4; i++) {
+        Vertex3D v;
+        v.pos[0] = corners[i].X;
+        v.pos[1] = corners[i].Y;
+        v.pos[2] = corners[i].Z;
+        v.normal[0] = alpha; // emissive: normal.x = alpha
+        v.normal[1] = 0.0f;
+        v.normal[2] = 0.0f;
+        v.color[0] = r;
+        v.color[1] = g;
+        v.color[2] = bl;
+        out.vertices.push_back(v);
+    }
+    out.indices.push_back(base + 0);
+    out.indices.push_back(base + 1);
+    out.indices.push_back(base + 2);
+    out.indices.push_back(base + 0);
+    out.indices.push_back(base + 2);
+    out.indices.push_back(base + 3);
+}
+
+// Build a camera-facing beam from `start` to `end` with given half-width
+static void append_beam(Mesh& out, HMM_Vec3 start, HMM_Vec3 end,
+                        float half_width, HMM_Vec3 cam_pos,
+                        float r, float g, float b, float alpha) {
+    HMM_Vec3 beam_dir = HMM_SubV3(end, start);
+    HMM_Vec3 mid = HMM_MulV3F(HMM_AddV3(start, end), 0.5f);
+    HMM_Vec3 view_dir = HMM_NormV3(HMM_SubV3(cam_pos, mid));
+
+    // Perpendicular to both beam direction and view direction
+    HMM_Vec3 right = HMM_NormV3(HMM_Cross(beam_dir, view_dir));
+    HMM_Vec3 offset = HMM_MulV3F(right, half_width);
+
+    HMM_Vec3 a = HMM_AddV3(start, offset);
+    HMM_Vec3 bb = HMM_SubV3(start, offset);
+    HMM_Vec3 c = HMM_SubV3(end, offset);
+    HMM_Vec3 d = HMM_AddV3(end, offset);
+
+    append_emissive_quad(out, a, bb, c, d, r, g, b, alpha);
+}
+
+void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
+                          const Entity entities[], int max_entities,
+                          const CollisionWorld& world,
+                          const Frustum& frustum, float total_time) {
+    for (int i = 0; i < max_entities; i++) {
+        const Entity& e = entities[i];
+        if (!e.alive || e.type != EntityType::Turret) continue;
+        if (e.ai_state == TURRET_IDLE || e.ai_state == TURRET_DYING || e.ai_state == TURRET_DEAD)
+            continue;
+
+        if (!frustum.sphere_visible(e.position, 50.0f)) continue;
+
+        HMM_Vec3 fwd = HMM_V3(sinf(e.yaw), 0.0f, cosf(e.yaw));
+        HMM_Vec3 origin = e.position;
+
+        // Raycast to find where laser hits geometry
+        float max_dist = 80.0f;
+        HitResult hit = world.raycast(origin, fwd, max_dist);
+        float laser_len = hit.hit ? hit.t : max_dist;
+        HMM_Vec3 laser_end = HMM_AddV3(origin, HMM_MulV3F(fwd, laser_len));
+
+        // Camera position for billboard beams (approximate from frustum)
+        // We don't have direct cam_pos here, so extract from frustum plane normals
+        // Actually let's just pass it through... we'll compute a reasonable up vector
+        // For billboard we need cam_pos. Let's use a fixed up = (0,1,0) cross fwd
+        HMM_Vec3 up = HMM_V3(0, 1, 0);
+        HMM_Vec3 right = HMM_NormV3(HMM_Cross(fwd, up));
+        if (HMM_LenV3(right) < 0.01f) {
+            up = HMM_V3(1, 0, 0);
+            right = HMM_NormV3(HMM_Cross(fwd, up));
+        }
+        up = HMM_NormV3(HMM_Cross(right, fwd));
+
+        // === THIN RED AIMING LASER (always when tracking/windup/firing/cooldown) ===
+        {
+            float width = 0.015f;  // very thin
+            float alpha_val = 0.0f;  // opaque emissive (alpha=0 → shader uses 1.0)
+
+            // Pulsing brightness during windup
+            float intensity = 0.6f;
+            if (e.ai_state == TURRET_WINDUP) {
+                float pulse = sinf(total_time * 12.0f) * 0.3f + 0.7f;
+                intensity = 0.6f + pulse * 0.4f;
+            }
+            if (e.ai_state == TURRET_FIRING) intensity = 0.3f; // dim during beam
+
+            // Build as 2 crossed quads for visibility from any angle
+            HMM_Vec3 off_r = HMM_MulV3F(right, width);
+            HMM_Vec3 off_u = HMM_MulV3F(up, width);
+
+            // Horizontal quad
+            append_emissive_quad(opaque_out,
+                HMM_AddV3(origin, off_r), HMM_SubV3(origin, off_r),
+                HMM_SubV3(laser_end, off_r), HMM_AddV3(laser_end, off_r),
+                intensity, 0.05f, 0.05f, alpha_val);
+
+            // Vertical quad
+            append_emissive_quad(opaque_out,
+                HMM_AddV3(origin, off_u), HMM_SubV3(origin, off_u),
+                HMM_SubV3(laser_end, off_u), HMM_AddV3(laser_end, off_u),
+                intensity, 0.05f, 0.05f, alpha_val);
+        }
+
+        // === CHARGE-UP PARTICLES (during windup) ===
+        if (e.ai_state == TURRET_WINDUP) {
+            // Small emissive dots orbiting the turret, converging as charge completes
+            float charge_t = 1.0f - (e.ai_timer / 1.2f); // 0→1 as charge completes
+            if (charge_t < 0) charge_t = 0;
+            if (charge_t > 1) charge_t = 1;
+
+            int num_particles = 6;
+            float orbit_radius = e.radius * (1.5f - charge_t * 0.8f); // converge inward
+            float spin_speed = 4.0f + charge_t * 8.0f; // spin faster as charging
+
+            for (int p = 0; p < num_particles; p++) {
+                float angle = total_time * spin_speed + (float)p * (6.2831853f / num_particles);
+                float y_off = sinf(total_time * 3.0f + (float)p * 1.5f) * 0.3f;
+
+                HMM_Vec3 ppos = HMM_V3(
+                    origin.X + cosf(angle) * orbit_radius,
+                    origin.Y + y_off,
+                    origin.Z + sinf(angle) * orbit_radius
+                );
+
+                float psize = 0.04f + charge_t * 0.04f;
+
+                // Two tiny crossed quads per particle
+                HMM_Vec3 pr = HMM_MulV3F(right, psize);
+                HMM_Vec3 pu = HMM_MulV3F(up, psize);
+
+                float pr_val = 0.8f + charge_t * 0.5f;
+                float pg_val = 0.2f * (1.0f - charge_t);
+
+                append_emissive_quad(opaque_out,
+                    HMM_AddV3(ppos, pr), HMM_SubV3(ppos, pr),
+                    HMM_SubV3(ppos, HMM_AddV3(pr, pu)), HMM_AddV3(ppos, HMM_SubV3(pu, pr)),
+                    pr_val, pg_val, 0.05f, 0.0f);
+            }
+        }
+
+        // === BIG RAILGUN BEAM (during firing) ===
+        if (e.ai_state == TURRET_FIRING) {
+            // Thick bright beam, fades over burst
+            float burst_progress = e.ai_timer2 / 3.0f; // 0→1 over burst
+            float beam_alpha = 0.7f * (1.0f - burst_progress * 0.4f);
+            float beam_width = 0.15f + (1.0f - burst_progress) * 0.1f;
+
+            // Core beam (bright white-red, transparent)
+            HMM_Vec3 off_r = HMM_MulV3F(right, beam_width);
+            HMM_Vec3 off_u = HMM_MulV3F(up, beam_width);
+
+            // Main beam - 2 crossed quads
+            append_emissive_quad(transparent_out,
+                HMM_AddV3(origin, off_r), HMM_SubV3(origin, off_r),
+                HMM_SubV3(laser_end, off_r), HMM_AddV3(laser_end, off_r),
+                1.0f, 0.3f, 0.2f, beam_alpha);
+
+            append_emissive_quad(transparent_out,
+                HMM_AddV3(origin, off_u), HMM_SubV3(origin, off_u),
+                HMM_SubV3(laser_end, off_u), HMM_AddV3(laser_end, off_u),
+                1.0f, 0.3f, 0.2f, beam_alpha);
+
+            // Outer glow beam (wider, more transparent)
+            float glow_width = beam_width * 2.5f;
+            HMM_Vec3 goff_r = HMM_MulV3F(right, glow_width);
+            HMM_Vec3 goff_u = HMM_MulV3F(up, glow_width);
+
+            append_emissive_quad(transparent_out,
+                HMM_AddV3(origin, goff_r), HMM_SubV3(origin, goff_r),
+                HMM_SubV3(laser_end, goff_r), HMM_AddV3(laser_end, goff_r),
+                1.0f, 0.1f, 0.05f, beam_alpha * 0.3f);
+
+            append_emissive_quad(transparent_out,
+                HMM_AddV3(origin, goff_u), HMM_SubV3(origin, goff_u),
+                HMM_SubV3(laser_end, goff_u), HMM_AddV3(laser_end, goff_u),
+                1.0f, 0.1f, 0.05f, beam_alpha * 0.3f);
+
+            // Particles along beam length
+            int beam_particles = 8;
+            for (int p = 0; p < beam_particles; p++) {
+                float t = (float)p / (float)beam_particles;
+                // Jitter offset so they shimmer
+                float jitter_r = sinf(total_time * 15.0f + t * 20.0f) * beam_width * 1.5f;
+                float jitter_u = cosf(total_time * 13.0f + t * 17.0f) * beam_width * 1.5f;
+
+                HMM_Vec3 bp = HMM_AddV3(origin, HMM_MulV3F(fwd, laser_len * t));
+                bp = HMM_AddV3(bp, HMM_MulV3F(right, jitter_r));
+                bp = HMM_AddV3(bp, HMM_MulV3F(up, jitter_u));
+
+                float psize = 0.06f;
+                HMM_Vec3 pr2 = HMM_MulV3F(right, psize);
+                HMM_Vec3 pu2 = HMM_MulV3F(up, psize);
+
+                append_emissive_quad(opaque_out,
+                    HMM_AddV3(bp, pr2), HMM_SubV3(bp, pr2),
+                    HMM_SubV3(bp, HMM_AddV3(pr2, pu2)), HMM_AddV3(bp, HMM_SubV3(pu2, pr2)),
+                    1.0f, 0.6f, 0.2f, 0.0f);
+            }
+
+            // Impact point flash
+            if (hit.hit) {
+                float flash_size = 0.2f + sinf(total_time * 20.0f) * 0.05f;
+                HMM_Vec3 ir = HMM_MulV3F(right, flash_size);
+                HMM_Vec3 iu = HMM_MulV3F(up, flash_size);
+
+                append_emissive_quad(transparent_out,
+                    HMM_AddV3(laser_end, ir), HMM_SubV3(laser_end, ir),
+                    HMM_SubV3(laser_end, HMM_AddV3(ir, iu)),
+                    HMM_AddV3(laser_end, HMM_SubV3(iu, ir)),
+                    1.0f, 0.8f, 0.3f, 0.6f);
+
+                append_emissive_quad(transparent_out,
+                    HMM_AddV3(laser_end, iu), HMM_SubV3(laser_end, iu),
+                    HMM_SubV3(laser_end, HMM_AddV3(ir, iu)),
+                    HMM_AddV3(laser_end, HMM_SubV3(ir, iu)),
+                    1.0f, 0.8f, 0.3f, 0.6f);
+            }
+        }
     }
 }

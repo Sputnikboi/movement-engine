@@ -329,12 +329,14 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
 //  Check if dashing rusher hit the player
 // ============================================================
 
-bool rusher_check_player_hit(Entity& rusher, HMM_Vec3 player_pos,
+bool rusher_check_player_hit(Entity& rusher, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                              float player_radius, const RusherConfig& config) {
     if (rusher.ai_state != RUSHER_DASHING) return false;
     if (rusher.ai_timer2 > 0.5f) return false; // already dealt damage this dash
 
-    HMM_Vec3 delta = HMM_SubV3(player_pos, rusher.position);
+    // Closest point on player capsule to rusher center
+    HMM_Vec3 closest = closest_point_on_segment(rusher.position, cap_bottom, cap_top);
+    HMM_Vec3 delta = HMM_SubV3(closest, rusher.position);
     float dist = HMM_LenV3(delta);
     float min_dist = player_radius + rusher.radius;
     if (dist < min_dist) {

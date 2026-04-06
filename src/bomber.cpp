@@ -323,14 +323,16 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
 //  Explosion check — call from main loop
 // ============================================================
 
-bool bomber_check_explosion(Entity& bomber, HMM_Vec3 player_pos,
+bool bomber_check_explosion(Entity& bomber, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                             float player_radius, const BomberConfig& config,
                             float& damage_out, HMM_Vec3& knockback_out) {
     if (bomber.ai_state != BOMBER_EXPLODING) return false;
     // Only on first frame of explosion
     if (bomber.ai_timer < 0.05f) return false;
 
-    HMM_Vec3 delta = HMM_SubV3(player_pos, bomber.position);
+    // Closest point on player capsule to bomber
+    HMM_Vec3 closest = closest_point_on_segment(bomber.position, cap_bottom, cap_top);
+    HMM_Vec3 delta = HMM_SubV3(closest, bomber.position);
     float dist = HMM_LenV3(delta);
 
     if (dist > config.explosion_radius) return false;

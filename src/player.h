@@ -34,7 +34,7 @@ struct Player {
     float crouch_speed    = 4.0f;     // ground speed while crouched (not sliding)
     float air_wish_speed  = 0.76f;
     float ground_accel    = 8.0f;
-    float air_accel       = 120.0f;
+    float air_accel       = 200.0f;
     float friction        = 6.0f;
     float stop_speed      = 2.0f;
     float jump_speed      = 7.2f;
@@ -105,6 +105,23 @@ struct Player {
     // --- Methods ---
     float current_height() const { return crouched ? height_crouch : height_stand; }
     float current_eye_offset() const { return crouched ? eye_crouch : eye_stand; }
+
+    // Capsule hitbox: line segment from bottom sphere center to top sphere center + radius
+    // Bottom = position + (0, radius, 0), Top = position + (0, current_eye_height, 0)
+    HMM_Vec3 capsule_bottom() const { return HMM_V3(position.X, position.Y + radius, position.Z); }
+    HMM_Vec3 capsule_top() const {
+        float h = crouched ? eye_crouch : eye_stand;
+        return HMM_V3(position.X, position.Y + h, position.Z);
+    }
+    float capsule_half_height() const {
+        float h = crouched ? eye_crouch : eye_stand;
+        return (h - radius) * 0.5f;
+    }
+    HMM_Vec3 capsule_center() const {
+        float h = crouched ? eye_crouch : eye_stand;
+        float mid_y = position.Y + (radius + h) * 0.5f;
+        return HMM_V3(position.X, mid_y, position.Z);
+    }
 
     HMM_Vec3 eye_position() const {
         return HMM_AddV3(position, HMM_V3(0.0f, current_eye_offset(), 0.0f));

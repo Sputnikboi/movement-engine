@@ -304,14 +304,16 @@ void tank_update(Entity& tank, Entity entities[], int max_entities,
 //  Stomp hit check
 // ============================================================
 
-bool tank_check_player_hit(Entity& tank, HMM_Vec3 player_pos,
+bool tank_check_player_hit(Entity& tank, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                            float player_radius, const TankConfig& config,
                            float& damage_out, HMM_Vec3& knockback_out) {
     // Only on the stomp frame (TANK_STOMP just entered)
     if (tank.ai_state != TANK_STOMP) return false;
     if (tank.ai_timer < 0.10f) return false;  // only first frame
 
-    HMM_Vec3 delta = HMM_SubV3(player_pos, tank.position);
+    // Closest point on player capsule to tank
+    HMM_Vec3 closest = closest_point_on_segment(tank.position, cap_bottom, cap_top);
+    HMM_Vec3 delta = HMM_SubV3(closest, tank.position);
     float dist = HMM_LenV3(delta);
 
     if (dist > config.stomp_aoe_radius) return false;

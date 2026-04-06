@@ -418,16 +418,11 @@ void shielder_apply_barriers(Entity entities[], int max_entities,
 float shielder_absorb_damage(Entity& target, float raw_damage) {
     if (target.shield_hp <= 0.0f) return raw_damage;
 
-    if (target.shield_hp >= raw_damage) {
-        // Shield absorbs entire hit
-        target.shield_hp -= raw_damage;
-        return 0.0f;
-    } else {
-        // Shield partially absorbs
-        float leftover = raw_damage - target.shield_hp;
-        target.shield_hp = 0.0f;
-        return leftover;
-    }
+    // Shield blocks the ENTIRE hit — no bleed-through.
+    // Damage depletes shield HP, but health is untouched until shield breaks.
+    target.shield_hp -= raw_damage;
+    if (target.shield_hp < 0.0f) target.shield_hp = 0.0f;
+    return 0.0f;
 }
 
 bool shielder_has_barrier(const Entity& e) {

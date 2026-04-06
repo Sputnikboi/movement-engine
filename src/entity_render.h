@@ -34,3 +34,13 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
 void build_shield_bubbles(Mesh& transparent_out,
                           const Entity entities[], int max_entities,
                           const Frustum& frustum);
+
+// Build turret laser effects:
+//  - Thin red aiming laser (opaque, emissive) when tracking/windup/firing
+//  - Thick railgun beam (transparent) when firing
+//  - Charge-up particles orbiting turret during windup
+struct CollisionWorld;  // forward decl
+void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
+                          const Entity entities[], int max_entities,
+                          const CollisionWorld& world,
+                          const Frustum& frustum, float total_time);

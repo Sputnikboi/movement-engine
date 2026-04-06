@@ -79,7 +79,7 @@ void rusher_update(Entity& rusher, Entity entities[], int max_entities,
                    const RusherConfig& config, float dt, float total_time);
 
 // Returns true if rusher hit the player during dash this frame
-bool rusher_check_player_hit(Entity& rusher, HMM_Vec3 player_pos,
+bool rusher_check_player_hit(Entity& rusher, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                              float player_radius, const RusherConfig& config);
 
 // Call once per frame before rusher updates (advances stagger counter)

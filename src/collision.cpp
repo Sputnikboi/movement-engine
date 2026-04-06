@@ -513,3 +513,102 @@ bool CollisionWorld::on_ladder(HMM_Vec3 center, float radius,
     }
     return false;
 }
+
+// ============================================================
+//  Capsule collision primitives
+// ============================================================
+
+HMM_Vec3 closest_point_on_segment(HMM_Vec3 p, HMM_Vec3 a, HMM_Vec3 b) {
+    HMM_Vec3 ab = HMM_SubV3(b, a);
+    float ab_sq = HMM_DotV3(ab, ab);
+    if (ab_sq < 0.0001f) return a;
+    float t = HMM_DotV3(HMM_SubV3(p, a), ab) / ab_sq;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return HMM_AddV3(a, HMM_MulV3F(ab, t));
+}
+
+float point_capsule_dist(HMM_Vec3 p, HMM_Vec3 cap_a, HMM_Vec3 cap_b, float cap_radius) {
+    HMM_Vec3 closest = closest_point_on_segment(p, cap_a, cap_b);
+    return HMM_LenV3(HMM_SubV3(p, closest)) - cap_radius;
+}
+
+bool sphere_capsule_overlap(HMM_Vec3 sphere_center, float sphere_radius,
+                            HMM_Vec3 cap_a, HMM_Vec3 cap_b, float cap_radius) {
+    HMM_Vec3 closest = closest_point_on_segment(sphere_center, cap_a, cap_b);
+    float dist = HMM_LenV3(HMM_SubV3(sphere_center, closest));
+    return dist < (sphere_radius + cap_radius);
+}
+
+float ray_capsule(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist,
+                  HMM_Vec3 cap_a, HMM_Vec3 cap_b, float cap_radius) {
+    // Ray vs capsule = ray vs infinite cylinder + cap checks
+    // Simplified approach: find closest point on segment to the ray,
+    // then do ray-sphere at that point. This isn't mathematically exact
+    // for grazing hits but works well for gameplay hit detection.
+
+    HMM_Vec3 seg = HMM_SubV3(cap_b, cap_a);
+    float seg_len = HMM_LenV3(seg);
+    if (seg_len < 0.001f) {
+        // Degenerate capsule = sphere
+        HMM_Vec3 oc = HMM_SubV3(origin, cap_a);
+        float b = HMM_DotV3(oc, dir);
+        float c = HMM_DotV3(oc, oc) - cap_radius * cap_radius;
+        float disc = b * b - c;
+        if (disc < 0) return -1.0f;
+        float t = -b - sqrtf(disc);
+        if (t < 0) t = -b + sqrtf(disc);
+        return (t >= 0 && t <= max_dist) ? t : -1.0f;
+    }
+
+    HMM_Vec3 seg_dir = HMM_MulV3F(seg, 1.0f / seg_len);
+
+    // Ray vs infinite cylinder along the segment axis
+    HMM_Vec3 d_perp = HMM_SubV3(dir, HMM_MulV3F(seg_dir, HMM_DotV3(dir, seg_dir)));
+    HMM_Vec3 oc = HMM_SubV3(origin, cap_a);
+    HMM_Vec3 oc_perp = HMM_SubV3(oc, HMM_MulV3F(seg_dir, HMM_DotV3(oc, seg_dir)));
+
+    float a_coeff = HMM_DotV3(d_perp, d_perp);
+    float b_coeff = 2.0f * HMM_DotV3(d_perp, oc_perp);
+    float c_coeff = HMM_DotV3(oc_perp, oc_perp) - cap_radius * cap_radius;
+
+    float best_t = -1.0f;
+
+    if (a_coeff > 0.0001f) {
+        float disc = b_coeff * b_coeff - 4.0f * a_coeff * c_coeff;
+        if (disc >= 0) {
+            float sqrt_disc = sqrtf(disc);
+            float t1 = (-b_coeff - sqrt_disc) / (2.0f * a_coeff);
+            float t2 = (-b_coeff + sqrt_disc) / (2.0f * a_coeff);
+
+            for (float t : {t1, t2}) {
+                if (t < 0 || t > max_dist) continue;
+                // Check if hit point is within segment bounds
+                HMM_Vec3 hit_pt = HMM_AddV3(origin, HMM_MulV3F(dir, t));
+                float along = HMM_DotV3(HMM_SubV3(hit_pt, cap_a), seg_dir);
+                if (along >= 0 && along <= seg_len) {
+                    if (best_t < 0 || t < best_t) best_t = t;
+                }
+            }
+        }
+    }
+
+    // Check hemisphere caps (spheres at cap_a and cap_b)
+    for (HMM_Vec3 cap_center : {cap_a, cap_b}) {
+        HMM_Vec3 oc2 = HMM_SubV3(origin, cap_center);
+        float b2 = HMM_DotV3(oc2, dir);
+        float c2 = HMM_DotV3(oc2, oc2) - cap_radius * cap_radius;
+        float disc2 = b2 * b2 - c2;
+        if (disc2 < 0) continue;
+        float sqrt_d = sqrtf(disc2);
+        float t1 = -b2 - sqrt_d;
+        float t2 = -b2 + sqrt_d;
+
+        for (float t : {t1, t2}) {
+            if (t < 0 || t > max_dist) continue;
+            if (best_t < 0 || t < best_t) best_t = t;
+        }
+    }
+
+    return best_t;
+}

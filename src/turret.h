@@ -71,7 +71,7 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
 
 // Returns true if turret's hitscan hit the player this frame
 // (sets damage_out to the damage dealt)
-bool turret_check_player_hit(Entity& turret, HMM_Vec3 player_pos,
+bool turret_check_player_hit(Entity& turret, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                              float player_radius, const CollisionWorld& world,
                              const TurretConfig& config, float& damage_out);
 

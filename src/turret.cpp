@@ -277,37 +277,37 @@ void turret_update(Entity& turret, Entity entities[], int max_entities,
 //  Hitscan check — call from main loop during FIRING state
 // ============================================================
 
-bool turret_check_player_hit(Entity& turret, HMM_Vec3 player_pos,
+bool turret_check_player_hit(Entity& turret, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                              float player_radius, const CollisionWorld& world,
                              const TurretConfig& config, float& damage_out) {
     if (turret.ai_state != TURRET_FIRING) return false;
-    // Only hit on the frame a shot was fired (ai_timer just reset)
-    if (turret.ai_timer > config.burst_interval * 0.9f) return false;
+
+    float time_since_shot = config.burst_interval - turret.ai_timer;
+    if (time_since_shot < 0.0f || time_since_shot > config.burst_interval * 0.15f) return false;
     if (turret.ai_timer2 < 1.0f) return false;
 
-    // Turret facing direction
-    HMM_Vec3 fwd = HMM_V3(sinf(turret.yaw), 0.0f, cosf(turret.yaw));
+    // Aim direction: towards capsule center with spread
+    HMM_Vec3 cap_center = HMM_MulV3F(HMM_AddV3(cap_bottom, cap_top), 0.5f);
+    HMM_Vec3 to_player = HMM_SubV3(cap_center, turret.position);
+    float dist = HMM_LenV3(to_player);
+    if (dist < 0.1f) { damage_out = config.hitscan_damage; return true; }
+
+    HMM_Vec3 aim = HMM_MulV3F(to_player, 1.0f / dist);
 
     // Add accuracy spread
     float spread = (1.0f - config.accuracy) * 0.5f;
-    fwd.X += randf(-spread, spread);
-    fwd.Y += randf(-spread * 0.5f, spread * 0.5f);
-    fwd.Z += randf(-spread, spread);
-    fwd = HMM_NormV3(fwd);
+    aim.X += randf(-spread, spread);
+    aim.Y += randf(-spread * 0.5f, spread * 0.5f);
+    aim.Z += randf(-spread, spread);
+    aim = HMM_NormV3(aim);
 
-    // Hitscan: ray-sphere vs player
-    HMM_Vec3 oc = HMM_SubV3(turret.position, player_pos);
-    float b = HMM_DotV3(oc, fwd);
-    float c = HMM_DotV3(oc, oc) - player_radius * player_radius;
-    float disc = b * b - c;
-    if (disc < 0) return false;
-
-    float t = -b - sqrtf(disc);
-    if (t < 0) t = -b + sqrtf(disc);
-    if (t < 0 || t > config.detection_range) return false;
+    // Hitscan: ray vs player capsule
+    float t = ray_capsule(turret.position, aim, config.detection_range,
+                          cap_bottom, cap_top, player_radius);
+    if (t < 0) return false;
 
     // Check wall in the way
-    HitResult wall = world.raycast(turret.position, fwd, t);
+    HitResult wall = world.raycast(turret.position, aim, t);
     if (wall.hit) return false;
 
     damage_out = config.hitscan_damage;

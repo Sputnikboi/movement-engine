@@ -84,7 +84,7 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
                    const BomberConfig& config, float dt, float total_time);
 
 // Check if bomber just exploded near player. Returns true + damage/knockback.
-bool bomber_check_explosion(Entity& bomber, HMM_Vec3 player_pos,
+bool bomber_check_explosion(Entity& bomber, HMM_Vec3 cap_bottom, HMM_Vec3 cap_top,
                             float player_radius, const BomberConfig& config,
                             float& damage_out, HMM_Vec3& knockback_out);
 

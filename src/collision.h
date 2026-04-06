@@ -80,3 +80,17 @@ float ray_triangle(HMM_Vec3 origin, HMM_Vec3 dir,
 
 // Closest point on triangle to a given point.
 HMM_Vec3 closest_point_on_triangle(HMM_Vec3 p, HMM_Vec3 v0, HMM_Vec3 v1, HMM_Vec3 v2);
+
+// Closest point on a line segment [a,b] to point p.
+HMM_Vec3 closest_point_on_segment(HMM_Vec3 p, HMM_Vec3 a, HMM_Vec3 b);
+
+// Distance from a point to a capsule (segment + radius). Returns distance to capsule surface (negative = inside).
+float point_capsule_dist(HMM_Vec3 p, HMM_Vec3 cap_a, HMM_Vec3 cap_b, float cap_radius);
+
+// Sphere vs capsule overlap check. Returns true if sphere overlaps the capsule.
+bool sphere_capsule_overlap(HMM_Vec3 sphere_center, float sphere_radius,
+                            HMM_Vec3 cap_a, HMM_Vec3 cap_b, float cap_radius);
+
+// Ray vs capsule intersection. Returns parametric t (or -1 on miss).
+float ray_capsule(HMM_Vec3 origin, HMM_Vec3 dir, float max_dist,
+                  HMM_Vec3 cap_a, HMM_Vec3 cap_b, float cap_radius);
