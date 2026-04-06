@@ -139,7 +139,7 @@ Mesh create_icosphere(int subdivisions) {
 // ============================================================
 static void append_mesh_transformed(Mesh& out, const Mesh& src,
                                     HMM_Vec3 pos, float yaw, float pitch,
-                                    float scale) {
+                                    float scale, float color_mult = 1.0f) {
     uint32_t base = static_cast<uint32_t>(out.vertices.size());
 
     // Build rotation: first pitch (around X), then yaw (around Y)
@@ -159,6 +159,12 @@ static void append_mesh_transformed(Mesh& out, const Mesh& src,
         v.normal[0] = rn.X;
         v.normal[1] = rn.Y;
         v.normal[2] = rn.Z;
+
+        if (color_mult != 1.0f) {
+            v.color[0] *= color_mult;
+            v.color[1] *= color_mult;
+            v.color[2] *= color_mult;
+        }
 
         out.vertices.push_back(v);
     }
@@ -392,7 +398,8 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
 
             if ((e.owner == -3 || e.owner == -4) && knife_mesh && !knife_mesh->vertices.empty()) {
                 // Player knife projectile (real or dummy) — render Kunai model
-                append_mesh_transformed(out, *knife_mesh, e.position, e.yaw, e.pitch, 0.08f);
+                // color_mult undoes the 0.45x viewmodel darkening (1/0.45 ≈ 2.22)
+                append_mesh_transformed(out, *knife_mesh, e.position, e.yaw, e.pitch, 0.08f, 2.22f);
             } else if (e.owner == -3 || e.owner == -4) {
                 // Fallback sphere
                 append_sphere(out, sphere, e.position, e.radius, 1.0f, 1.0f, 0.9f);
