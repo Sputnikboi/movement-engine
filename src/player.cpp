@@ -466,7 +466,15 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
         apply_soft_speed_cap(dt);
 
-        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+        // On slopes, project velocity onto the slope plane so we follow
+        // the surface downhill instead of separating and re-colliding.
+        if (on_slope) {
+            float vn = HMM_DotV3(velocity, ground_normal);
+            if (vn < 0.0f)
+                velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, vn));
+        } else {
+            if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+        }
 
         // Move, then snap to slope surface to stay grounded
         do_collide_and_move(dt, world);
@@ -507,7 +515,14 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     apply_soft_speed_cap(dt);
 
-    if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    // On slopes, project velocity onto slope plane
+    if (ground_normal.Y < 0.99f && ground_normal.Y > 0.7f) {
+        float vn = HMM_DotV3(velocity, ground_normal);
+        if (vn < 0.0f)
+            velocity = HMM_SubV3(velocity, HMM_MulV3F(ground_normal, vn));
+    } else {
+        if (velocity.Y < 0.0f) velocity.Y = 0.0f;
+    }
     do_collide_and_move(dt, world);
 }
 

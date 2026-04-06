@@ -444,10 +444,13 @@ LevelData generate_level(const ProcGenConfig& config,
         hm.terrain_basis(bx, bz, yaw, &right, &up, &fwd);
         add_box_oriented(m, {bx, base_y, bz}, bw, bh, bd, col, right, up, fwd);
     };
-    // Place a box on top of another (flat, no terrain tilt)
+    // Place a box on top of another, matching terrain tilt of the ground below
     auto place_box_stacked = [&](float bx, float bz, float bw, float bh, float bd,
-                                 HMM_Vec3 col, float yaw, float base_y) {
-        add_box(m, {bx, base_y, bz}, bw, bh, bd, col, yaw);
+                                 HMM_Vec3 col, float yaw, float base_y,
+                                 float ground_x, float ground_z) {
+        HMM_Vec3 right, up, fwd;
+        hm.terrain_basis(ground_x, ground_z, yaw, &right, &up, &fwd);
+        add_box_oriented(m, {bx, base_y, bz}, bw, bh, bd, col, right, up, fwd);
     };
 
     // --- Box clusters + individual boxes ---
@@ -509,12 +512,12 @@ LevelData generate_level(const ProcGenConfig& config,
                     float sw = randf(config.box_size_min, bw * 0.8f);
                     float sd = randf(config.box_size_min, bd * 0.8f);
                     float sh = randf(config.box_height_min, bh * 0.7f);
-                    float syaw = yaw + randf(-0.4f, 0.4f);
+                    float syaw = yaw + randf(-0.1f, 0.1f); // match base rotation closely
                     float sox = randf(-0.3f, 0.3f), soz = randf(-0.3f, 0.3f);
                     HMM_Vec3 scol = col;
                     float sv = randf(-0.04f, 0.04f);
                     scol.X += sv; scol.Y += sv; scol.Z += sv;
-                    place_box_stacked(bx + sox, bz + soz, sw, sh, sd, scol, syaw, base_y + bh);
+                    place_box_stacked(bx + sox, bz + soz, sw, sh, sd, scol, syaw, base_y + bh, bx, bz);
                 }
             }
             // Register cluster as one placed object
@@ -542,12 +545,12 @@ LevelData generate_level(const ProcGenConfig& config,
                 float sw = randf(config.box_size_min, bw * 0.8f);
                 float sd = randf(config.box_size_min, bd * 0.8f);
                 float sh = randf(config.box_height_min, bh * 0.7f);
-                float syaw = yaw + randf(-0.4f, 0.4f);
+                float syaw = yaw + randf(-0.1f, 0.1f); // match base rotation closely
                 float sox = randf(-0.3f, 0.3f), soz = randf(-0.3f, 0.3f);
                 HMM_Vec3 scol = col;
                 float sv = randf(-0.04f, 0.04f);
                 scol.X += sv; scol.Y += sv; scol.Z += sv;
-                place_box_stacked(cx + sox, cz + soz, sw, sh, sd, scol, syaw, base_y + bh);
+                place_box_stacked(cx + sox, cz + soz, sw, sh, sd, scol, syaw, base_y + bh, cx, cz);
             }
 
             boxes_placed++;
