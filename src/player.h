@@ -85,9 +85,10 @@ struct Player {
     float    ladder_cooldown     = 0.0f; // seconds remaining before re-grab allowed
 
     // --- Weapon holster ---
-    bool weapon_holstered = false;
-    float effective_max_speed() const { return weapon_holstered ? max_speed : weapon_speed; }
-    float effective_accel() const { return weapon_holstered ? ground_accel * (max_speed / weapon_speed) : ground_accel; }
+    bool weapon_holstered  = false;
+    bool weapon_lightweight = false; // lightweight weapons use holstered speed
+    float effective_max_speed() const { return (weapon_holstered || weapon_lightweight) ? max_speed : weapon_speed; }
+    float effective_accel() const { return (weapon_holstered || weapon_lightweight) ? ground_accel * (max_speed / weapon_speed) : ground_accel; }
 
     // --- Crouch/slide state ---
     bool  crouched          = false;

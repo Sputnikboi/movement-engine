@@ -48,6 +48,8 @@ struct WeaponConfig {
     float proj_radius     = 0.3f;   // hitbox radius
     float proj_lifetime   = 3.0f;   // seconds
     bool  infinite_ammo   = false;  // no reload needed
+    bool  no_ads          = false;  // weapon cannot ADS
+    bool  lightweight     = false;  // uses holstered move speed
 
     // ADS
     float ads_fov_mult    = 0.7f;     // FOV multiplied by this when ADS

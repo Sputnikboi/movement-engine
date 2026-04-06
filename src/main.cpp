@@ -417,6 +417,12 @@ int main(int argc, char* argv[]) {
                             weapons[w].has_mag_submesh = true;
                         }
                     }
+                    // Darken vertex colors to avoid overexposure on close viewmodels
+                    for (auto& v : weapons[w].viewmodel_mesh.vertices) {
+                        v.color[0] *= 0.45f;
+                        v.color[1] *= 0.45f;
+                        v.color[2] *= 0.45f;
+                    }
                     printf("Loaded weapon model '%s': %zu verts\n",
                            mp.c_str(), weapons[w].viewmodel_mesh.vertices.size());
                     break;
@@ -719,6 +725,7 @@ int main(int argc, char* argv[]) {
         // --- Weapon update & shooting ---
         {
             Weapon& weapon = weapons[active_weapon];
+            player.weapon_lightweight = weapon.config.lightweight;
             bool holstered = player.weapon_holstered;
             bool fire_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Shoot, keys_frame);
             bool reload_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Reload, keys_frame);

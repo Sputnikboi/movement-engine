@@ -103,29 +103,31 @@ void Weapon::init_knife() {
     config.name            = "Throwing Knife";
     config.fire_mode       = FireMode::PROJECTILE;
     config.damage          = 60.0f;
-    config.fire_rate       = 3.0f;
+    config.fire_rate       = 1.0f;
     config.range           = 200.0f;
     config.mag_size        = 1;
     config.reload_time     = 0.0f;
     config.crit_multiplier = 2.0f;
     config.infinite_ammo   = true;
+    config.no_ads          = true;
+    config.lightweight     = true;
 
     config.proj_speed      = 70.0f;
     config.proj_radius     = 0.3f;
     config.proj_lifetime   = 3.0f;
 
-    config.ads_fov_mult    = 0.85f;
-    config.ads_sens_mult   = 0.8f;
-    config.ads_speed       = 16.0f;
+    config.ads_fov_mult    = 1.0f;
+    config.ads_sens_mult   = 1.0f;
+    config.ads_speed       = 1.0f;
 
     config.hip_offset      = HMM_V3(0.2f, -0.18f, 0.35f);
-    config.ads_offset      = HMM_V3(0.0f, -0.12f, 0.3f);
+    config.ads_offset      = HMM_V3(0.2f, -0.18f, 0.35f);  // same as hip (no ADS)
 
-    config.recoil_kick     = 0.015f;
-    config.recoil_pitch    = -3.0f;
-    config.recoil_roll     = 1.5f;
-    config.recoil_side     = 0.01f;
-    config.recoil_recovery = 16.0f;
+    config.recoil_kick     = 0.0f;
+    config.recoil_pitch    = 0.0f;
+    config.recoil_roll     = 0.0f;
+    config.recoil_side     = 0.0f;
+    config.recoil_recovery = 10.0f;
     config.recoil_tilt_dir = 1.0f;
 
     config.reload_buffer_delay = 0.0f;
@@ -176,7 +178,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
         reload_buffered = true;
 
     // ADS blend
-    ads_held = ads_input;
+    ads_held = ads_input && !config.no_ads;
     float ads_target = (ads_held && state != WeaponState::RELOADING) ? 1.0f : 0.0f;
     float blend_speed = config.ads_speed * dt;
     if (ads_blend < ads_target)
