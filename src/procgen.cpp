@@ -477,13 +477,22 @@ LevelData generate_level(const ProcGenConfig& config,
         hm.terrain_basis(bx, bz, yaw, &right, &up, &fwd);
         add_box_oriented(m, {bx, base_y, bz}, bw, bh, bd, col, right, up, fwd);
     };
-    // Place a box on top of another, matching terrain tilt of the ground below
+    // Place a box on top of another, using terrain basis to find actual top position
     auto place_box_stacked = [&](float bx, float bz, float bw, float bh, float bd,
-                                 HMM_Vec3 col, float yaw, float base_y,
+                                 HMM_Vec3 col, float yaw, float base_box_h,
                                  float ground_x, float ground_z) {
         HMM_Vec3 right, up, fwd;
         hm.terrain_basis(ground_x, ground_z, yaw, &right, &up, &fwd);
-        add_box_oriented(m, {bx, base_y, bz}, bw, bh, bd, col, right, up, fwd);
+        // Top center of base box = ground_pos + up * base_box_h
+        float ground_y = hm.sample(ground_x, ground_z);
+        HMM_Vec3 top_pos = HMM_AddV3(
+            HMM_V3(ground_x, ground_y, ground_z),
+            HMM_MulV3F(up, base_box_h));
+        // Offset stacked box slightly from center
+        float sox = bx - ground_x, soz = bz - ground_z;
+        HMM_Vec3 stack_pos = HMM_AddV3(top_pos,
+            HMM_AddV3(HMM_MulV3F(right, sox), HMM_MulV3F(fwd, soz)));
+        add_box_oriented(m, stack_pos, bw, bh, bd, col, right, up, fwd);
     };
 
     // --- Box clusters + individual boxes ---
@@ -530,7 +539,7 @@ LevelData generate_level(const ProcGenConfig& config,
                 float base_sz = randf(config.box_size_min, config.box_size_max);
                 float bw = base_sz * randf(0.85f, 1.15f);
                 float bd = base_sz * randf(0.85f, 1.15f);
-                float bh = randf(config.box_height_min, config.box_height_max);
+                float bh = randf(config.box_height_min, fminf(config.box_height_max, base_sz * 1.2f));
                 float yaw = cluster_yaw + randf(-0.5f, 0.5f);
                 float base_y = hm.sample(bx, bz);
 
@@ -550,7 +559,7 @@ LevelData generate_level(const ProcGenConfig& config,
                     HMM_Vec3 scol = col;
                     float sv = randf(-0.04f, 0.04f);
                     scol.X += sv; scol.Y += sv; scol.Z += sv;
-                    place_box_stacked(bx + sox, bz + soz, sw, sh, sd, scol, syaw, base_y + bh, bx, bz);
+                    place_box_stacked(bx + sox, bz + soz, sw, sh, sd, scol, syaw, bh, bx, bz);
                 }
             }
             // Register cluster as one placed object
@@ -561,7 +570,7 @@ LevelData generate_level(const ProcGenConfig& config,
             float base_sz = randf(config.box_size_min, config.box_size_max);
             float bw = base_sz * randf(0.85f, 1.15f);
             float bd = base_sz * randf(0.85f, 1.15f);
-            float bh = randf(config.box_height_min, config.box_height_max);
+            float bh = randf(config.box_height_min, fminf(config.box_height_max, base_sz * 1.2f));
             float yaw = randf(0, HMM_PI32 * 2.0f);
             float base_y = hm.sample(cx, cz);
             float br = sqrtf(bw * bw + bd * bd) * 0.5f;
@@ -583,7 +592,7 @@ LevelData generate_level(const ProcGenConfig& config,
                 HMM_Vec3 scol = col;
                 float sv = randf(-0.04f, 0.04f);
                 scol.X += sv; scol.Y += sv; scol.Z += sv;
-                place_box_stacked(cx + sox, cz + soz, sw, sh, sd, scol, syaw, base_y + bh, cx, cz);
+                place_box_stacked(cx + sox, cz + soz, sw, sh, sd, scol, syaw, bh, cx, cz);
             }
 
             boxes_placed++;
