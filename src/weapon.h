@@ -28,14 +28,26 @@ enum class ReloadPhase : uint8_t {
 //  Static config for a weapon type
 // ============================================================
 
+enum class FireMode : uint8_t {
+    HITSCAN,
+    PROJECTILE,  // spawns a projectile entity
+};
+
 struct WeaponConfig {
     const char* name      = "Unknown";
+    FireMode fire_mode    = FireMode::HITSCAN;
     float damage          = 70.0f;
     float fire_rate       = 1.5f;     // shots per second
     float range           = 100.0f;
     int   mag_size        = 6;
     float reload_time     = 2.5f;     // seconds
     float crit_multiplier = 2.5f;
+
+    // Projectile mode
+    float proj_speed      = 70.0f;  // units/sec
+    float proj_radius     = 0.3f;   // hitbox radius
+    float proj_lifetime   = 3.0f;   // seconds
+    bool  infinite_ammo   = false;  // no reload needed
 
     // ADS
     float ads_fov_mult    = 0.7f;     // FOV multiplied by this when ADS
@@ -115,6 +127,7 @@ struct Weapon {
     // --- Methods ---
     void init_wingman();
     void init_glock();
+    void init_knife();
     void update(float dt, bool fire_pressed, bool reload_pressed, bool ads_held);
     bool try_fire();
     void begin_swap();   // start lowering weapon for swap

@@ -95,6 +95,58 @@ void Weapon::init_glock() {
 }
 
 // ============================================================
+//  Throwing Knife preset
+// ============================================================
+
+void Weapon::init_knife() {
+    config.name            = "Throwing Knife";
+    config.fire_mode       = FireMode::PROJECTILE;
+    config.damage          = 60.0f;
+    config.fire_rate       = 3.0f;
+    config.range           = 200.0f;
+    config.mag_size        = 1;
+    config.reload_time     = 0.0f;
+    config.crit_multiplier = 2.0f;
+    config.infinite_ammo   = true;
+
+    config.proj_speed      = 70.0f;
+    config.proj_radius     = 0.3f;
+    config.proj_lifetime   = 3.0f;
+
+    config.ads_fov_mult    = 0.85f;
+    config.ads_sens_mult   = 0.8f;
+    config.ads_speed       = 16.0f;
+
+    config.hip_offset      = HMM_V3(0.25f, -0.22f, 0.4f);
+    config.ads_offset      = HMM_V3(0.0f, -0.14f, 0.35f);
+
+    config.recoil_kick     = 0.015f;
+    config.recoil_pitch    = -3.0f;
+    config.recoil_roll     = 1.5f;
+    config.recoil_side     = 0.01f;
+    config.recoil_recovery = 16.0f;
+    config.recoil_tilt_dir = 1.0f;
+
+    config.reload_buffer_delay = 0.0f;
+
+    config.model_scale     = 1.0f;
+    config.model_rotation  = HMM_V3(0.0f, 90.0f, 0.0f);
+
+    config.reload_phase1    = 0.0f;
+    config.reload_phase2    = 0.0f;
+    config.reload_drop_dist = 0.0f;
+    config.reload_tilt      = 0.0f;
+    config.mag_drop_dist    = 0.0f;
+    config.mag_insert_dist  = 0.0f;
+
+    ammo  = 1;
+    state = WeaponState::IDLE;
+    reload_buffered = false;
+    reload_phase = ReloadPhase::NONE;
+    reload_progress = 0.0f;
+}
+
+// ============================================================
 //  Begin weapon swap (lower current weapon)
 // ============================================================
 
@@ -241,9 +293,10 @@ bool Weapon::try_fire() {
     if (state == WeaponState::RELOADING) return false;
     if (state == WeaponState::SWAPPING) return false;
     if (fire_timer > 0.0f) return false;
-    if (ammo <= 0) return false;
+    if (ammo <= 0 && !config.infinite_ammo) return false;
 
-    ammo--;
+    if (!config.infinite_ammo)
+        ammo--;
     fire_timer = 1.0f / config.fire_rate;
     state = WeaponState::FIRING;
 

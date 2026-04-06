@@ -353,11 +353,14 @@ Mesh build_entity_mesh(const Entity entities[], int max_entities,
         } break;
 
         case EntityType::Projectile: {
-            // Bright orange-yellow for drone projectiles, red for bombs
-            if (e.owner == -2) {
+            if (e.owner == -3) {
+                // Player knife projectile — bright white
+                append_sphere(out, sphere, e.position, e.radius, 1.0f, 1.0f, 0.9f);
+            } else if (e.owner == -2) {
                 // Bomb (from bomber) — red-orange
                 append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.3f, 0.1f);
             } else {
+                // Drone projectile — orange-yellow
                 append_sphere(out, sphere, e.position, e.radius, 1.0f, 0.7f, 0.1f);
             }
         } break;

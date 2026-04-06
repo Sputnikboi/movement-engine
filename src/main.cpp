@@ -353,10 +353,11 @@ int main(int argc, char* argv[]) {
     Weapon weapons[MAX_WEAPONS];
     int    active_weapon = 0;
     int    pending_weapon = -1;  // weapon to switch to after lowering
-    int    num_weapons = 2;      // weapons unlocked
+    int    num_weapons = 3;      // weapons unlocked
 
     weapons[0].init_wingman();
     weapons[1].init_glock();
+    weapons[2].init_knife();
 
     {
         // Try several paths — exe might run from build/ or project root
@@ -665,8 +666,12 @@ int main(int argc, char* argv[]) {
         {
             // Number keys to switch weapons
             for (int w = 0; w < num_weapons && w < MAX_WEAPONS; w++) {
-                if (keys_frame[SDL_SCANCODE_1 + w] && w != active_weapon && !show_settings) {
-                    if (weapons[active_weapon].state != WeaponState::SWAPPING) {
+                if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings) {
+                    // Unholster if holstered
+                    if (player.weapon_holstered)
+                        player.weapon_holstered = false;
+                    // Switch weapon if different
+                    if (w != active_weapon && weapons[active_weapon].state != WeaponState::SWAPPING) {
                         pending_weapon = w;
                         weapons[active_weapon].begin_swap();
                     }
@@ -718,6 +723,26 @@ int main(int argc, char* argv[]) {
                         e.ai_state = SHIELDER_CHASING;
                 }
 
+              if (weapon.config.fire_mode == FireMode::PROJECTILE) {
+                // Spawn a player projectile
+                HMM_Vec3 fwd = camera.forward();
+                for (int i = 0; i < MAX_ENTITIES; i++) {
+                    if (!entities[i].alive) {
+                        Entity& p = entities[i];
+                        p = Entity{};
+                        p.type     = EntityType::Projectile;
+                        p.alive    = true;
+                        p.position = camera.position;
+                        p.velocity = HMM_MulV3F(fwd, weapon.config.proj_speed);
+                        p.radius   = weapon.config.proj_radius;
+                        p.damage   = weapon.config.damage;
+                        p.owner    = -3; // player knife projectile
+                        p.lifetime = weapon.config.proj_lifetime;
+                        break;
+                    }
+                }
+              } else {
+                // Hitscan
                 HMM_Vec3 ray_origin = camera.position;
                 HMM_Vec3 ray_dir    = camera.forward();
 
@@ -806,6 +831,7 @@ int main(int argc, char* argv[]) {
                         );
                     }
                 }
+              } // end hitscan else
             }
         }
 
@@ -980,6 +1006,67 @@ int main(int argc, char* argv[]) {
                                                HMM_MulV3F(push_dir, overlap * 0.5f));
                     }
                 }
+            }
+
+            // --- Player projectile-vs-enemy collision (knife etc) ---
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Entity& proj = entities[i];
+                if (!proj.alive || proj.type != EntityType::Projectile) continue;
+                if (proj.owner != -3) continue; // only player projectiles
+
+                bool hit_something = false;
+                for (int j = 0; j < MAX_ENTITIES; j++) {
+                    Entity& e = entities[j];
+                    if (!e.alive || j == i) continue;
+                    if (e.type == EntityType::Projectile || e.type == EntityType::None) continue;
+
+                    float dist = HMM_LenV3(HMM_SubV3(proj.position, e.position));
+                    if (dist < proj.radius + e.radius) {
+                        // Apply damage with shield absorption
+                        float raw_dmg = proj.damage;
+                        float actual_dmg = shielder_absorb_damage(e, raw_dmg);
+                        e.health -= actual_dmg;
+
+                        // Hit flash
+                        if (e.type == EntityType::Turret)       e.hit_flash = turret_cfg.hit_flash_time;
+                        else if (e.type == EntityType::Tank)    e.hit_flash = tank_cfg.hit_flash_time;
+                        else if (e.type == EntityType::Bomber)  e.hit_flash = bomber_cfg.hit_flash_time;
+                        else if (e.type == EntityType::Shielder)e.hit_flash = shielder_cfg.hit_flash_time;
+                        else                                    e.hit_flash = drone_cfg.hit_flash_time;
+
+                        // Wake idle enemies
+                        if (e.type == EntityType::Drone  && e.ai_state == DRONE_IDLE)   e.ai_state = DRONE_CHASING;
+                        if (e.type == EntityType::Rusher && e.ai_state == RUSHER_IDLE)  e.ai_state = RUSHER_CHASING;
+                        if (e.type == EntityType::Turret && e.ai_state == TURRET_IDLE)  e.ai_state = TURRET_TRACKING;
+                        if (e.type == EntityType::Tank   && e.ai_state == TANK_IDLE)    e.ai_state = TANK_CHASING;
+                        if (e.type == EntityType::Bomber && e.ai_state == BOMBER_IDLE)  e.ai_state = BOMBER_APPROACH;
+                        if (e.type == EntityType::Shielder && e.ai_state == SHIELDER_IDLE) e.ai_state = SHIELDER_CHASING;
+
+                        // Kill check
+                        uint8_t dying_state = (uint8_t)DRONE_DYING;
+                        float tumble = drone_cfg.death_tumble_speed;
+                        if (e.type == EntityType::Rusher)  { dying_state = RUSHER_DYING;  tumble = rusher_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Turret)  { dying_state = TURRET_DYING;  tumble = turret_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Tank)    { dying_state = TANK_DYING;    tumble = tank_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Bomber)  { dying_state = BOMBER_DYING;  tumble = bomber_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Shielder){ dying_state = SHIELDER_DYING; tumble = shielder_cfg.death_tumble_speed; }
+
+                        if (e.health <= 0 && e.ai_state != dying_state) {
+                            e.ai_state = dying_state;
+                            e.death_timer = 0.0f;
+                            e.velocity.Y += 3.0f;
+                            HMM_Vec3 kb = HMM_NormV3(proj.velocity);
+                            e.velocity = HMM_AddV3(e.velocity, HMM_MulV3F(kb, 5.0f));
+                            e.angular_vel = HMM_V3(
+                                randf(-1.0f, 1.0f) * tumble * 57.3f, 0.0f,
+                                randf(-1.0f, 1.0f) * tumble * 57.3f);
+                        }
+
+                        hit_something = true;
+                        break; // one hit per projectile
+                    }
+                }
+                if (hit_something) proj.alive = false;
             }
 
             // --- Projectile-player collision (capsule hitbox) ---
