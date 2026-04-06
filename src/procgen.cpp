@@ -46,53 +46,56 @@ static HMM_Vec3 rotate_n(HMM_Vec3 n, float c, float s) {
 }
 
 // Full 3-axis rotation: yaw (Y), pitch (X), roll (Z)
-static HMM_Vec3 rotate_pry(HMM_Vec3 p, HMM_Vec3 center, float yaw, float pitch, float roll) {
-    float lx = p.X - center.X, ly = p.Y - center.Y, lz = p.Z - center.Z;
-    // Pitch (around X) — tilt forward/back with terrain
-    float cp = cosf(pitch), sp = sinf(pitch);
-    float y1 = ly * cp - lz * sp;
-    float z1 = ly * sp + lz * cp;
-    float x1 = lx;
-    // Roll (around Z) — tilt sideways with terrain
-    float cr = cosf(roll), sr = sinf(roll);
-    float x2 = x1 * cr - y1 * sr;
-    float y2 = x1 * sr + y1 * cr;
-    float z2 = z1;
-    // Yaw (around Y) — spin to face direction
-    float cy = cosf(yaw), sy = sinf(yaw);
-    float x3 = x2 * cy + z2 * sy;
-    float z3 = -x2 * sy + z2 * cy;
-    float y3 = y2;
-    return {center.X + x3, center.Y + y3, center.Z + z3};
-}
-static HMM_Vec3 rotate_n_pry(HMM_Vec3 n, float yaw, float pitch, float roll) {
-    HMM_Vec3 zero = {0,0,0};
-    return rotate_pry(HMM_AddV3(zero, n), zero, yaw, pitch, roll);
+
+
+// Add a box using 3 basis vectors (right, up, forward) for orientation.
+// bottom center at pos.
+static void add_box_oriented(Mesh& m, HMM_Vec3 pos, float w, float h, float d,
+                             HMM_Vec3 color,
+                             HMM_Vec3 right, HMM_Vec3 up, HMM_Vec3 fwd) {
+    // Half extents along each axis
+    HMM_Vec3 hr = HMM_MulV3F(right, w * 0.5f);
+    HMM_Vec3 hu = HMM_MulV3F(up, h);
+    HMM_Vec3 hf = HMM_MulV3F(fwd, d * 0.5f);
+
+    // 8 corners: combinations of +-right, 0/+up, +-forward
+    auto corner = [&](float sr, float su, float sf) -> HMM_Vec3 {
+        return HMM_AddV3(HMM_AddV3(HMM_AddV3(pos,
+            HMM_MulV3F(hr, sr)),
+            HMM_MulV3F(hu, su)),
+            HMM_MulV3F(hf, sf));
+    };
+    HMM_Vec3 c000 = corner(-1, 0, -1); // bottom-left-back
+    HMM_Vec3 c100 = corner( 1, 0, -1);
+    HMM_Vec3 c010 = corner(-1, 1, -1);
+    HMM_Vec3 c110 = corner( 1, 1, -1);
+    HMM_Vec3 c001 = corner(-1, 0,  1);
+    HMM_Vec3 c101 = corner( 1, 0,  1);
+    HMM_Vec3 c011 = corner(-1, 1,  1);
+    HMM_Vec3 c111 = corner( 1, 1,  1);
+
+    // Top (+up)
+    add_quad(m, c010, c110, c111, c011, up, color);
+    // Bottom (-up)
+    add_quad(m, c001, c101, c100, c000, HMM_MulV3F(up, -1), color);
+    // Front (+fwd)
+    add_quad(m, c001, c011, c111, c101, fwd, color);
+    // Back (-fwd)
+    add_quad(m, c100, c110, c010, c000, HMM_MulV3F(fwd, -1), color);
+    // Right (+right)
+    add_quad(m, c101, c111, c110, c100, right, color);
+    // Left (-right)
+    add_quad(m, c000, c010, c011, c001, HMM_MulV3F(right, -1), color);
 }
 
-// Add a box with yaw + optional pitch/roll tilt. Bottom center at pos.
+// Convenience: box with yaw only (no terrain tilt), for pillars/platforms
 static void add_box(Mesh& m, HMM_Vec3 pos, float w, float h, float d,
-                    HMM_Vec3 color, float yaw, float pitch = 0, float roll = 0) {
-    float x0 = pos.X - w * 0.5f, x1 = pos.X + w * 0.5f;
-    float y0 = pos.Y,            y1 = pos.Y + h;
-    float z0 = pos.Z - d * 0.5f, z1 = pos.Z + d * 0.5f;
-    HMM_Vec3 ctr = {pos.X, pos.Y, pos.Z}; // rotate around bottom so box sits on terrain
-
-    auto r  = [&](HMM_Vec3 p) { return rotate_pry(p, ctr, yaw, pitch, roll); };
-    auto rn = [&](HMM_Vec3 n) { return rotate_n_pry(n, yaw, pitch, roll); };
-
-    add_quad(m, r({x0,y1,z0}), r({x1,y1,z0}), r({x1,y1,z1}), r({x0,y1,z1}),
-             rn({0,1,0}), color);
-    add_quad(m, r({x0,y0,z1}), r({x1,y0,z1}), r({x1,y0,z0}), r({x0,y0,z0}),
-             rn({0,-1,0}), color);
-    add_quad(m, r({x0,y0,z1}), r({x0,y1,z1}), r({x1,y1,z1}), r({x1,y0,z1}),
-             rn({0,0,1}), color);
-    add_quad(m, r({x1,y0,z0}), r({x1,y1,z0}), r({x0,y1,z0}), r({x0,y0,z0}),
-             rn({0,0,-1}), color);
-    add_quad(m, r({x1,y0,z1}), r({x1,y1,z1}), r({x1,y1,z0}), r({x1,y0,z0}),
-             rn({1,0,0}), color);
-    add_quad(m, r({x0,y0,z0}), r({x0,y1,z0}), r({x0,y1,z1}), r({x0,y0,z1}),
-             rn({-1,0,0}), color);
+                    HMM_Vec3 color, float yaw) {
+    float cy = cosf(yaw), sy = sinf(yaw);
+    HMM_Vec3 right = {cy, 0, -sy};
+    HMM_Vec3 up    = {0, 1, 0};
+    HMM_Vec3 fwd   = {sy, 0, cy};
+    add_box_oriented(m, pos, w, h, d, color, right, up, fwd);
 }
 
 // Merge external mesh (for door model)
@@ -164,12 +167,22 @@ struct HeightMap {
         return HMM_NormV3(n);
     }
 
-    // Derive pitch and roll to align a yaw-rotated box with terrain
-    // World-space pitch/roll from terrain normal (applied before yaw)
-    void normal_to_tilt(float x, float z, float* pitch, float* roll) const {
-        HMM_Vec3 n = sample_normal(x, z);
-        *pitch = atan2f(-n.Z, n.Y);
-        *roll  = atan2f(n.X, n.Y);
+    // Build a 3x3 rotation matrix aligning Y-up to the terrain normal,
+    // then rotating around that normal by yaw.
+    // Returns 3 basis vectors (right, up, forward).
+    void terrain_basis(float x, float z, float yaw,
+                       HMM_Vec3* out_right, HMM_Vec3* out_up, HMM_Vec3* out_fwd) const {
+        HMM_Vec3 up = sample_normal(x, z);
+        // Yaw direction in XZ plane
+        float cy = cosf(yaw), sy = sinf(yaw);
+        HMM_Vec3 wish_fwd = {sy, 0, cy};
+        // Right = cross(wish_fwd, up), normalized
+        HMM_Vec3 right = HMM_NormV3(HMM_Cross(wish_fwd, up));
+        // Recompute forward = cross(up, right) to ensure orthogonal
+        HMM_Vec3 fwd = HMM_Cross(up, right);
+        *out_right = right;
+        *out_up = up;
+        *out_fwd = fwd;
     }
 };
 
@@ -255,7 +268,7 @@ LevelData generate_level(const ProcGenConfig& config,
     // Exit platform config
     float exit_plat_h     = 2.5f;
     float exit_plat_depth = 6.0f;
-    float exit_plat_width = 8.0f;
+    float exit_plat_width = 14.0f;
     float exit_ramp_len   = 8.0f;
 
     float door_flat_radius = 5.0f;
@@ -278,8 +291,16 @@ LevelData generate_level(const ProcGenConfig& config,
                 float ex = lx / hl.rx, ez = lz / hl.rz;
                 float d2 = ex * ex + ez * ez;
                 if (d2 < 1.0f) {
-                    float t = 1.0f - d2;
-                    float falloff = powf(t, 1.0f / hl.sharpness);
+                    float d = sqrtf(d2);
+                    // Trapezoidal profile: flat_top = inner fraction that's flat
+                    float flat_top = 1.0f - 1.0f / hl.sharpness; // sharpness 1→0% flat, 3→67% flat
+                    float falloff;
+                    if (d < flat_top)
+                        falloff = 1.0f; // flat top
+                    else
+                        falloff = 1.0f - (d - flat_top) / (1.0f - flat_top); // linear ramp
+                    // Smooth the ramp edges slightly
+                    falloff = falloff * falloff * (3.0f - 2.0f * falloff); // smoothstep
                     h += hl.height * falloff;
                 }
             }
@@ -331,14 +352,11 @@ LevelData generate_level(const ProcGenConfig& config,
 
     // Entry door gap starts at floor level
     wall_with_door(-hw, hw, 0, rh, -hd, {0,0,1}, entry_x, door_w, door_h);
-    // Exit door gap starts at platform height
+    // Exit door gap starts at platform height  
     wall_with_door(-hw, hw, exit_plat_h, rh, hd, {0,0,-1}, exit_x, door_w, exit_plat_h + door_h);
-    // Fill wall below exit platform gap
-    {
-        float gx0 = exit_x - door_w * 0.5f, gx1 = exit_x + door_w * 0.5f;
-        add_quad(m, {gx0,0,hd}, {gx0,exit_plat_h,hd}, {gx1,exit_plat_h,hd}, {gx1,0,hd},
-                 {0,0,-1}, config.wall_color);
-    }
+    // Full wall strip from floor to platform height (below the upper wall section)
+    add_quad(m, {-hw,0,hd}, {-hw,exit_plat_h,hd}, {hw,exit_plat_h,hd}, {hw,0,hd},
+             {0,0,-1}, config.wall_color);
     add_quad(m, {hw,0,hd}, {hw,rh,hd}, {hw,rh,-hd}, {hw,0,-hd}, {-1,0,0}, config.wall_color);
     add_quad(m, {-hw,0,-hd}, {-hw,rh,-hd}, {-hw,rh,hd}, {-hw,0,hd}, {1,0,0}, config.wall_color);
 
@@ -418,11 +436,18 @@ LevelData generate_level(const ProcGenConfig& config,
     placed[placed_count++] = {entry_x, -hd + 2.0f, 2.5f};
     placed[placed_count++] = {exit_x, hd - (exit_plat_depth + exit_ramp_len) * 0.5f, (exit_plat_depth + exit_ramp_len) * 0.5f + 2.0f};
 
-    // --- Helper: place a single box with terrain-aware Y ---
-    auto place_box = [&](float bx, float bz, float bw, float bh, float bd,
-                         HMM_Vec3 col, float yaw, float pitch, float roll,
-                         float base_y) {
-        add_box(m, {bx, base_y, bz}, bw, bh, bd, col, yaw, pitch, roll);
+    // --- Helper: place a terrain-aligned box ---
+    auto place_box_terrain = [&](float bx, float bz, float bw, float bh, float bd,
+                                 HMM_Vec3 col, float yaw) {
+        float base_y = hm.sample(bx, bz);
+        HMM_Vec3 right, up, fwd;
+        hm.terrain_basis(bx, bz, yaw, &right, &up, &fwd);
+        add_box_oriented(m, {bx, base_y, bz}, bw, bh, bd, col, right, up, fwd);
+    };
+    // Place a box on top of another (flat, no terrain tilt)
+    auto place_box_stacked = [&](float bx, float bz, float bw, float bh, float bd,
+                                 HMM_Vec3 col, float yaw, float base_y) {
+        add_box(m, {bx, base_y, bz}, bw, bh, bd, col, yaw);
     };
 
     // --- Box clusters + individual boxes ---
@@ -471,17 +496,13 @@ LevelData generate_level(const ProcGenConfig& config,
                 float bd = base_sz * randf(0.85f, 1.15f);
                 float bh = randf(config.box_height_min, config.box_height_max);
                 float yaw = cluster_yaw + randf(-0.5f, 0.5f);
-                float pitch, roll;
-                hm.normal_to_tilt(bx, bz, &pitch, &roll);
-
-
                 float base_y = hm.sample(bx, bz);
 
                 HMM_Vec3 col = config.box_color;
                 float var = randf(-0.05f, 0.05f);
                 col.X += var; col.Y += var; col.Z += var;
 
-                place_box(bx, bz, bw, bh, bd, col, yaw, pitch, roll, base_y);
+                place_box_terrain(bx, bz, bw, bh, bd, col, yaw);
 
                 // Maybe stack
                 if (randf(0, 1) < config.box_stack_chance) {
@@ -493,7 +514,7 @@ LevelData generate_level(const ProcGenConfig& config,
                     HMM_Vec3 scol = col;
                     float sv = randf(-0.04f, 0.04f);
                     scol.X += sv; scol.Y += sv; scol.Z += sv;
-                    place_box(bx + sox, bz + soz, sw, sh, sd, scol, syaw, 0, 0, base_y + bh);
+                    place_box_stacked(bx + sox, bz + soz, sw, sh, sd, scol, syaw, base_y + bh);
                 }
             }
             // Register cluster as one placed object
@@ -506,8 +527,6 @@ LevelData generate_level(const ProcGenConfig& config,
             float bd = base_sz * randf(0.85f, 1.15f);
             float bh = randf(config.box_height_min, config.box_height_max);
             float yaw = randf(0, HMM_PI32 * 2.0f);
-            float pitch, roll;
-            hm.normal_to_tilt(cx, cz, &pitch, &roll);
             float base_y = hm.sample(cx, cz);
             float br = sqrtf(bw * bw + bd * bd) * 0.5f;
 
@@ -515,7 +534,7 @@ LevelData generate_level(const ProcGenConfig& config,
             float var = randf(-0.05f, 0.05f);
             col.X += var; col.Y += var; col.Z += var;
 
-            place_box(cx, cz, bw, bh, bd, col, yaw, pitch, roll, base_y);
+            place_box_terrain(cx, cz, bw, bh, bd, col, yaw);
             placed[placed_count++] = {cx, cz, br};
 
             // Maybe stack
@@ -528,7 +547,7 @@ LevelData generate_level(const ProcGenConfig& config,
                 HMM_Vec3 scol = col;
                 float sv = randf(-0.04f, 0.04f);
                 scol.X += sv; scol.Y += sv; scol.Z += sv;
-                place_box(cx + sox, cz + soz, sw, sh, sd, scol, syaw, 0, 0, base_y + bh);
+                place_box_stacked(cx + sox, cz + soz, sw, sh, sd, scol, syaw, base_y + bh);
             }
 
             boxes_placed++;
@@ -566,11 +585,44 @@ LevelData generate_level(const ProcGenConfig& config,
         placed[placed_count++] = {tx, tz, tr};
     }
 
+    // --- Fill empty areas with large buildings ---
+    // Scan a grid and place buildings in cells that have nothing nearby
+    {
+        float scan_step = 12.0f; // check every 12m
+        float min_empty_radius = 10.0f; // area must be this empty
+        float bldg_w_min = 6.0f, bldg_w_max = 12.0f;
+        float bldg_h_min = 6.0f, bldg_h_max = 14.0f;
+        HMM_Vec3 bldg_color = {0.32f, 0.30f, 0.28f};
+
+        for (float sz = -hd + scan_step; sz < hd - scan_step && placed_count < MAX_PLACED; sz += scan_step) {
+            for (float sx = -hw + scan_step; sx < hw - scan_step && placed_count < MAX_PLACED; sx += scan_step) {
+                // Jitter the probe point
+                float px = sx + randf(-3.0f, 3.0f);
+                float pz = sz + randf(-3.0f, 3.0f);
+                // Check if area is empty
+                if (!overlaps(px, pz, min_empty_radius, placed, placed_count, 0.0f)) {
+                    float bw = randf(bldg_w_min, bldg_w_max);
+                    float bd = randf(bldg_w_min, bldg_w_max);
+                    float bh = randf(bldg_h_min, bldg_h_max);
+                    float yaw = randf(0, HMM_PI32 * 2.0f);
+                    float br = sqrtf(bw*bw + bd*bd) * 0.5f;
+
+                    HMM_Vec3 col = bldg_color;
+                    float var = randf(-0.03f, 0.03f);
+                    col.X += var; col.Y += var; col.Z += var;
+
+                    add_box(m, {px, 0, pz}, bw, bh, bd, col, yaw);
+                    placed[placed_count++] = {px, pz, br + 2.0f};
+                }
+            }
+        }
+    }
+
     // --- Spawn point ---
     ld.spawn_pos = HMM_V3(entry_x, 1.0f, -hd + 3.0f);
     ld.has_spawn = true;
 
-    // --- Enemy spawns ---
+    // --- Enemy spawns (placed last so they avoid all objects) ---
     float min_enemy_dist = 15.0f;
     auto spawn_enemy = [&](EntityType type, float spawn_h) {
         for (int attempt = 0; attempt < 40; attempt++) {
