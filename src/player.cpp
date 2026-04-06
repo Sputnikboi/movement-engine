@@ -207,9 +207,16 @@ void Player::handle_crouch(const InputState& input, const CollisionWorld& world)
 
             HitResult hit = world.raycast(ray_origin, ray_dir, check_dist);
             if (!hit.hit) {
+                bool was_sliding = sliding;
                 crouched = false;
                 sliding = false;
                 power_sliding = false;
+                // Depenetrate when uncrouching from a slide on slopes
+                if (was_sliding) {
+                    HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0, radius, 0));
+                    sphere_center = world.depenetrate(sphere_center, radius);
+                    position = HMM_SubV3(sphere_center, HMM_V3(0, radius, 0));
+                }
             }
             // else: can't stand up, stay crouched
         }
@@ -462,6 +469,10 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         if (hspeed < (on_slope ? slide_stop_speed * 0.5f : slide_stop_speed)) {
             sliding = false;
             power_sliding = false;
+            // Depenetrate on slide exit to prevent clipping into slopes
+            HMM_Vec3 sphere_center = HMM_AddV3(position, HMM_V3(0, radius, 0));
+            sphere_center = world.depenetrate(sphere_center, radius);
+            position = HMM_SubV3(sphere_center, HMM_V3(0, radius, 0));
         }
 
         apply_soft_speed_cap(dt);
@@ -517,6 +528,19 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
     if (velocity.Y < 0.0f) velocity.Y = 0.0f;
     do_collide_and_move(dt, world);
+
+    // Ground-snap on slopes: prevent floating/clipping after slide exit
+    if (ground_normal.Y < 0.99f && ground_normal.Y > 0.7f) {
+        HMM_Vec3 ray_origin = HMM_AddV3(position, HMM_V3(0, radius + 0.1f, 0));
+        HitResult snap = world.raycast(ray_origin, HMM_V3(0, -1, 0), step_height + 0.3f);
+        if (snap.hit && snap.normal.Y > 0.7f) {
+            float ground_y = snap.point.Y;
+            if (position.Y > ground_y && position.Y - ground_y < step_height)
+                position.Y = ground_y;
+            else if (position.Y < ground_y)
+                position.Y = ground_y;
+        }
+    }
 }
 
 // ============================================================
