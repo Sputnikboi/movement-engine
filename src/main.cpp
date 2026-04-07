@@ -30,25 +30,12 @@
 #include "vendor/imgui/imgui_impl_sdl3.h"
 #include "vendor/imgui/imgui_impl_vulkan.h"
 
-namespace fs = std::filesystem;
+#include "game_state.h"
+#include "shop.h"
+#include "hud.h"
+#include "debug_menu.h"
 
-// Scan a directory for .glb/.gltf files
-static std::vector<std::string> scan_levels(const std::string& dir) {
-    std::vector<std::string> files;
-    std::error_code ec;
-    if (!fs::is_directory(dir, ec)) return files;
-    for (auto& entry : fs::directory_iterator(dir, ec)) {
-        if (!entry.is_regular_file()) continue;
-        auto ext = entry.path().extension().string();
-        // lowercase compare
-        for (auto& c : ext) c = static_cast<char>(tolower(c));
-        if (ext == ".glb" || ext == ".gltf") {
-            files.push_back(entry.path().string());
-        }
-    }
-    std::sort(files.begin(), files.end());
-    return files;
-}
+namespace fs = std::filesystem;
 
 // Load a level and update all engine state
 static bool load_level(const std::string& path,
@@ -382,27 +369,6 @@ int main(int argc, char* argv[]) {
         }
     };
 
-    // Apply upgrade stats based on weapon level
-    auto apply_weapon_upgrades = [&](int w) {
-        int ups = weapon_level[w] - 1; // upgrades above base
-        if (ups <= 0) return;
-        switch (w) {
-            case 0: // Glock: +1 damage, +5% fire rate (additive) per upgrade
-                weapons[w].config.damage    += ups * 1.0f;
-                weapons[w].config.fire_rate *= (1.0f + ups * 0.05f);
-                break;
-            case 1: // Wingman: 1.1x damage per upgrade (multiplicative)
-                for (int i = 0; i < ups; i++)
-                    weapons[w].config.damage *= 1.1f;
-                break;
-            case 2: // Knife: +5 damage, +0.1x crit multiplier per upgrade
-                weapons[w].config.damage          += ups * 5.0f;
-                weapons[w].config.crit_multiplier += ups * 0.1f;
-                break;
-        }
-        weapons[w].ammo = weapons[w].config.mag_size;
-    };
-
     {
         // Try several paths — exe might run from build/ or project root
         const char* vm_paths[] = {
@@ -503,6 +469,63 @@ int main(int argc, char* argv[]) {
     float fps_timer = 0.0f;
     int frame_count = 0;
     float display_fps = 0.0f;
+
+    // --- Construct shared game state ---
+    GameState gs {
+        /* window */            window,
+        /* camera */            camera,
+        /* player */            player,
+        /* renderer */          renderer,
+        /* collision */         collision,
+        /* config */            config,
+        /* kb */                kb,
+        /* effects */           effects,
+        /* entities */          entities,
+        /* max_entities */      MAX_ENTITIES,
+        /* drone_cfg */         drone_cfg,
+        /* rusher_cfg */        rusher_cfg,
+        /* turret_cfg */        turret_cfg,
+        /* tank_cfg */          tank_cfg,
+        /* bomber_cfg */        bomber_cfg,
+        /* shielder_cfg */      shielder_cfg,
+        /* ai_enabled */        ai_enabled,
+        /* weapons */           weapons,
+        /* active_weapon */     active_weapon,
+        /* pending_weapon */    pending_weapon,
+        /* num_weapons */       num_weapons,
+        /* weapon_level */      weapon_level,
+        /* procgen_cfg */       procgen_cfg,
+        /* rooms_cleared */     rooms_cleared,
+        /* door_mesh_ptr */     door_mesh_ptr,
+        /* active_doors */      active_doors,
+        /* current_level_name */current_level_name,
+        /* currency */          currency,
+        /* show_shop */         show_shop,
+        /* in_shop_room */      in_shop_room,
+        /* shop_weapon */       shop_weapon,
+        /* shop_data */         shop_data,
+        /* shop_nearby_stand */ shop_nearby_stand,
+        /* shop_interact_cooldown */ shop_interact_cooldown,
+        /* show_settings */     show_settings,
+        /* show_hud */          show_hud,
+        /* show_ladder_debug */ show_ladder_debug,
+        /* noclip */            noclip,
+        /* running */           running,
+        /* fly_speed */         fly_speed,
+        /* rebinding_action */  rebinding_action,
+        /* rebinding_slot */    rebinding_slot,
+        /* level_files */       level_files,
+        /* levels_scanned */    levels_scanned,
+        /* level_path_buf */    level_path_buf,
+    };
+
+    // Load-level callback for debug menu
+    auto load_level_fn = [&](const std::string& path) -> bool {
+        return load_level(path, renderer, collision, player, camera, noclip,
+                          current_level_name, entities, MAX_ENTITIES,
+                          &drone_cfg, &rusher_cfg, &turret_cfg,
+                          &tank_cfg, &bomber_cfg, &shielder_cfg);
+    };
 
     while (running) {
         float mouse_dx = 0.0f, mouse_dy = 0.0f;
@@ -1242,194 +1265,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // --- Transition: combat room exit door → shop room ---
+        // --- Shop: enter from combat room exit door ---
         if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room) {
+            shop_enter(gs);
             interact_pressed = false;
-            in_shop_room = true;
-            show_shop = true;  // gates entity updates / weapon switching
-
-            // Pick weapon to offer this shop visit
-            if (shop_weapon < 0) {
-                int candidates[3] = {0, 1, 2};
-                int n_cand = 0;
-                for (int i = 0; i < 3; i++)
-                    if (i != active_weapon) candidates[n_cand++] = i;
-                shop_weapon = candidates[rand() % n_cand];
-            }
-
-            // Generate the shop room
-            shop_data = generate_shop_room(door_mesh_ptr, &active_doors);
-
-            // Configure stands
-            for (auto& s : shop_data.stands) {
-                s.purchased = false;
-                if (s.type == ShopStandType::Weapon) {
-                    s.weapon_index = shop_weapon;
-                    int lvl = weapon_level[shop_weapon];
-                    const char* wnames[] = {"Glock", "Wingman", "Throwing Knife"};
-                    s.label = wnames[shop_weapon];
-                    s.cost = 10;
-                } else if (s.type == ShopStandType::Healthpack) {
-                    s.cost = 5;
-                }
-            }
-
-            // Clear entities + effects
-            for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
-            effects.init();
-
-            // Build collision from shop room mesh
-            collision.triangles.clear();
-            collision.ladder_volumes.clear();
-            collision.build_from_mesh(shop_data.level.mesh);
-
-            // Upload to renderer
-            renderer.reload_mesh(shop_data.level.mesh);
-
-            // Spawn player at shop entrance
-            player.position = shop_data.level.spawn_pos;
-            player.velocity = HMM_V3(0, 0, 0);
-            camera.yaw = HMM_PI32 / 2.0f;  // face +Z (into shop)
-            camera.pitch = 0;
-            noclip = false;
-
-            shop_interact_cooldown = 0.3f; // prevent instant-buy on entry
-
-            current_level_name = "Shop";
-            printf("Entering shop room...\n");
         }
-
-        // --- Shop room interaction: stands + exit door ---
-        if (in_shop_room) {
-            shop_interact_cooldown -= dt;
-            if (shop_interact_cooldown < 0) shop_interact_cooldown = 0;
-
-            // Find nearest stand the player is close to
-            shop_nearby_stand = -1;
-            float best_dist_sq = 2.2f * 2.2f;  // interaction radius
-            for (int i = 0; i < (int)shop_data.stands.size(); i++) {
-                const auto& s = shop_data.stands[i];
-                HMM_Vec3 diff = HMM_SubV3(player.position, s.position);
-                diff.Y = 0;
-                float d2 = HMM_DotV3(diff, diff);
-                if (d2 < best_dist_sq) {
-                    best_dist_sq = d2;
-                    shop_nearby_stand = i;
-                }
-            }
-
-            // Check proximity to exit door
-            bool near_shop_exit = false;
-            {
-                HMM_Vec3 diff = HMM_SubV3(player.position, shop_data.exit_door_pos);
-                diff.Y = 0;
-                if (HMM_DotV3(diff, diff) < 3.0f * 3.0f)
-                    near_shop_exit = true;
-            }
-
-            if (interact_pressed && shop_interact_cooldown <= 0) {
-                // Buy from stand
-                if (shop_nearby_stand >= 0) {
-                    ShopStand& s = shop_data.stands[shop_nearby_stand];
-                    if (!s.purchased && s.type != ShopStandType::Empty) {
-                        if (s.type == ShopStandType::Weapon) {
-                            int w = s.weapon_index;
-                            int lvl = weapon_level[w];
-                            if (currency >= s.cost) {
-                                if (lvl > 0) {
-                                    // Upgrade existing weapon
-                                    currency -= s.cost;
-                                    weapon_level[w]++;
-                                    switch (w) {
-                                        case 0: weapons[w].init_glock();   break;
-                                        case 1: weapons[w].init_wingman(); break;
-                                        case 2: weapons[w].init_knife();   break;
-                                    }
-                                    apply_weapon_upgrades(w);
-                                    s.purchased = true;
-                                    printf("Upgraded %s to Lv %d\n", s.label, weapon_level[w]);
-                                } else {
-                                    // Buy new weapon (replace current)
-                                    currency -= s.cost;
-                                    weapon_level[active_weapon] = 0;
-                                    weapon_level[w] = 1;
-                                    active_weapon = w;
-                                    weapons[w].ammo = weapons[w].config.mag_size;
-                                    weapons[w].state = WeaponState::IDLE;
-                                    num_weapons = 1;
-                                    s.purchased = true;
-                                    printf("Bought %s\n", s.label);
-                                }
-                                shop_interact_cooldown = 0.3f;
-                            }
-                        } else if (s.type == ShopStandType::Healthpack) {
-                            bool full_hp = (player.health >= player.max_health - 0.1f);
-                            if (!full_hp && currency >= s.cost) {
-                                currency -= s.cost;
-                                player.health += player.max_health * 0.25f;
-                                if (player.health > player.max_health) player.health = player.max_health;
-                                s.purchased = true;
-                                shop_interact_cooldown = 0.3f;
-                                printf("Bought healthpack\n");
-                            }
-                        }
-                    }
-                }
-                // Exit shop → next combat room
-                else if (near_shop_exit) {
-                    in_shop_room = false;
-                    show_shop = false;
-                    shop_weapon = -1;
-
-                    rooms_cleared++;
-                    player.health = player.max_health;
-                    player.damage_accum = 0.0f;
-                    for (int w = 0; w < MAX_WEAPONS; w++) {
-                        weapons[w].ammo = weapons[w].config.mag_size;
-                        weapons[w].state = WeaponState::IDLE;
-                        weapons[w].reload_phase = ReloadPhase::NONE;
-                    }
-                    printf("Entering room %d...\n", rooms_cleared + 1);
-                    procgen_cfg.seed = 0;
-                    procgen_cfg.room_number = rooms_cleared + 1;
-                    procgen_cfg.difficulty = 1.0f + rooms_cleared * 0.15f;
-
-                    LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
-
-                    for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
-                    effects.init();
-
-                    collision.triangles.clear();
-                    collision.ladder_volumes.clear();
-                    collision.build_from_mesh(pld.mesh);
-                    renderer.reload_mesh(pld.mesh);
-
-                    player.position = pld.spawn_pos;
-                    player.velocity = HMM_V3(0, 0, 0);
-                    camera.yaw = HMM_PI32 / 2.0f;
-                    camera.pitch = 0;
-                    noclip = false;
-
-                    for (const auto& es : pld.enemy_spawns) {
-                        if (es.type == EntityType::Drone)
-                            drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
-                        else if (es.type == EntityType::Rusher)
-                            rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
-                        else if (es.type == EntityType::Turret)
-                            turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
-                        else if (es.type == EntityType::Tank)
-                            tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
-                        else if (es.type == EntityType::Bomber)
-                            bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
-                        else if (es.type == EntityType::Shielder)
-                            shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
-                    }
-
-                    current_level_name = "Procedural";
-                    printf("Room transition complete.\n");
-                }
-            }
-        }
+        // --- Shop: stand interaction + exit to next room ---
+        shop_tick(gs, dt, interact_pressed);
         interact_pressed = false; // consume
 
         // Build frustum from current camera for culling
@@ -1501,799 +1343,26 @@ int main(int argc, char* argv[]) {
         ImGui::NewFrame();
 
         // --- HUD ---
-        if (show_hud && !show_settings) {
-            ImGui::SetNextWindowPos(ImVec2(10, 10));
-            ImGui::SetNextWindowBgAlpha(0.4f);
-            ImGui::Begin("##hud", nullptr,
-                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-
-            ImGui::Text("FPS: %.0f", display_fps);
-            float speed_xz = sqrtf(player.velocity.X * player.velocity.X +
-                                   player.velocity.Z * player.velocity.Z);
-            ImGui::Text("Speed: %.1f u/s", speed_xz);
-
-            // Health bar
-            {
-                float hp_frac = player.health / player.max_health;
-                ImVec4 hp_color = (hp_frac > 0.5f)
-                    ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f)
-                    : (hp_frac > 0.25f)
-                        ? ImVec4(1.0f, 0.8f, 0.2f, 1.0f)
-                        : ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, hp_color);
-                char hp_text[32];
-                snprintf(hp_text, sizeof(hp_text), "HP: %.0f / %.0f", player.health, player.max_health);
-                ImGui::ProgressBar(hp_frac, ImVec2(180, 14), hp_text);
-                ImGui::PopStyleColor();
-            }
-            ImGui::Text("Pos: %.1f %.1f %.1f", player.position.X, player.position.Y, player.position.Z);
-            const char* state = "AIR";
-            if (player.grounded) {
-                if (player.sliding)       state = player.power_sliding ? "POWER SLIDE" : "SLIDE";
-                else if (player.crouched) state = "CROUCH";
-                else                      state = "GROUND";
-            }
-            ImGui::Text("%s", state);
-            if (player.lurch_timer > 0.0f) {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1,0.7f,0.2f,1), "LURCH");
-            }
-            if (noclip) ImGui::Text("NOCLIP");
-            // Count alive enemies
+        {
             int enemy_count_hud = 0;
             for (int i = 0; i < MAX_ENTITIES; i++) {
-                if (!entities[i].alive) continue;
-                auto t = entities[i].type;
-                if (t == EntityType::Drone || t == EntityType::Rusher ||
-                    t == EntityType::Turret || t == EntityType::Tank ||
-                    t == EntityType::Bomber || t == EntityType::Shielder)
+                const Entity& e = entities[i];
+                if (!e.alive) continue;
+                if (e.type == EntityType::Drone || e.type == EntityType::Rusher ||
+                    e.type == EntityType::Turret || e.type == EntityType::Tank ||
+                    e.type == EntityType::Bomber || e.type == EntityType::Shielder)
                     enemy_count_hud++;
             }
-            if (enemy_count_hud > 0)
-                ImGui::Text("Enemies: %d", enemy_count_hud);
-            if (rooms_cleared > 0)
-                ImGui::Text("Room: %d  Diff: %.2f", rooms_cleared + 1, procgen_cfg.difficulty);
-            ImGui::Text("Gold: %d", currency);
-            for (const auto& d : active_doors) {
-                if (d.is_exit) {
-                    if (!in_shop_room) {
-                        if (d.locked)
-                            ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", enemy_count_hud);
-                        else if (near_exit_door)
-                            ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to enter shop",
-                                               input_code_name(kb.get(Action::Interact, 0)));
-                        else
-                            ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "EXIT: UNLOCKED");
-                    }
-                }
-            }
-
-            // --- Weapon HUD ---
-            ImGui::Separator();
-            {
-                Weapon& w = weapons[active_weapon];
-                ImGui::Text("[%d] %s  %d / %d", active_weapon + 1, w.config.name,
-                            w.ammo, w.config.mag_size);
-                if (w.state == WeaponState::RELOADING) {
-                    float pct = 1.0f - w.reload_timer / w.config.reload_time;
-                    ImGui::ProgressBar(pct, ImVec2(-1, 4), "");
-                    const char* phase_name =
-                        w.reload_phase == ReloadPhase::MAG_OUT  ? "MAG OUT" :
-                        w.reload_phase == ReloadPhase::MAG_SWAP ? "MAG SWAP" :
-                        w.reload_phase == ReloadPhase::GUN_UP   ? "GUN UP" : "RELOADING";
-                    ImGui::TextColored(ImVec4(1,1,0,1), "%s...", phase_name);
-                }
-                if (w.state == WeaponState::SWAPPING)
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Swapping...");
-                if (w.ads_blend > 0.01f)
-                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "ADS");
-            }
-
-            ImGui::Separator();
-            ImGui::TextDisabled("ESC: settings  H: hide HUD  R: reload  RMB: aim");
-
-            ImGui::End();
+            HudContext ctx{display_fps, near_exit_door, exit_door_locked, enemy_count_hud};
+            hud_draw(gs, ctx);
         }
 
-        // --- Shop room HUD (centered prompts when near stands / exit) ---
-        if (in_shop_room && show_hud && !show_settings) {
-            // Gold display at top center
-            {
-                char gold_buf[64];
-                snprintf(gold_buf, sizeof(gold_buf), "Gold: %d", currency);
-                ImVec2 text_sz = ImGui::CalcTextSize(gold_buf);
-                float cx = renderer.swapchain_width() * 0.5f - text_sz.x * 0.5f;
-                ImGui::SetNextWindowPos(ImVec2(cx, 40));
-                ImGui::SetNextWindowBgAlpha(0.5f);
-                ImGui::Begin("##shop_gold", nullptr,
-                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "%s", gold_buf);
-                ImGui::End();
-            }
+        // --- Shop room HUD ---
+        shop_draw_hud(gs);
 
-            // Stand interaction prompt (bottom center)
-            if (shop_nearby_stand >= 0) {
-                const ShopStand& s = shop_data.stands[shop_nearby_stand];
-                ImVec2 prompt_pos(renderer.swapchain_width() * 0.5f,
-                                  renderer.swapchain_height() * 0.7f);
-                ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-                ImGui::SetNextWindowBgAlpha(0.6f);
-                ImGui::Begin("##shop_prompt", nullptr,
-                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
 
-                if (s.type == ShopStandType::Empty) {
-                    ImGui::TextDisabled("Coming Soon");
-                } else if (s.purchased) {
-                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "SOLD");
-                } else {
-                    const char* interact_key = input_code_name(kb.get(Action::Interact, 0));
-                    if (s.type == ShopStandType::Weapon) {
-                        int w = s.weapon_index;
-                        int lvl = weapon_level[w];
-                        const char* wnames[] = {"Glock", "Wingman", "Throwing Knife"};
-                        const char* upgrade_desc[] = {
-                            "+1 dmg, +5%% fire rate",
-                            "1.1x damage",
-                            "+5 dmg, +0.1x crit mult"
-                        };
-                        if (lvl > 0) {
-                            ImGui::Text("%s  Lv %d -> %d", wnames[w], lvl, lvl + 1);
-                            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", upgrade_desc[w]);
-                        } else {
-                            ImGui::Text("%s", wnames[w]);
-                        }
-                        if (currency >= s.cost)
-                            ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] %s  (%d gold)",
-                                               interact_key, lvl > 0 ? "Upgrade" : "Buy", s.cost);
-                        else
-                            ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
-                    } else if (s.type == ShopStandType::Healthpack) {
-                        bool full_hp = (player.health >= player.max_health - 0.1f);
-                        ImGui::Text("Healthpack +25%%");
-                        if (full_hp)
-                            ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1), "Full HP");
-                        else if (currency >= s.cost)
-                            ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
-                                               interact_key, s.cost);
-                        else
-                            ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
-                    }
-                }
-                ImGui::End();
-            }
-
-            // Exit door prompt
-            {
-                HMM_Vec3 diff = HMM_SubV3(player.position, shop_data.exit_door_pos);
-                diff.Y = 0;
-                if (HMM_DotV3(diff, diff) < 3.0f * 3.0f && shop_nearby_stand < 0) {
-                    ImVec2 prompt_pos(renderer.swapchain_width() * 0.5f,
-                                      renderer.swapchain_height() * 0.7f);
-                    ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-                    ImGui::SetNextWindowBgAlpha(0.6f);
-                    ImGui::Begin("##shop_exit_prompt", nullptr,
-                        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-                    ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "Press [%s] to continue to next room",
-                                       input_code_name(kb.get(Action::Interact, 0)));
-                    ImGui::End();
-                }
-            }
-        }
-
-        if (show_hud && !show_settings) {
-            // --- Damage vignette ---
-            {
-                float intensity = player.damage_accum / 40.0f; // 40 dmg = full intensity
-                if (intensity > 1.0f) intensity = 1.0f;
-                if (intensity > 0.01f) {
-                    ImDrawList* fg = ImGui::GetForegroundDrawList();
-                    ImVec2 sz = ImGui::GetIO().DisplaySize;
-                    float alpha = intensity * 0.6f;
-                    // Four edge gradients (vignette)
-                    float border = sz.x * 0.15f; // vignette width
-                    ImU32 red_full = ImGui::ColorConvertFloat4ToU32(ImVec4(0.8f, 0.0f, 0.0f, alpha));
-                    ImU32 red_zero = ImGui::ColorConvertFloat4ToU32(ImVec4(0.8f, 0.0f, 0.0f, 0.0f));
-                    // Top
-                    fg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(sz.x, border),
-                        red_full, red_full, red_zero, red_zero);
-                    // Bottom
-                    fg->AddRectFilledMultiColor(ImVec2(0, sz.y - border), ImVec2(sz.x, sz.y),
-                        red_zero, red_zero, red_full, red_full);
-                    // Left
-                    fg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(border, sz.y),
-                        red_full, red_zero, red_zero, red_full);
-                    // Right
-                    fg->AddRectFilledMultiColor(ImVec2(sz.x - border, 0), ImVec2(sz.x, sz.y),
-                        red_zero, red_full, red_full, red_zero);
-                }
-            }
-
-            // --- Crosshair ---
-            ImDrawList* draw = ImGui::GetForegroundDrawList();
-            ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
-            float cs = 8.0f;
-            float ct = 2.0f;
-            ImU32 cross_col = IM_COL32(255, 255, 255, 200);
-            draw->AddLine(ImVec2(center.x - cs, center.y), ImVec2(center.x + cs, center.y), cross_col, ct);
-            draw->AddLine(ImVec2(center.x, center.y - cs), ImVec2(center.x, center.y + cs), cross_col, ct);
-        }
-
-        // --- Settings window ---
-        if (show_settings) {
-            ImGui::SetNextWindowSize(ImVec2(440, 0), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowPos(ImVec2(420, 60), ImGuiCond_FirstUseEver);
-
-            ImGui::Begin("Settings", &show_settings);
-
-            // --- Level ---
-            if (ImGui::CollapsingHeader("Level", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Text("Current: %s", current_level_name.c_str());
-                ImGui::Spacing();
-
-                // Scan for levels on first open
-                if (!levels_scanned) {
-                    level_files = scan_levels("levels");
-                    // Also try relative to exe on Windows
-                    if (level_files.empty())
-                        level_files = scan_levels("../levels");
-                    if (level_files.empty())
-                        level_files = scan_levels("../../levels");
-                    levels_scanned = true;
-                }
-
-                if (ImGui::Button("Refresh Level List")) {
-                    level_files = scan_levels("levels");
-                    if (level_files.empty())
-                        level_files = scan_levels("../levels");
-                    if (level_files.empty())
-                        level_files = scan_levels("../../levels");
-                }
-
-                ImGui::SameLine();
-                if (ImGui::Button("Built-in Test Level")) {
-                    Mesh test = create_test_level();
-                    renderer.reload_mesh(test);
-                    collision.triangles.clear();
-                    collision.build_from_mesh(test);
-                    player.position = HMM_V3(0, 1, 15);
-                    player.velocity = HMM_V3(0, 0, 0);
-                    noclip = false;
-                    camera.position = player.eye_position();
-                    current_level_name = "built-in test level";
-                }
-
-                if (!level_files.empty()) {
-                    ImGui::Spacing();
-                    ImGui::BeginChild("##levellist", ImVec2(0, 150), ImGuiChildFlags_Borders);
-                    for (auto& path : level_files) {
-                        std::string name = fs::path(path).filename().string();
-                        if (ImGui::Selectable(name.c_str())) {
-                            load_level(path, renderer, collision, player, camera,
-                                       noclip, current_level_name,
-                                       entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg,
-                                       &turret_cfg, &tank_cfg, &bomber_cfg, &shielder_cfg);
-                        }
-                    }
-                    ImGui::EndChild();
-                } else {
-                    ImGui::TextDisabled("No .glb/.gltf files found in levels/");
-                }
-
-                ImGui::Spacing();
-                ImGui::Text("Or enter a path:");
-                ImGui::SetNextItemWidth(-80);
-                ImGui::InputText("##lvlpath", level_path_buf, sizeof(level_path_buf));
-                ImGui::SameLine();
-                if (ImGui::Button("Load") && level_path_buf[0]) {
-                    load_level(level_path_buf, renderer, collision, player, camera,
-                               noclip, current_level_name,
-                               entities, MAX_ENTITIES, &drone_cfg, &rusher_cfg,
-                                       &turret_cfg, &tank_cfg, &bomber_cfg, &shielder_cfg);
-                }
-
-                ImGui::Separator();
-                ImGui::Text("Procedural Generation");
-                if (ImGui::Button("Generate New Level")) {
-                    procgen_cfg.room_number = rooms_cleared + 1;
-                    procgen_cfg.difficulty = 1.0f + rooms_cleared * 0.15f;
-                    LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
-
-                    // Clear entities + effects
-                    for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
-                    effects.init();
-
-                    // Build collision
-                    collision.triangles.clear();
-                    collision.ladder_volumes.clear();
-                    collision.build_from_mesh(pld.mesh);
-
-                    // Upload to renderer
-                    renderer.reload_mesh(pld.mesh);
-
-                    // Spawn player facing into room (+Z = yaw PI/2)
-                    player.position = pld.spawn_pos;
-                    player.velocity = HMM_V3(0, 0, 0);
-                    camera.yaw = HMM_PI32 / 2.0f; camera.pitch = 0;
-                    noclip = false;
-
-                    // Spawn enemies with difficulty scaling
-                    {
-                        float diff = procgen_cfg.difficulty;
-                        float hp_s = 1.0f + (diff - 1.0f) * (procgen_cfg.hp_scale_per_room / 0.15f);
-                        float dm_s = 1.0f + (diff - 1.0f) * (procgen_cfg.dmg_scale_per_room / 0.15f);
-                        float sp_s = 1.0f + (diff - 1.0f) * (procgen_cfg.spd_scale_per_room / 0.15f);
-
-                        auto dr = drone_cfg;   dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
-                        auto ru = rusher_cfg;  ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
-                        auto tu = turret_cfg;  tu.health *= hp_s; tu.beam_dps *= dm_s; tu.track_speed *= sp_s;
-                        auto tk = tank_cfg;    tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
-                        auto bo = bomber_cfg;  bo.health *= hp_s; bo.explosion_damage *= dm_s; bo.approach_speed *= sp_s; bo.dive_speed *= sp_s;
-                        auto sh = shielder_cfg; sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
-
-                        for (const auto& es : pld.enemy_spawns) {
-                            if (es.type == EntityType::Drone)
-                                drone_spawn(entities, MAX_ENTITIES, es.position, dr);
-                            else if (es.type == EntityType::Rusher)
-                                rusher_spawn(entities, MAX_ENTITIES, es.position, ru);
-                            else if (es.type == EntityType::Turret)
-                                turret_spawn(entities, MAX_ENTITIES, es.position, tu);
-                            else if (es.type == EntityType::Tank)
-                                tank_spawn(entities, MAX_ENTITIES, es.position, tk);
-                            else if (es.type == EntityType::Bomber)
-                                bomber_spawn(entities, MAX_ENTITIES, es.position, bo);
-                            else if (es.type == EntityType::Shielder)
-                                shielder_spawn(entities, MAX_ENTITIES, es.position, sh);
-                        }
-                    }
-
-                    current_level_name = "Procedural";
-                }
-                ImGui::SameLine();
-                ImGui::InputInt("Seed", (int*)&procgen_cfg.seed);
-
-                ImGui::SliderFloat2("Room W", &procgen_cfg.room_width_min, 15.0f, 80.0f, "%.0f");
-                ImGui::SliderFloat2("Room D", &procgen_cfg.room_depth_min, 15.0f, 80.0f, "%.0f");
-                ImGui::SliderFloat("Room Height", &procgen_cfg.room_height, 5.0f, 25.0f, "%.0f");
-                ImGui::SliderInt("Boxes Min", &procgen_cfg.box_count_min, 0, 30);
-                ImGui::SliderInt("Boxes Max", &procgen_cfg.box_count_max, 0, 30);
-                ImGui::SliderInt("Hills Min", &procgen_cfg.hill_count_min, 0, 8);
-                ImGui::SliderInt("Hills Max", &procgen_cfg.hill_count_max, 0, 8);
-                ImGui::SliderFloat("Hill Height", &procgen_cfg.hill_height_max, 0.5f, 8.0f);
-                ImGui::SliderFloat("Hill Radius", &procgen_cfg.hill_radius_max, 4.0f, 30.0f);
-                ImGui::SliderFloat("Cluster Chance", &procgen_cfg.cluster_chance, 0.0f, 1.0f);
-                ImGui::SliderFloat("Stack Chance", &procgen_cfg.box_stack_chance, 0.0f, 1.0f);
-                ImGui::SliderInt("Tall Min", &procgen_cfg.tall_count_min, 0, 15);
-                ImGui::SliderInt("Tall Max", &procgen_cfg.tall_count_max, 0, 15);
-                ImGui::Text("Room: %d  Difficulty: %.2f", rooms_cleared + 1,
-                            procgen_cfg.difficulty);
-                ImGui::Separator();
-                ImGui::Text("Enemy Budget (0 overrides = random)");
-                ImGui::SliderInt("Budget Base", &procgen_cfg.enemy_budget_base, 3, 30);
-                ImGui::SliderInt("Budget/Room", &procgen_cfg.enemy_budget_per_room, 0, 5);
-                ImGui::SliderInt("Budget Max", &procgen_cfg.enemy_budget_max, 5, 60);
-                ImGui::SliderFloat("HP Scale/Room", &procgen_cfg.hp_scale_per_room, 0.0f, 0.2f, "%.2f");
-                ImGui::SliderFloat("Dmg Scale/Room", &procgen_cfg.dmg_scale_per_room, 0.0f, 0.2f, "%.2f");
-                ImGui::SliderFloat("Spd Scale/Room", &procgen_cfg.spd_scale_per_room, 0.0f, 0.1f, "%.2f");
-                ImGui::Separator();
-                ImGui::Text("Spawn Weights");
-                ImGui::SliderFloat("W Drone", &procgen_cfg.weight_drone, 0.0f, 10.0f);
-                ImGui::SliderFloat("W Rusher", &procgen_cfg.weight_rusher, 0.0f, 10.0f);
-                ImGui::SliderFloat("W Turret", &procgen_cfg.weight_turret, 0.0f, 10.0f);
-                ImGui::SliderFloat("W Tank", &procgen_cfg.weight_tank, 0.0f, 10.0f);
-                ImGui::SliderFloat("W Bomber", &procgen_cfg.weight_bomber, 0.0f, 10.0f);
-                ImGui::SliderFloat("W Shielder", &procgen_cfg.weight_shielder, 0.0f, 10.0f);
-                ImGui::Separator();
-                ImGui::Text("Fixed Overrides (all 0 = use budget)");
-                ImGui::SliderInt("Drones", &procgen_cfg.drone_count, 0, 20);
-                ImGui::SliderInt("Rushers", &procgen_cfg.rusher_count, 0, 20);
-                ImGui::SliderInt("Turrets", &procgen_cfg.turret_count, 0, 10);
-                ImGui::SliderInt("Tanks", &procgen_cfg.tank_count, 0, 10);
-                ImGui::SliderInt("Bombers", &procgen_cfg.bomber_count, 0, 10);
-                ImGui::SliderInt("Shielders", &procgen_cfg.shielder_count, 0, 10);
-            }
-
-            // --- Enemies ---
-            if (ImGui::CollapsingHeader("Weapons")) {
-                for (int w = 0; w < 3; w++) {
-                    Weapon& wep = weapons[w];
-                    char label[64];
-                    snprintf(label, sizeof(label), "[%d] %s%s", w + 1, wep.config.name,
-                             (w == active_weapon) ? " (active)" : "");
-                    if (ImGui::TreeNode(label)) {
-                        ImGui::PushID(w);
-                        if (w == active_weapon) {
-                            ImGui::Text("State: %s",
-                                wep.state == WeaponState::IDLE ? "Idle" :
-                                wep.state == WeaponState::FIRING ? "Firing" :
-                                wep.state == WeaponState::RELOADING ? "Reloading" :
-                                wep.state == WeaponState::SWAPPING ? "Swapping" : "?");
-                        }
-                        ImGui::Separator();
-
-                        ImGui::SliderFloat("Damage",       &wep.config.damage,     1.0f, 200.0f);
-                        ImGui::SliderFloat("Fire Rate",    &wep.config.fire_rate,  0.5f, 10.0f, "%.1f shots/s");
-                        ImGui::SliderFloat("Range",        &wep.config.range,      10.0f, 500.0f);
-                        ImGui::SliderFloat("Reload Time",  &wep.config.reload_time, 0.5f, 5.0f, "%.1fs");
-                        ImGui::SliderFloat("Crit Multi",   &wep.config.crit_multiplier, 1.0f, 5.0f, "%.1fx");
-                        ImGui::Separator();
-
-                        ImGui::Text("Viewmodel");
-                        ImGui::SliderFloat("Model Scale",     &wep.config.model_scale, 0.001f, 5.0f, "%.3f");
-                        ImGui::SliderFloat3("Model Rotation", &wep.config.model_rotation.X, -180.0f, 180.0f, "%.1f deg");
-                        ImGui::SliderFloat3("Hip Offset",     &wep.config.hip_offset.X, -1.0f, 1.0f, "%.3f");
-                        ImGui::SliderFloat3("ADS Offset",     &wep.config.ads_offset.X, -1.0f, 1.0f, "%.3f");
-                        ImGui::Separator();
-
-                        ImGui::Text("ADS");
-                        ImGui::SliderFloat("ADS FOV Mult",  &wep.config.ads_fov_mult,  0.5f, 1.0f, "%.2f");
-                        ImGui::SliderFloat("ADS Sens Mult", &wep.config.ads_sens_mult, 0.1f, 1.0f, "%.2f");
-                        ImGui::SliderFloat("ADS Speed",     &wep.config.ads_speed,     1.0f, 20.0f);
-                        ImGui::Separator();
-
-                        ImGui::Text("Recoil");
-                        ImGui::SliderFloat("Recoil Kick",     &wep.config.recoil_kick,     0.0f, 0.2f, "%.3f");
-                        ImGui::SliderFloat("Recoil Pitch",    &wep.config.recoil_pitch,    -60.0f, 60.0f, "%.1f deg");
-                        ImGui::SliderFloat("Recoil Roll",     &wep.config.recoil_roll,     0.0f, 20.0f, "%.1f deg");
-                        ImGui::SliderFloat("Recoil Side",     &wep.config.recoil_side,     0.0f, 0.1f, "%.3f");
-                        ImGui::SliderFloat("Recoil Recovery", &wep.config.recoil_recovery, 1.0f, 30.0f);
-                        {
-                            const char* tilt_items[] = { "Right", "Left" };
-                            int tilt_idx = (wep.config.recoil_tilt_dir >= 0.0f) ? 0 : 1;
-                            if (ImGui::Combo("Tilt Direction", &tilt_idx, tilt_items, 2))
-                                wep.config.recoil_tilt_dir = (tilt_idx == 0) ? 1.0f : -1.0f;
-                        }
-                        ImGui::SliderFloat("Reload Buffer Delay", &wep.config.reload_buffer_delay, 0.0f, 1.0f, "%.2fs");
-                        ImGui::Separator();
-
-                        ImGui::Text("Reload Anim (3-phase)");
-                        ImGui::SliderFloat("Phase1 End (mag out)", &wep.config.reload_phase1, 0.05f, 0.5f, "%.2f");
-                        ImGui::SliderFloat("Phase2 End (mag swap)", &wep.config.reload_phase2, 0.1f, 0.9f, "%.2f");
-                        ImGui::SliderFloat("Reload Drop",     &wep.config.reload_drop_dist, 0.0f, 0.5f, "%.3f");
-                        ImGui::SliderFloat("Reload Tilt",     &wep.config.reload_tilt,      0.0f, 60.0f, "%.1f deg");
-                        ImGui::SliderFloat("Mag Drop Dist",   &wep.config.mag_drop_dist,    0.0f, 1.0f, "%.3f");
-                        ImGui::SliderFloat("Mag Insert Dist", &wep.config.mag_insert_dist,  0.0f, 0.5f, "%.3f");
-                        if (wep.has_mag_submesh)
-                            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Mag sub-mesh: found (%u indices)", wep.mag_index_count);
-                        else
-                            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "Mag sub-mesh: not found");
-
-                        char reset_label[64];
-                        snprintf(reset_label, sizeof(reset_label), "Reset %s Defaults", wep.config.name);
-                        if (ImGui::Button(reset_label)) {
-                            switch (w) {
-                                case 0: wep.init_wingman(); break;
-                                case 1: wep.init_glock();   break;
-                                case 2: wep.init_knife();   break;
-                            }
-                        }
-                        ImGui::PopID();
-                        ImGui::TreePop();
-                    }
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Enemies")) {
-                ImGui::Checkbox("AI Enabled", &ai_enabled);
-                ImGui::SameLine();
-                if (ImGui::Button("Kill All")) {
-                    for (int i = 0; i < MAX_ENTITIES; i++)
-                        entities[i].alive = false;
-                }
-
-                if (ImGui::TreeNode("Drone")) {
-                    if (ImGui::Button("Spawn Drone")) {
-                        HMM_Vec3 fwd = camera.forward_flat();
-                        HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
-                        spawn.Y += 3.0f;
-                        int idx = drone_spawn(entities, MAX_ENTITIES, spawn, drone_cfg);
-                        if (idx >= 0) entities[idx].ai_state = DRONE_CHASING;
-                    }
-                    ImGui::SliderFloat("Health",          &drone_cfg.drone_health,     1.0f, 200.0f);
-                    ImGui::SliderFloat("Radius",          &drone_cfg.drone_radius,     0.2f, 2.0f);
-                    ImGui::SliderFloat("Detection Range", &drone_cfg.detection_range,  5.0f, 100.0f);
-                    ImGui::SliderFloat("Attack Range",    &drone_cfg.attack_range,     5.0f, 50.0f);
-                    ImGui::SliderFloat("Circle Distance", &drone_cfg.circle_distance,  3.0f, 20.0f);
-                    ImGui::SliderFloat("Attack Windup",   &drone_cfg.attack_windup,    0.1f, 3.0f, "%.2fs");
-                    ImGui::SliderFloat("Acceleration",    &drone_cfg.acceleration,     1.0f, 20.0f);
-                    ImGui::SliderFloat("Chase Speed Min", &drone_cfg.chase_speed_min,  1.0f, 20.0f);
-                    ImGui::SliderFloat("Chase Speed Max", &drone_cfg.chase_speed_max,  1.0f, 20.0f);
-                    ImGui::SliderFloat("Circle Speed Min",&drone_cfg.circle_speed_min, 1.0f, 20.0f);
-                    ImGui::SliderFloat("Circle Speed Max",&drone_cfg.circle_speed_max, 1.0f, 20.0f);
-                    ImGui::SliderFloat("Hover Force",     &drone_cfg.hover_force,      1.0f, 30.0f);
-                    ImGui::SliderFloat("Hover Height Min",&drone_cfg.hover_height_min, 0.5f, 5.0f);
-                    ImGui::SliderFloat("Hover Height Max",&drone_cfg.hover_height_max, 0.5f, 5.0f);
-                    ImGui::SliderFloat("Proj Speed",      &drone_cfg.projectile_speed, 5.0f, 50.0f);
-                    ImGui::SliderFloat("Proj Damage",     &drone_cfg.projectile_damage,1.0f, 50.0f);
-                    ImGui::SliderFloat("Wander Radius",   &drone_cfg.wander_radius,    2.0f, 20.0f);
-                    ImGui::SliderFloat("Wall Avoid Dist", &drone_cfg.wall_avoid_dist,  0.5f, 5.0f);
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("Rusher")) {
-                    if (ImGui::Button("Spawn Rusher")) {
-                        HMM_Vec3 fwd = camera.forward_flat();
-                        HMM_Vec3 spawn = HMM_AddV3(player.position, HMM_MulV3F(fwd, 10.0f));
-                        spawn.Y += 3.0f;
-                        int idx = rusher_spawn(entities, MAX_ENTITIES, spawn, rusher_cfg);
-                        if (idx >= 0) entities[idx].ai_state = RUSHER_CHASING;
-                    }
-                    ImGui::SliderFloat("Health",          &rusher_cfg.health,          1.0f, 100.0f);
-                    ImGui::SliderFloat("Radius",          &rusher_cfg.radius,          0.2f, 2.0f);
-                    ImGui::SliderFloat("Detection Range", &rusher_cfg.detection_range, 5.0f, 100.0f);
-                    ImGui::SliderFloat("Melee Damage",    &rusher_cfg.melee_damage,    1.0f, 100.0f);
-                    ImGui::SliderFloat("Chase Speed",     &rusher_cfg.chase_speed,     5.0f, 30.0f);
-                    ImGui::SliderFloat("Acceleration",    &rusher_cfg.acceleration,    1.0f, 20.0f);
-                    ImGui::SliderFloat("Hover Height",    &rusher_cfg.hover_height,    0.5f, 6.0f);
-                    ImGui::SliderFloat("Attack Range",    &rusher_cfg.attack_range,    2.0f, 20.0f);
-                    ImGui::SliderFloat("Charge Up Time",  &rusher_cfg.charge_up_time,  0.1f, 3.0f, "%.2fs");
-                    ImGui::SliderFloat("Dash Force",      &rusher_cfg.dash_force,      10.0f, 100.0f);
-                    ImGui::SliderFloat("Dash Duration",   &rusher_cfg.dash_duration,   0.1f, 2.0f, "%.2fs");
-                    ImGui::SliderFloat("Dash Cooldown",   &rusher_cfg.dash_cooldown,   0.1f, 5.0f, "%.2fs");
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("Turret")) {
-                    if (ImGui::Button("Spawn Turret")) {
-                        HMM_Vec3 spawn = HMM_AddV3(player.position,
-                            HMM_MulV3F(camera.forward(), 8.0f));
-                        int idx = turret_spawn(entities, MAX_ENTITIES, spawn, turret_cfg);
-                        if (idx >= 0) entities[idx].ai_state = TURRET_TRACKING;
-                    }
-                    ImGui::SliderFloat("Health",          &turret_cfg.health,          1.0f, 50.0f);
-                    ImGui::SliderFloat("Radius",          &turret_cfg.radius,          0.3f, 2.0f);
-                    ImGui::SliderFloat("Detection Range", &turret_cfg.detection_range, 10.0f, 80.0f);
-                    ImGui::SliderFloat("Beam DPS",        &turret_cfg.beam_dps,        5.0f, 100.0f);
-                    ImGui::SliderFloat("Windup Time",     &turret_cfg.windup_time,     0.2f, 3.0f, "%.2fs");
-                    ImGui::SliderFloat("Burst Count",     &turret_cfg.burst_count_f,   1.0f, 10.0f, "%.0f");
-                    ImGui::SliderFloat("Burst Interval",  &turret_cfg.burst_interval,  0.05f, 0.5f, "%.2fs");
-                    ImGui::SliderFloat("Cooldown",        &turret_cfg.cooldown_time,   0.5f, 5.0f, "%.1fs");
-                    ImGui::SliderFloat("Accuracy",        &turret_cfg.accuracy,        0.5f, 1.0f, "%.2f");
-                    ImGui::SliderFloat("Track Speed",     &turret_cfg.track_speed,     0.5f, 10.0f);
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("Tank")) {
-                    if (ImGui::Button("Spawn Tank")) {
-                        HMM_Vec3 spawn = HMM_AddV3(player.position,
-                            HMM_MulV3F(camera.forward(), 10.0f));
-                        int idx = tank_spawn(entities, MAX_ENTITIES, spawn, tank_cfg);
-                        if (idx >= 0) entities[idx].ai_state = TANK_CHASING;
-                    }
-                    ImGui::SliderFloat("Health",          &tank_cfg.health,            10.0f, 200.0f);
-                    ImGui::SliderFloat("Radius",          &tank_cfg.radius,            0.5f, 3.0f);
-                    ImGui::SliderFloat("Detection Range", &tank_cfg.detection_range,   10.0f, 60.0f);
-                    ImGui::SliderFloat("Chase Speed",     &tank_cfg.chase_speed,       1.0f, 15.0f);
-                    ImGui::SliderFloat("Stomp Range",     &tank_cfg.stomp_range,       3.0f, 15.0f);
-                    ImGui::SliderFloat("Stomp AoE",       &tank_cfg.stomp_aoe_radius,  3.0f, 15.0f);
-                    ImGui::SliderFloat("Stomp Damage",    &tank_cfg.stomp_damage,      5.0f, 50.0f);
-                    ImGui::SliderFloat("Stomp KB",        &tank_cfg.stomp_knockback,   0.0f, 5.0f, "%.2f");
-                    ImGui::SliderFloat("Windup Time",     &tank_cfg.windup_time,       0.3f, 2.0f, "%.2fs");
-                    ImGui::SliderFloat("Cooldown",        &tank_cfg.stomp_cooldown,    1.0f, 8.0f, "%.1fs");
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("Bomber")) {
-                    if (ImGui::Button("Spawn Bomber")) {
-                        HMM_Vec3 spawn = HMM_AddV3(player.position,
-                            HMM_MulV3F(camera.forward(), 12.0f));
-                        spawn.Y += 10.0f;
-                        int idx = bomber_spawn(entities, MAX_ENTITIES, spawn, bomber_cfg);
-                        if (idx >= 0) entities[idx].ai_state = BOMBER_APPROACH;
-                    }
-                    ImGui::SliderFloat("Health",          &bomber_cfg.health,              5.0f, 100.0f);
-                    ImGui::SliderFloat("Radius",          &bomber_cfg.radius,              0.3f, 2.0f);
-                    ImGui::SliderFloat("Detection Range", &bomber_cfg.detection_range,     10.0f, 60.0f);
-                    ImGui::SliderFloat("Hover Height",    &bomber_cfg.hover_height,        5.0f, 25.0f);
-                    ImGui::SliderFloat("Dive Speed",      &bomber_cfg.dive_speed,          3.0f, 30.0f);
-                    ImGui::SliderFloat("Dive Trigger",    &bomber_cfg.dive_trigger_dist,   5.0f, 30.0f);
-                    ImGui::SliderFloat("Explode Damage",  &bomber_cfg.explosion_damage,    5.0f, 50.0f);
-                    ImGui::SliderFloat("Explode Radius",  &bomber_cfg.explosion_radius,    2.0f, 12.0f);
-                    ImGui::SliderFloat("Explode KB",      &bomber_cfg.explosion_knockback, 0.0f, 5.0f, "%.2f");
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNode("Shielder")) {
-                    if (ImGui::Button("Spawn Shielder")) {
-                        HMM_Vec3 spawn = HMM_AddV3(player.position,
-                            HMM_MulV3F(camera.forward(), 8.0f));
-                        int idx = shielder_spawn(entities, MAX_ENTITIES, spawn, shielder_cfg);
-                        if (idx >= 0) entities[idx].ai_state = SHIELDER_CHASING;
-                    }
-                    ImGui::SliderFloat("Health",          &shielder_cfg.health,          5.0f, 100.0f);
-                    ImGui::SliderFloat("Radius",          &shielder_cfg.radius,          0.3f, 2.0f);
-                    ImGui::SliderFloat("Detection Range", &shielder_cfg.detection_range, 10.0f, 60.0f);
-                    ImGui::SliderFloat("Shield Radius",   &shielder_cfg.shield_radius,   3.0f, 20.0f);
-                    ImGui::SliderFloat("Shield HP",       &shielder_cfg.shield_hp,       5.0f, 50.0f);
-                    ImGui::SliderFloat("Recharge/s",      &shielder_cfg.shield_recharge, 1.0f, 20.0f);
-                    ImGui::SliderFloat("Apply Cooldown",  &shielder_cfg.shield_apply_cd, 0.5f, 10.0f, "%.1fs");
-                    ImGui::SliderFloat("Flee Range",      &shielder_cfg.flee_range,      3.0f, 15.0f);
-                    ImGui::SliderFloat("Preferred Dist",  &shielder_cfg.preferred_dist,  5.0f, 25.0f);
-                    ImGui::SliderFloat("Chase Speed",     &shielder_cfg.chase_speed,     2.0f, 15.0f);
-                    ImGui::SliderFloat("Flee Speed",      &shielder_cfg.flee_speed,      3.0f, 15.0f);
-                    ImGui::TreePop();
-                }
-            }
-
-            // --- Mouse ---
-            if (ImGui::CollapsingHeader("Mouse", ImGuiTreeNodeFlags_DefaultOpen)) {
-                float sens_display = camera.sensitivity * 10000.0f;
-                if (ImGui::SliderFloat("Sensitivity", &sens_display, 0.1f, 50.0f, "%.1f"))
-                    camera.sensitivity = sens_display / 10000.0f;
-
-                bool inv_x = camera.invert_x < 0.0f;
-                bool inv_y = camera.invert_y < 0.0f;
-                if (ImGui::Checkbox("Invert X (horizontal)", &inv_x))
-                    camera.invert_x = inv_x ? -1.0f : 1.0f;
-                if (ImGui::Checkbox("Invert Y (vertical)", &inv_y))
-                    camera.invert_y = inv_y ? -1.0f : 1.0f;
-            }
-
-            // --- Video ---
-            if (ImGui::CollapsingHeader("Video")) {
-                ImGui::SliderFloat("FOV", &camera.fov, 60.0f, 130.0f, "%.0f");
-            }
-
-            // --- Keybinds ---
-            if (ImGui::CollapsingHeader("Keybinds", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::TextDisabled("Click a slot to rebind. Press a key, mouse button, or scroll wheel.");
-                ImGui::TextDisabled("Escape cancels. Right-click a slot to clear it.");
-                ImGui::Spacing();
-
-                for (int i = 0; i < ACTION_COUNT; i++) {
-                    ImGui::PushID(i);
-
-                    Action action = static_cast<Action>(i);
-                    const char* name = action_name(action);
-
-                    ImGui::AlignTextToFramePadding();
-                    ImGui::Text("%-16s", name);
-
-                    for (int s = 0; s < SLOTS; s++) {
-                        ImGui::SameLine(s == 0 ? 160.0f : 300.0f);
-                        ImGui::PushID(s);
-
-                        if (rebinding_action == i && rebinding_slot == s) {
-                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.1f, 1.0f));
-                            ImGui::Button("...press...");
-                            ImGui::PopStyleColor();
-                        } else {
-                            InputCode code = kb.get(action, s);
-                            char label[64];
-                            snprintf(label, sizeof(label), "  %s  ", input_code_name(code));
-                            if (ImGui::Button(label)) {
-                                rebinding_action = i;
-                                rebinding_slot = s;
-                            }
-                            // Right-click to clear
-                            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-                                kb.set(action, s, INPUT_NONE);
-                            }
-                        }
-
-                        ImGui::PopID();
-                    }
-
-                    ImGui::PopID();
-                }
-
-                ImGui::Spacing();
-                if (ImGui::Button("Reset Keybinds to Defaults")) {
-                    kb.reset_defaults();
-                    rebinding_action = -1;
-                }
-            }
-
-            // --- Movement ---
-            if (ImGui::CollapsingHeader("Movement")) {
-                ImGui::SliderFloat("Gravity",          &player.gravity,        0.0f, 40.0f);
-                ImGui::SliderFloat("Max Speed (Holstered)", &player.max_speed,    1.0f, 30.0f);
-                ImGui::SliderFloat("Weapon Speed",     &player.weapon_speed,   1.0f, 30.0f);
-                ImGui::SliderFloat("Air Wish Speed",   &player.air_wish_speed, 0.1f, 5.0f, "%.2f");
-                ImGui::SliderFloat("Ground Accel",     &player.ground_accel,   1.0f, 50.0f);
-                ImGui::Text("Holstered: %s (effective: %.1f u/s, accel: %.1f)",
-                            player.weapon_holstered ? "YES" : "NO",
-                            player.effective_max_speed(), player.effective_accel());
-                ImGui::SliderFloat("Air Accel",        &player.air_accel,      1.0f, 200.0f);
-                ImGui::SliderFloat("Friction",         &player.friction,       0.0f, 20.0f);
-                ImGui::SliderFloat("Jump Speed",       &player.jump_speed,     1.0f, 20.0f);
-
-                ImGui::Spacing();
-                ImGui::Checkbox("Auto-hop (hold jump to bhop)", &player.auto_hop);
-
-                ImGui::Spacing();
-                ImGui::Separator();
-                ImGui::Text("Slide");
-                ImGui::SliderFloat("Slide Friction",      &player.slide_friction,         0.0f, 5.0f, "%.2f");
-                ImGui::SliderFloat("Slide Boost",         &player.slide_boost,            0.0f, 10.0f);
-                ImGui::SliderFloat("Slide Min Speed",     &player.slide_min_speed,        0.0f, 15.0f);
-                ImGui::SliderFloat("Slide Stop Speed",    &player.slide_stop_speed,       0.0f, 10.0f);
-                ImGui::SliderFloat("Slide Boost Cooldown",&player.slide_boost_cooldown,   0.0f, 5.0f);
-                ImGui::SliderFloat("Slide Jump Boost",    &player.slide_jump_boost,       0.0f, 10.0f);
-                ImGui::Separator();
-                ImGui::Text("Speed Cap");
-                ImGui::SliderFloat("Soft Speed Cap",     &player.soft_speed_cap,     0.0f, 30.0f);
-                ImGui::SliderFloat("Soft Cap Drag",      &player.soft_cap_drag,      0.0f, 10.0f);
-                ImGui::SliderFloat("Slope Land Convert",  &player.slope_landing_conversion, 0.0f, 1.0f, "%.2f");
-                ImGui::SliderFloat("Crouch Speed",        &player.crouch_speed,           1.0f, 10.0f);
-
-                ImGui::Spacing();
-                ImGui::Separator();
-                ImGui::Text("Lurch");
-                ImGui::SliderFloat("Lurch Window",    &player.lurch_window,   0.0f, 2.0f, "%.2f");
-                ImGui::SliderFloat("Lurch Strength",  &player.lurch_strength, 0.0f, 1.0f, "%.2f");
-
-                ImGui::Spacing();
-                if (ImGui::Button("Reset to Source defaults")) {
-                    player.gravity        = 20.0f;
-                    player.max_speed      = 8.0f;
-                    player.air_wish_speed = 0.76f;
-                    player.ground_accel   = 10.0f;
-                    player.air_accel      = 70.0f;
-                    player.friction       = 6.0f;
-                    player.jump_speed     = 7.2f;
-                    player.slide_friction = 0.8f;
-                    player.slide_boost    = 3.0f;
-                    player.slide_min_speed = 6.0f;
-                    player.slide_stop_speed = 3.0f;
-                    player.slide_boost_cooldown = 2.0f;
-                    player.slide_jump_boost = 4.0f;
-                    player.slope_landing_conversion = 0.5f;
-                    player.crouch_speed   = 4.0f;
-                    player.lurch_window   = 0.5f;
-                    player.lurch_strength = 0.5f;
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Ladder")) {
-                ImGui::SliderFloat("Climb Speed Mult",  &player.ladder_speed_mult, 0.1f, 2.0f, "%.2fx");
-                ImGui::SliderFloat("Jump Off Mult",    &player.ladder_jump_mult,  0.5f, 3.0f, "%.2fx");
-                ImGui::Text("Climb: %.1f u/s  Jump-off: %.1f u/s",
-                            player.max_speed * player.ladder_speed_mult,
-                            player.max_speed * player.ladder_jump_mult);
-                ImGui::SliderFloat("Ladder Inflate",  &collision.ladder_inflate, 0.0f, 2.0f, "%.2f");
-                ImGui::Checkbox("Show Ladder Volumes", &show_ladder_debug);
-                ImGui::Text("Ladder volumes: %zu", collision.ladder_volumes.size());
-                if (player.on_ladder)
-                    ImGui::TextColored(ImVec4(0.4f,1,0.4f,1), "ON LADDER");
-            }
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            if (ImGui::Button("Save Settings")) {
-                config.pull(camera, player);
-                config.save();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Load Settings")) {
-                config.load();
-                config.apply(camera, player);
-            }
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
-            if (ImGui::Button("Quit Game")) {
-                running = false;
-            }
-            ImGui::PopStyleColor(2);
-
-            ImGui::End();
-
-            if (!show_settings) {
-                SDL_SetWindowRelativeMouseMode(window, true);
-                rebinding_action = -1;
-                rebinding_slot = -1;
-            }
-        }
+        // --- Settings / debug menu ---
+        debug_menu_draw(gs, load_level_fn);
 
         ImGui::Render();
 

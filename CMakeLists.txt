@@ -93,6 +93,9 @@ add_executable(${PROJECT_NAME}
     src/entity_render.cpp
     src/effects.cpp
     src/weapon.cpp
+    src/shop.cpp
+    src/hud.cpp
+    src/debug_menu.cpp
     ${IMGUI_SOURCES}
 )
 
