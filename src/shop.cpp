@@ -255,6 +255,7 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
                 float display_scale = gs.weapons[w].config.model_scale * 2.0f;
                 HMM_Vec3 display_pos = s.position;
                 display_pos.Y += 0.4f;  // float above pedestal
+                if (w == 2) display_pos.Y += 0.45f; // knife sits higher
 
                 // Build rotation: model_rotation fix first, then tilt barrel/blade up, then spin
                 HMM_Vec3 mr = gs.weapons[w].config.model_rotation;
