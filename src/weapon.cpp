@@ -9,11 +9,11 @@
 void Weapon::init_wingman() {
     config.name            = "Wingman";
     config.damage          = 70.0f;
-    config.fire_rate       = 1.5f;
+    config.fire_rate       = 2.0f;
     config.range           = 100.0f;
     config.mag_size        = 6;
     config.reload_time     = 2.5f;
-    config.crit_multiplier = 2.5f;
+    config.crit_multiplier = 2.0f;
 
     config.ads_fov_mult    = 0.7f;
     config.ads_sens_mult   = 0.67f;
@@ -107,7 +107,7 @@ void Weapon::init_knife() {
     config.range           = 200.0f;
     config.mag_size        = 1;
     config.reload_time     = 0.0f;
-    config.crit_multiplier = 2.0f;
+    config.crit_multiplier = 2.5f;
     config.infinite_ammo   = true;
     config.no_ads          = true;
     config.lightweight     = true;
