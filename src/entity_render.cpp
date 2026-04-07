@@ -1,4 +1,10 @@
 #include "entity_render.h"
+#include "drone.h"
+#include "rusher.h"
+#include "turret.h"
+#include "tank.h"
+#include "bomber.h"
+#include "shielder.h"
 #include <cmath>
 #include <map>
 
@@ -832,6 +838,123 @@ void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
                     HMM_AddV3(laser_end, HMM_SubV3(ir, iu)),
                     1.0f, 0.8f, 0.3f, 0.6f);
             }
+        }
+    }
+}
+
+// ============================================================
+//  Billboard health bars above enemies
+// ============================================================
+
+// Dying states for each enemy type
+static bool is_dying(const Entity& e) {
+    if (e.type == EntityType::Drone    && e.ai_state == DRONE_DYING)    return true;
+    if (e.type == EntityType::Rusher   && e.ai_state == RUSHER_DYING)   return true;
+    if (e.type == EntityType::Turret   && e.ai_state == TURRET_DYING)   return true;
+    if (e.type == EntityType::Tank     && e.ai_state == TANK_DYING)     return true;
+    if (e.type == EntityType::Bomber   && e.ai_state == BOMBER_DYING)   return true;
+    if (e.type == EntityType::Shielder && e.ai_state == SHIELDER_DYING) return true;
+    return false;
+}
+
+static void add_bar_quad(Mesh& m, HMM_Vec3 center, HMM_Vec3 right, HMM_Vec3 up,
+                          float half_w, float half_h, HMM_Vec3 color) {
+    uint32_t base = (uint32_t)m.vertices.size();
+    HMM_Vec3 normal = HMM_NormV3(HMM_Cross(right, up));
+
+    HMM_Vec3 corners[4] = {
+        HMM_AddV3(center, HMM_AddV3(HMM_MulV3F(right, -half_w), HMM_MulV3F(up, -half_h))),
+        HMM_AddV3(center, HMM_AddV3(HMM_MulV3F(right,  half_w), HMM_MulV3F(up, -half_h))),
+        HMM_AddV3(center, HMM_AddV3(HMM_MulV3F(right,  half_w), HMM_MulV3F(up,  half_h))),
+        HMM_AddV3(center, HMM_AddV3(HMM_MulV3F(right, -half_w), HMM_MulV3F(up,  half_h))),
+    };
+
+    for (int i = 0; i < 4; i++) {
+        Vertex3D v;
+        v.pos[0] = corners[i].X; v.pos[1] = corners[i].Y; v.pos[2] = corners[i].Z;
+        v.normal[0] = normal.X; v.normal[1] = normal.Y; v.normal[2] = normal.Z;
+        v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
+        m.vertices.push_back(v);
+    }
+
+    m.indices.push_back(base + 0);
+    m.indices.push_back(base + 1);
+    m.indices.push_back(base + 2);
+    m.indices.push_back(base + 0);
+    m.indices.push_back(base + 2);
+    m.indices.push_back(base + 3);
+}
+
+void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
+                       const Frustum& frustum,
+                       HMM_Vec3 cam_right, HMM_Vec3 cam_up) {
+    for (int i = 0; i < max_entities; i++) {
+        const Entity& e = entities[i];
+        if (!e.alive) continue;
+        if (e.type == EntityType::Projectile || e.type == EntityType::None) continue;
+        if (is_dying(e)) continue;
+
+        // Only show bar if enemy has taken damage
+        if (e.max_health <= 0 || e.health >= e.max_health) continue;
+
+        // Frustum cull
+        if (!frustum.sphere_visible(e.position, e.radius + 1.0f)) continue;
+
+        float hp_frac = e.health / e.max_health;
+        if (hp_frac < 0.0f) hp_frac = 0.0f;
+        if (hp_frac > 1.0f) hp_frac = 1.0f;
+
+        // Bar dimensions scale with entity radius
+        float bar_w = e.radius * 1.8f;
+        if (bar_w < 0.6f) bar_w = 0.6f;
+        if (bar_w > 2.0f) bar_w = 2.0f;
+        float bar_h = 0.07f;
+
+        // Position above entity
+        float y_offset = e.radius + 0.3f;
+        HMM_Vec3 bar_center = HMM_AddV3(e.position, HMM_V3(0, y_offset, 0));
+
+        // Background (dark)
+        HMM_Vec3 bg_color = HMM_V3(0.15f, 0.1f, 0.1f);
+        add_bar_quad(out, bar_center, cam_right, cam_up, bar_w * 0.5f, bar_h, bg_color);
+
+        // Filled portion (green → yellow → red)
+        HMM_Vec3 hp_color;
+        if (hp_frac > 0.5f)
+            hp_color = HMM_V3((1.0f - hp_frac) * 2.0f, 0.85f, 0.15f);  // green to yellow
+        else
+            hp_color = HMM_V3(0.9f, hp_frac * 1.7f, 0.1f);             // yellow to red
+
+        float filled_w = bar_w * hp_frac;
+        float fill_offset = (filled_w - bar_w) * 0.5f; // shift left since bar grows from left
+        HMM_Vec3 fill_center = HMM_AddV3(bar_center, HMM_MulV3F(cam_right, fill_offset));
+
+        // Nudge slightly toward camera so it renders in front of background
+        HMM_Vec3 cam_fwd = HMM_NormV3(HMM_Cross(cam_up, cam_right));
+        fill_center = HMM_AddV3(fill_center, HMM_MulV3F(cam_fwd, 0.005f));
+
+        add_bar_quad(out, fill_center, cam_right, cam_up, filled_w * 0.5f, bar_h, hp_color);
+
+        // Shield bar (second bar below if shielded)
+        if (e.shield_hp > 0.01f) {
+            float shield_max = 20.0f; // default shielder config value
+            float shield_frac = e.shield_hp / shield_max;
+            if (shield_frac > 1.0f) shield_frac = 1.0f;
+
+            HMM_Vec3 shield_center = HMM_SubV3(bar_center, HMM_MulV3F(cam_up, bar_h * 3.0f));
+
+            // Shield background
+            add_bar_quad(out, shield_center, cam_right, cam_up, bar_w * 0.5f, bar_h * 0.7f,
+                         HMM_V3(0.1f, 0.1f, 0.15f));
+
+            // Shield fill (blue)
+            float shield_fill_w = bar_w * shield_frac;
+            float shield_offset = (shield_fill_w - bar_w) * 0.5f;
+            HMM_Vec3 sfill = HMM_AddV3(shield_center, HMM_MulV3F(cam_right, shield_offset));
+            sfill = HMM_AddV3(sfill, HMM_MulV3F(cam_fwd, 0.005f));
+
+            add_bar_quad(out, sfill, cam_right, cam_up, shield_fill_w * 0.5f, bar_h * 0.7f,
+                         HMM_V3(0.3f, 0.5f, 0.9f));
         }
     }
 }

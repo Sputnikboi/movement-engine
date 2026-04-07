@@ -34,6 +34,7 @@
 #include "shop.h"
 #include "hud.h"
 #include "debug_menu.h"
+#include "damage_numbers.h"
 
 namespace fs = std::filesystem;
 
@@ -314,6 +315,7 @@ int main(int argc, char* argv[]) {
     BomberConfig bomber_cfg;
     ShielderConfig shielder_cfg;
     EffectSystem effects;
+    DamageNumberSystem dmg_numbers;
     effects.init();
     float total_time = 0.0f;
 
@@ -930,11 +932,24 @@ int main(int argc, char* argv[]) {
                         hit_ent.hit_flash = drone_cfg.hit_flash_time;
 
                     // Apply shield barrier absorption
+                    float actual_dmg_display;
                     {
                         float raw_dmg = weapon.config.damage;
                         float actual_dmg = shielder_absorb_damage(hit_ent, raw_dmg);
                         // Refund the difference (damage was already fully applied above)
                         hit_ent.health += (raw_dmg - actual_dmg);
+                        actual_dmg_display = actual_dmg;
+                    }
+
+                    // Floating damage number at hit point
+                    {
+                        HMM_Vec3 hit_pos = HMM_AddV3(ray_origin, HMM_MulV3F(ray_dir, best_t));
+                        // Offset slightly up and random horizontal jitter
+                        hit_pos.Y += 0.3f;
+                        hit_pos.X += randf(-0.2f, 0.2f);
+                        hit_pos.Z += randf(-0.2f, 0.2f);
+                        bool is_kill = (hit_ent.health <= 0);
+                        dmg_numbers.spawn(hit_pos, (int)actual_dmg_display, is_kill);
                     }
 
                     // Wake up idle enemies on hit
@@ -1171,6 +1186,16 @@ int main(int argc, char* argv[]) {
                         float actual_dmg = shielder_absorb_damage(e, raw_dmg);
                         e.health -= actual_dmg;
 
+                        // Floating damage number at hit point
+                        {
+                            HMM_Vec3 hit_pos = e.position;
+                            hit_pos.Y += e.radius * 0.5f;
+                            hit_pos.X += randf(-0.2f, 0.2f);
+                            hit_pos.Z += randf(-0.2f, 0.2f);
+                            bool is_kill = (e.health <= 0);
+                            dmg_numbers.spawn(hit_pos, (int)actual_dmg, is_kill);
+                        }
+
                         // Hit flash
                         if (e.type == EntityType::Turret)       e.hit_flash = turret_cfg.hit_flash_time;
                         else if (e.type == EntityType::Tank)    e.hit_flash = tank_cfg.hit_flash_time;
@@ -1282,9 +1307,18 @@ int main(int argc, char* argv[]) {
             frustum.extract(vp);
         }
 
+        // Update floating damage numbers
+        dmg_numbers.update(dt);
+
         // Build entity mesh + opaque death effects (frustum-culled)
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);
         effects.append_to_mesh(entity_mesh);
+
+        // Health bars + damage numbers (billboarded)
+        HMM_Vec3 cam_right = camera.right();
+        HMM_Vec3 cam_up = HMM_NormV3(HMM_Cross(camera.forward(), cam_right));
+        build_health_bars(entity_mesh, entities, MAX_ENTITIES, frustum, cam_right, cam_up);
+        dmg_numbers.build_mesh(entity_mesh, cam_right, cam_up);
 
         // Shop: spinning weapon display models on stands
         shop_build_display_meshes(gs, entity_mesh, total_time);

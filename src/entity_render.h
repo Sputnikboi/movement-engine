@@ -44,3 +44,10 @@ void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
                           const Entity entities[], int max_entities,
                           const CollisionWorld& world,
                           const Frustum& frustum, float total_time);
+
+// Append billboard health bars above enemies to an existing mesh.
+// cam_right/cam_up used for billboarding. Only shows bars for
+// enemies that have taken damage (hp < max_hp) and are not dying.
+void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
+                       const Frustum& frustum,
+                       HMM_Vec3 cam_right, HMM_Vec3 cam_up);
