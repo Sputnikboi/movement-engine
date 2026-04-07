@@ -268,7 +268,7 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
                 );
 
                 // After model_fix, barrel points along -Z. Tilt around X to point up.
-                float tilt_deg = (w == 2) ? 75.0f : -75.0f;
+                float tilt_deg = (w == 2) ? 75.0f : 75.0f;
                 HMM_Mat4 tilt = HMM_Rotate_RH(HMM_AngleDeg(tilt_deg), HMM_V3(1, 0, 0));
                 HMM_Mat4 spin = HMM_Rotate_RH(spin_yaw, HMM_V3(0, 1, 0));
 
