@@ -62,7 +62,7 @@ static bool world_to_screen(HMM_Vec3 world_pos, HMM_Mat4 view_proj,
 
     // NDC to screen (Vulkan NDC: X [-1,1] left-right, Y [-1,1] top-bottom)
     out_x = (ndc_x * 0.5f + 0.5f) * screen_w;
-    out_y = (-ndc_y * 0.5f + 0.5f) * screen_h;  // flip Y: NDC Y+ is up, screen Y+ is down
+    out_y = (ndc_y * 0.5f + 0.5f) * screen_h;  // proj already flips Y for Vulkan
 
     return true;
 }
