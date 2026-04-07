@@ -363,19 +363,30 @@ int main(int argc, char* argv[]) {
     // Shop system
     int    currency = 0;
     bool   show_shop = false;
-    int    weapon_cost[MAX_WEAPONS] = {0, 150, 100, 0};  // glock free, wingman 150, knife 100
-    bool   weapon_owned[MAX_WEAPONS] = {true, false, false, false};
+    int    shop_weapon = -1;   // which weapon is offered this shop (-1 = none yet)
+    int    weapon_level[MAX_WEAPONS] = {1, 0, 0, 0}; // 0=not owned, 1+=owned+level
 
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
-            case EntityType::Drone:    return 10;
-            case EntityType::Rusher:   return 10;
-            case EntityType::Turret:   return 20;
-            case EntityType::Tank:     return 40;
-            case EntityType::Bomber:   return 20;
-            case EntityType::Shielder: return 25;
+            case EntityType::Drone:    return 1;
+            case EntityType::Rusher:   return 1;
+            case EntityType::Turret:   return 2;
+            case EntityType::Tank:     return 5;
+            case EntityType::Bomber:   return 2;
+            case EntityType::Shielder: return 3;
             default: return 0;
         }
+    };
+
+    // Apply upgrade stats based on weapon level
+    auto apply_weapon_upgrades = [&](int w) {
+        int lvl = weapon_level[w] - 1; // level 1 = base, 2 = +1 upgrade, etc.
+        if (lvl <= 0) return;
+        weapons[w].config.damage    *= (1.0f + lvl * 0.10f);  // +10% damage per upgrade
+        weapons[w].config.mag_size  += lvl;                     // +1 mag per upgrade
+        weapons[w].config.reload_time *= (1.0f - lvl * 0.05f); // -5% reload per upgrade
+        if (weapons[w].config.reload_time < 0.3f) weapons[w].config.reload_time = 0.3f;
+        weapons[w].ammo = weapons[w].config.mag_size;
     };
 
     {
@@ -716,7 +727,7 @@ int main(int argc, char* argv[]) {
         {
             // Number keys to switch weapons (only owned)
             for (int w = 0; w < MAX_WEAPONS; w++) {
-                if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings && weapon_owned[w] && !show_shop) {
+                if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings && weapon_level[w] > 0 && !show_shop) {
                     // Unholster if holstered
                     if (player.weapon_holstered)
                         player.weapon_holstered = false;
@@ -1404,7 +1415,7 @@ int main(int argc, char* argv[]) {
                 ImGui::Text("Enemies: %d", enemy_count_hud);
             if (rooms_cleared > 0)
                 ImGui::Text("Room: %d  Diff: %.2f", rooms_cleared + 1, procgen_cfg.difficulty);
-            ImGui::Text("Currency: %d", currency);
+            ImGui::Text("Gold: %d", currency);
             for (const auto& d : active_doors) {
                 if (d.is_exit) {
                     if (d.locked)
@@ -1446,50 +1457,99 @@ int main(int argc, char* argv[]) {
 
         // --- Shop window ---
         if (show_shop) {
+            // Pick a random weapon to offer on first open each room
+            if (shop_weapon < 0) {
+                // Offer a weapon other than current, randomly
+                int candidates[3] = {0, 1, 2};
+                int n_cand = 0;
+                for (int i = 0; i < 3; i++)
+                    if (i != active_weapon) candidates[n_cand++] = i;
+                shop_weapon = candidates[rand() % n_cand];
+            }
+
             ImVec2 center(renderer.swapchain_width() * 0.5f, renderer.swapchain_height() * 0.5f);
             ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowSize(ImVec2(400, 0));
+            ImGui::SetNextWindowSize(ImVec2(420, 0));
             ImGui::Begin("Shop", nullptr,
                 ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
-            ImGui::Text("Currency: %d", currency);
+            ImGui::Text("Gold: %d", currency);
             ImGui::Separator();
 
-            const char* weapon_names[] = {"Glock", "Wingman", "Throwing Knife", "Slot 4"};
-            for (int w = 0; w < 3; w++) {
-                ImGui::PushID(w);
-                if (weapon_owned[w]) {
-                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s  OWNED", weapon_names[w]);
-                    if (w != active_weapon) {
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton("Equip")) {
-                            pending_weapon = w;
-                            weapons[active_weapon].begin_swap();
+            const char* weapon_names[] = {"Glock", "Wingman", "Throwing Knife"};
+
+            // Current weapon display
+            ImGui::Text("Equipped: %s (Lv %d)", weapon_names[active_weapon], weapon_level[active_weapon]);
+            ImGui::Separator();
+
+            // Weapon slot
+            {
+                int w = shop_weapon;
+                int lvl = weapon_level[w];
+                bool is_upgrade = (lvl > 0); // already own this weapon
+                if (is_upgrade) {
+                    ImGui::Text("%s  Lv %d -> %d  (10 gold)", weapon_names[w], lvl, lvl + 1);
+                    ImGui::SameLine();
+                    if (currency >= 10) {
+                        if (ImGui::SmallButton("Upgrade")) {
+                            currency -= 10;
+                            weapon_level[w]++;
+                            // Re-init and apply upgrades
+                            switch (w) {
+                                case 0: weapons[w].init_glock();   break;
+                                case 1: weapons[w].init_wingman(); break;
+                                case 2: weapons[w].init_knife();   break;
+                            }
+                            apply_weapon_upgrades(w);
                         }
                     } else {
-                        ImGui::SameLine();
-                        ImGui::TextDisabled("(equipped)");
+                        ImGui::TextDisabled("(not enough)");
                     }
                 } else {
-                    ImGui::Text("%s  %d coins", weapon_names[w], weapon_cost[w]);
+                    ImGui::Text("%s  (10 gold)", weapon_names[w]);
                     ImGui::SameLine();
-                    if (currency >= weapon_cost[w]) {
+                    if (currency >= 10) {
                         if (ImGui::SmallButton("Buy")) {
-                            currency -= weapon_cost[w];
-                            weapon_owned[w] = true;
-                            num_weapons = 0;
-                            for (int i = 0; i < MAX_WEAPONS; i++)
-                                if (weapon_owned[i]) num_weapons = i + 1;
+                            currency -= 10;
+                            // Unown old weapon
+                            weapon_level[active_weapon] = 0;
+                            // Own new weapon
+                            weapon_level[w] = 1;
+                            active_weapon = w;
+                            weapons[w].ammo = weapons[w].config.mag_size;
+                            weapons[w].state = WeaponState::IDLE;
+                            num_weapons = 1;
                         }
                     } else {
                         ImGui::TextDisabled("(not enough)");
                     }
                 }
-                ImGui::PopID();
+            }
+
+            ImGui::Separator();
+
+            // Healthpack
+            {
+                int hp_cost = 5;
+                bool full_hp = (player.health >= player.max_health - 0.1f);
+                ImGui::Text("Healthpack +25%%  (%d gold)", hp_cost);
+                ImGui::SameLine();
+                if (full_hp) {
+                    ImGui::TextDisabled("(full HP)");
+                } else if (currency >= hp_cost) {
+                    if (ImGui::SmallButton("Buy##hp")) {
+                        currency -= hp_cost;
+                        player.health += player.max_health * 0.25f;
+                        if (player.health > player.max_health) player.health = player.max_health;
+                    }
+                } else {
+                    ImGui::TextDisabled("(not enough)");
+                }
             }
 
             ImGui::Separator();
             if (ImGui::Button("Continue to next room", ImVec2(-1, 30))) {
+                shop_weapon = -1; // reset for next shop
                 do_room_transition();
             }
             ImGui::End();
