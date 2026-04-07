@@ -34,6 +34,7 @@
 #include "shop.h"
 #include "hud.h"
 #include "debug_menu.h"
+#include "magazine_view.h"
 #include "damage_numbers.h"
 #include "bullet_mods.h"
 
@@ -294,6 +295,7 @@ int main(int argc, char* argv[]) {
     bool show_settings = false;
     bool show_hud = true;
     bool show_ladder_debug = false;
+    bool show_magazine_view = false;
     bool ai_enabled = true;
     float fly_speed = 15.0f;
 
@@ -512,6 +514,7 @@ int main(int argc, char* argv[]) {
         /* show_settings */     show_settings,
         /* show_hud */          show_hud,
         /* show_ladder_debug */ show_ladder_debug,
+        /* show_magazine_view */ show_magazine_view,
         /* noclip */            noclip,
         /* running */           running,
         /* fly_speed */         fly_speed,
@@ -593,6 +596,8 @@ int main(int argc, char* argv[]) {
                     }
                     if (kb.matches_scancode(Action::ToggleHUD, event.key.scancode) && !event.key.repeat)
                         show_hud = !show_hud;
+                    if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat)
+                        show_magazine_view = !show_magazine_view;
                     if (kb.matches_scancode(Action::ToggleFullscreen, event.key.scancode) && !event.key.repeat) {
                         Uint32 flags = SDL_GetWindowFlags(window);
                         SDL_SetWindowFullscreen(window, (flags & SDL_WINDOW_FULLSCREEN) ? false : true);
@@ -1434,6 +1439,9 @@ int main(int argc, char* argv[]) {
 
         // --- Shop room HUD ---
         shop_draw_hud(gs);
+
+        // --- Magazine card view ---
+        magazine_view_draw(gs);
 
         // --- Floating damage numbers (screen-space) ---
         {

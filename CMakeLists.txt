@@ -97,6 +97,7 @@ add_executable(${PROJECT_NAME}
     src/hud.cpp
     src/debug_menu.cpp
     src/damage_numbers.cpp
+    src/magazine_view.cpp
     ${IMGUI_SOURCES}
 )
 

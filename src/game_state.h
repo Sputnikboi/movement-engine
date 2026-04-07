@@ -76,6 +76,7 @@ struct GameState {
     bool&             show_settings;
     bool&             show_hud;
     bool&             show_ladder_debug;
+    bool&             show_magazine_view;
     bool&             noclip;
     bool&             running;
     float&            fly_speed;
