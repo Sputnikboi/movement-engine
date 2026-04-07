@@ -132,7 +132,7 @@ void Weapon::init_knife() {
 
     config.reload_buffer_delay = 0.0f;
 
-    config.model_scale     = 0.08f;
+    config.model_scale     = 0.054f;
     config.model_rotation  = HMM_V3(0.0f, 0.0f, 0.0f);
     config.model_path      = "Kunai.glb";
 

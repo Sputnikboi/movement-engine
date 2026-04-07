@@ -258,7 +258,14 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
                 float display_scale = gs.weapons[w].config.model_scale * 2.0f;
                 HMM_Vec3 display_pos = s.position;
                 display_pos.Y += 0.4f;  // float above pedestal
-                float tilt = -75.0f * (HMM_PI32 / 180.0f); // barrel points ~75° up
+
+                // Per-weapon tilt: guns point barrel up, knife blade up
+                float tilt;
+                if (w == 2) // Knife — flip so blade points up
+                    tilt = 75.0f * (HMM_PI32 / 180.0f);
+                else        // Guns — barrel points up
+                    tilt = -75.0f * (HMM_PI32 / 180.0f);
+
                 append_mesh_rotated(out, gs.weapons[w].viewmodel_mesh,
                                     display_pos, spin_yaw, tilt, display_scale);
             }
