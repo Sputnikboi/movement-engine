@@ -443,7 +443,7 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
 
                     // Steepness factor (steeper = stronger effect)
                     float steepness = 1.0f - ground_normal.Y;
-                    float slope_force = gravity * steepness * 1.5f;
+                    float slope_force = gravity * steepness * 3.0f;
 
                     if (alignment > 0.1f) {
                         // Downhill — accelerate along slope direction
