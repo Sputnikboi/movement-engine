@@ -785,3 +785,252 @@ LevelData generate_level(const ProcGenConfig& config,
 
     return ld;
 }
+
+// ============================================================
+//  Shop room generation
+// ============================================================
+
+// Helper: add a hexagonal pedestal (approximated as 6-sided prism)
+static void add_pedestal(Mesh& m, HMM_Vec3 base_pos, float radius, float height,
+                         HMM_Vec3 body_color, HMM_Vec3 top_color) {
+    const int SIDES = 6;
+    float angle_step = 2.0f * HMM_PI32 / SIDES;
+
+    // Compute corner positions at bottom and top
+    HMM_Vec3 bot[SIDES], top_v[SIDES];
+    for (int i = 0; i < SIDES; i++) {
+        float a = angle_step * i;
+        float cx = cosf(a) * radius;
+        float cz = sinf(a) * radius;
+        bot[i]   = HMM_V3(base_pos.X + cx, base_pos.Y,          base_pos.Z + cz);
+        top_v[i] = HMM_V3(base_pos.X + cx, base_pos.Y + height, base_pos.Z + cz);
+    }
+
+    // Side faces (quads)
+    for (int i = 0; i < SIDES; i++) {
+        int j = (i + 1) % SIDES;
+        HMM_Vec3 e1 = HMM_SubV3(bot[j], bot[i]);
+        HMM_Vec3 e2 = HMM_V3(0, 1, 0);
+        HMM_Vec3 normal = HMM_NormV3(HMM_Cross(e2, e1));
+        add_quad(m, bot[i], top_v[i], top_v[j], bot[j], normal, body_color);
+    }
+
+    // Top face (fan of triangles)
+    {
+        HMM_Vec3 center_top = HMM_V3(base_pos.X, base_pos.Y + height, base_pos.Z);
+        HMM_Vec3 up = HMM_V3(0, 1, 0);
+        uint32_t center_idx = (uint32_t)m.vertices.size();
+        Vertex3D cv;
+        cv.pos[0] = center_top.X; cv.pos[1] = center_top.Y; cv.pos[2] = center_top.Z;
+        cv.normal[0] = 0; cv.normal[1] = 1; cv.normal[2] = 0;
+        cv.color[0] = top_color.X; cv.color[1] = top_color.Y; cv.color[2] = top_color.Z;
+        m.vertices.push_back(cv);
+
+        for (int i = 0; i < SIDES; i++) {
+            uint32_t vi = (uint32_t)m.vertices.size();
+            Vertex3D v;
+            v.pos[0] = top_v[i].X; v.pos[1] = top_v[i].Y; v.pos[2] = top_v[i].Z;
+            v.normal[0] = 0; v.normal[1] = 1; v.normal[2] = 0;
+            v.color[0] = top_color.X; v.color[1] = top_color.Y; v.color[2] = top_color.Z;
+            m.vertices.push_back(v);
+        }
+        for (int i = 0; i < SIDES; i++) {
+            int j = (i + 1) % SIDES;
+            m.indices.push_back(center_idx);
+            m.indices.push_back(center_idx + 1 + i);
+            m.indices.push_back(center_idx + 1 + j);
+        }
+    }
+
+    // Bottom face (fan, facing down)
+    {
+        HMM_Vec3 center_bot = base_pos;
+        uint32_t center_idx = (uint32_t)m.vertices.size();
+        Vertex3D cv;
+        cv.pos[0] = center_bot.X; cv.pos[1] = center_bot.Y; cv.pos[2] = center_bot.Z;
+        cv.normal[0] = 0; cv.normal[1] = -1; cv.normal[2] = 0;
+        cv.color[0] = body_color.X; cv.color[1] = body_color.Y; cv.color[2] = body_color.Z;
+        m.vertices.push_back(cv);
+
+        for (int i = 0; i < SIDES; i++) {
+            uint32_t vi = (uint32_t)m.vertices.size();
+            Vertex3D v;
+            v.pos[0] = bot[i].X; v.pos[1] = bot[i].Y; v.pos[2] = bot[i].Z;
+            v.normal[0] = 0; v.normal[1] = -1; v.normal[2] = 0;
+            v.color[0] = body_color.X; v.color[1] = body_color.Y; v.color[2] = body_color.Z;
+            m.vertices.push_back(v);
+        }
+        for (int i = 0; i < SIDES; i++) {
+            int j = (i + 1) % SIDES;
+            m.indices.push_back(center_idx);
+            m.indices.push_back(center_idx + 1 + j);
+            m.indices.push_back(center_idx + 1 + i);
+        }
+    }
+}
+
+ShopRoomData generate_shop_room(const Mesh* door_mesh,
+                                std::vector<DoorInfo>* doors_out) {
+    ShopRoomData shop;
+    LevelData& ld = shop.level;
+    Mesh& m = ld.mesh;
+
+    // Small room dimensions
+    float rw = 16.0f;  // width (X)
+    float rd = 20.0f;  // depth (Z)
+    float rh = 6.0f;   // height
+    float hw = rw * 0.5f, hd = rd * 0.5f;
+
+    // Colors
+    HMM_Vec3 floor_col   = {0.20f, 0.18f, 0.22f};  // dark purple-grey
+    HMM_Vec3 wall_col    = {0.15f, 0.14f, 0.18f};
+    HMM_Vec3 ceiling_col = {0.12f, 0.11f, 0.14f};
+    HMM_Vec3 trim_col    = {0.55f, 0.45f, 0.25f};  // gold trim
+
+    // --- Floor ---
+    add_quad(m, {-hw,0,-hd}, {hw,0,-hd}, {hw,0,hd}, {-hw,0,hd},
+             {0,1,0}, floor_col);
+
+    // --- Ceiling ---
+    add_quad(m, {-hw,rh,-hd}, {-hw,rh,hd}, {hw,rh,hd}, {hw,rh,-hd},
+             {0,-1,0}, ceiling_col);
+
+    // --- Walls ---
+    // Entry wall (-Z) with door gap
+    float door_w = 1.2f, door_h = 2.15f;
+    float entry_x = 0.0f;
+    {
+        float gx0 = entry_x - door_w * 0.5f;
+        float gx1 = entry_x + door_w * 0.5f;
+        // Left of door
+        if (gx0 > -hw)
+            add_quad(m, {-hw,0,-hd}, {-hw,rh,-hd}, {gx0,rh,-hd}, {gx0,0,-hd}, {0,0,1}, wall_col);
+        // Right of door
+        if (gx1 < hw)
+            add_quad(m, {gx1,0,-hd}, {gx1,rh,-hd}, {hw,rh,-hd}, {hw,0,-hd}, {0,0,1}, wall_col);
+        // Above door
+        add_quad(m, {gx0,door_h,-hd}, {gx0,rh,-hd}, {gx1,rh,-hd}, {gx1,door_h,-hd}, {0,0,1}, wall_col);
+    }
+
+    // Exit wall (+Z) with door gap
+    float exit_x = 0.0f;
+    {
+        float gx0 = exit_x - door_w * 0.5f;
+        float gx1 = exit_x + door_w * 0.5f;
+        if (gx0 > -hw)
+            add_quad(m, {gx0,0,hd}, {gx0,rh,hd}, {-hw,rh,hd}, {-hw,0,hd}, {0,0,-1}, wall_col);
+        if (gx1 < hw)
+            add_quad(m, {hw,0,hd}, {hw,rh,hd}, {gx1,rh,hd}, {gx1,0,hd}, {0,0,-1}, wall_col);
+        add_quad(m, {gx1,door_h,hd}, {gx1,rh,hd}, {gx0,rh,hd}, {gx0,door_h,hd}, {0,0,-1}, wall_col);
+    }
+
+    // Side walls (solid)
+    add_quad(m, {hw,0,-hd}, {hw,rh,-hd}, {hw,rh,hd}, {hw,0,hd}, {-1,0,0}, wall_col);
+    add_quad(m, {-hw,0,hd}, {-hw,rh,hd}, {-hw,rh,-hd}, {-hw,0,-hd}, {1,0,0}, wall_col);
+
+    // --- Gold trim strips along floor-wall edges ---
+    float trim_h = 0.08f;
+    float trim_d = 0.02f;
+    // Left wall trim
+    add_box(m, {-hw + trim_d, 0, 0}, trim_d * 2, trim_h, rd, trim_col, 0);
+    // Right wall trim
+    add_box(m, { hw - trim_d, 0, 0}, trim_d * 2, trim_h, rd, trim_col, 0);
+    // Back wall trim
+    add_box(m, {0, 0, hd - trim_d}, rw, trim_h, trim_d * 2, trim_col, 0);
+    // Front wall trim
+    add_box(m, {0, 0, -hd + trim_d}, rw, trim_h, trim_d * 2, trim_col, 0);
+
+    // --- Doors ---
+    float door_offset = 0.05f;
+    DoorInfo entry_door, exit_door;
+    entry_door.position = HMM_V3(entry_x, 0, -hd - door_offset);
+    entry_door.yaw = 0;
+    entry_door.is_exit = false;
+    entry_door.locked = false;
+
+    exit_door.position = HMM_V3(exit_x, 0, hd + door_offset);
+    exit_door.yaw = HMM_PI32;
+    exit_door.is_exit = true;
+    exit_door.locked = false;  // shop exit is always unlocked
+
+    shop.exit_door_pos = exit_door.position;
+
+    if (door_mesh) {
+        merge_mesh(m, *door_mesh, entry_door.position, entry_door.yaw);
+        merge_mesh(m, *door_mesh, exit_door.position, exit_door.yaw);
+    }
+    if (doors_out) {
+        doors_out->clear();
+        doors_out->push_back(entry_door);
+        doors_out->push_back(exit_door);
+    }
+
+    // --- Pedestals / stands ---
+    // Layout: stands arranged in a semicircle around the room center
+    // Stand 0: Weapon (left)
+    // Stand 1: Healthpack (right)
+    // Stand 2: Empty / future (far left)
+    // Stand 3: Empty / future (far right)
+
+    float pedestal_radius = 0.45f;
+    float pedestal_height = 0.9f;
+    HMM_Vec3 ped_body = {0.25f, 0.22f, 0.28f};  // dark stone
+    HMM_Vec3 ped_top_weapon = {0.6f, 0.5f, 0.2f};    // gold top for weapon
+    HMM_Vec3 ped_top_health = {0.2f, 0.6f, 0.3f};    // green top for health
+    HMM_Vec3 ped_top_empty  = {0.3f, 0.3f, 0.35f};   // grey for empty
+
+    struct StandPlacement {
+        float x, z;
+        ShopStandType type;
+        const char* label;
+        HMM_Vec3 top_color;
+    };
+
+    // Positions: stands along the sides, leaving center aisle open
+    StandPlacement placements[] = {
+        { -3.5f,  2.0f, ShopStandType::Weapon,     "Weapon",       ped_top_weapon },
+        {  3.5f,  2.0f, ShopStandType::Healthpack,  "Healthpack",   ped_top_health },
+        { -3.5f,  6.0f, ShopStandType::Empty,       "Coming Soon",  ped_top_empty  },
+        {  3.5f,  6.0f, ShopStandType::Empty,       "Coming Soon",  ped_top_empty  },
+    };
+
+    for (const auto& sp : placements) {
+        HMM_Vec3 pos = HMM_V3(sp.x, 0, sp.z);
+        add_pedestal(m, pos, pedestal_radius, pedestal_height, ped_body, sp.top_color);
+
+        ShopStand stand;
+        stand.position = HMM_V3(sp.x, pedestal_height, sp.z);  // top of pedestal
+        stand.type = sp.type;
+        stand.weapon_index = -1;  // set by caller
+        stand.cost = 10;          // default, overridden by caller
+        stand.purchased = false;
+        stand.label = sp.label;
+        shop.stands.push_back(stand);
+    }
+
+    // --- Small floating item markers above stands ---
+    // Weapon stand: small rotating box (placeholder for weapon model)
+    {
+        HMM_Vec3 item_pos = HMM_V3(-3.5f, pedestal_height + 0.15f, 2.0f);
+        HMM_Vec3 item_col = {0.7f, 0.6f, 0.25f};
+        add_box(m, item_pos, 0.3f, 0.2f, 0.6f, item_col, 0.3f);
+    }
+    // Health stand: green cross
+    {
+        HMM_Vec3 hp_pos = HMM_V3(3.5f, pedestal_height + 0.15f, 2.0f);
+        HMM_Vec3 hp_col = {0.3f, 0.8f, 0.4f};
+        // Horizontal bar
+        add_box(m, hp_pos, 0.5f, 0.12f, 0.15f, hp_col, 0);
+        // Vertical bar
+        add_box(m, hp_pos, 0.15f, 0.12f, 0.5f, hp_col, 0);
+    }
+
+    // --- Spawn point (just inside entry door) ---
+    ld.spawn_pos = HMM_V3(entry_x, 1.0f, -hd + 2.0f);
+    ld.has_spawn = true;
+
+    printf("ShopRoom: %zu verts, %zu indices, %zu stands\n",
+           m.vertices.size(), m.indices.size(), shop.stands.size());
+
+    return shop;
+}

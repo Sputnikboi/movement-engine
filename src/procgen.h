@@ -96,3 +96,31 @@ struct DoorInfo {
 LevelData generate_level(const ProcGenConfig& config,
                          const Mesh* door_mesh = nullptr,
                          std::vector<DoorInfo>* doors_out = nullptr);
+
+// ============================================================
+//  Shop room — physical room between combat rooms
+// ============================================================
+
+enum class ShopStandType : uint8_t {
+    Weapon,
+    Healthpack,
+    Empty,    // placeholder for future upgrades
+};
+
+struct ShopStand {
+    HMM_Vec3      position;       // center of the pedestal top
+    ShopStandType type;
+    int           weapon_index;   // which weapon (only for Weapon type)
+    int           cost;
+    bool          purchased;      // already bought this visit
+    const char*   label;          // display name
+};
+
+struct ShopRoomData {
+    LevelData     level;
+    std::vector<ShopStand> stands;
+    HMM_Vec3      exit_door_pos;  // position of the exit door
+};
+
+ShopRoomData generate_shop_room(const Mesh* door_mesh = nullptr,
+                                std::vector<DoorInfo>* doors_out = nullptr);

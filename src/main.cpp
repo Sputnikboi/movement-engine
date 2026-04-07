@@ -362,9 +362,13 @@ int main(int argc, char* argv[]) {
 
     // Shop system
     int    currency = 0;
-    bool   show_shop = false;
-    int    shop_weapon = -1;   // which weapon is offered this shop (-1 = none yet)
+    bool   show_shop = false;       // legacy flag — kept for gating, true when in_shop_room
+    bool   in_shop_room = false;    // player is physically in the shop room
+    int    shop_weapon = -1;        // which weapon is offered this shop (-1 = none yet)
     int    weapon_level[MAX_WEAPONS] = {1, 0, 0, 0}; // 0=not owned, 1+=owned+level
+    ShopRoomData shop_data;         // current shop room geometry + stands
+    int    shop_nearby_stand = -1;  // index of stand player is near (-1 = none)
+    float  shop_interact_cooldown = 0.0f; // prevent double-buy
 
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
@@ -1238,69 +1242,194 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Door interaction: pressing interact near unlocked exit -> open shop
-        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !show_shop) {
-            show_shop = true;
-            SDL_SetWindowRelativeMouseMode(window, false);
+        // --- Transition: combat room exit door → shop room ---
+        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room) {
             interact_pressed = false;
-        }
+            in_shop_room = true;
+            show_shop = true;  // gates entity updates / weapon switching
 
-        // Shop continue -> transition to next room
-        auto do_room_transition = [&]() {
-            show_shop = false;
-            SDL_SetWindowRelativeMouseMode(window, true);
-            rooms_cleared++;
-            player.health = player.max_health;
-            player.damage_accum = 0.0f;
-            // Refill all weapon ammo on room transition
-            for (int w = 0; w < MAX_WEAPONS; w++) {
-                weapons[w].ammo = weapons[w].config.mag_size;
-                weapons[w].state = WeaponState::IDLE;
-                weapons[w].reload_phase = ReloadPhase::NONE;
+            // Pick weapon to offer this shop visit
+            if (shop_weapon < 0) {
+                int candidates[3] = {0, 1, 2};
+                int n_cand = 0;
+                for (int i = 0; i < 3; i++)
+                    if (i != active_weapon) candidates[n_cand++] = i;
+                shop_weapon = candidates[rand() % n_cand];
             }
-            printf("Entering room %d...\n", rooms_cleared + 1);
-            procgen_cfg.seed = 0; // random seed each time
-            procgen_cfg.room_number = rooms_cleared + 1;
-            procgen_cfg.difficulty = 1.0f + rooms_cleared * 0.15f;
 
-            LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
+            // Generate the shop room
+            shop_data = generate_shop_room(door_mesh_ptr, &active_doors);
+
+            // Configure stands
+            for (auto& s : shop_data.stands) {
+                s.purchased = false;
+                if (s.type == ShopStandType::Weapon) {
+                    s.weapon_index = shop_weapon;
+                    int lvl = weapon_level[shop_weapon];
+                    const char* wnames[] = {"Glock", "Wingman", "Throwing Knife"};
+                    s.label = wnames[shop_weapon];
+                    s.cost = 10;
+                } else if (s.type == ShopStandType::Healthpack) {
+                    s.cost = 5;
+                }
+            }
 
             // Clear entities + effects
             for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
             effects.init();
 
-            // Build collision
+            // Build collision from shop room mesh
             collision.triangles.clear();
             collision.ladder_volumes.clear();
-            collision.build_from_mesh(pld.mesh);
+            collision.build_from_mesh(shop_data.level.mesh);
 
             // Upload to renderer
-            renderer.reload_mesh(pld.mesh);
+            renderer.reload_mesh(shop_data.level.mesh);
 
-            // Spawn player facing into room (+Z = yaw PI/2)
-            player.position = pld.spawn_pos;
+            // Spawn player at shop entrance
+            player.position = shop_data.level.spawn_pos;
             player.velocity = HMM_V3(0, 0, 0);
-            camera.yaw = HMM_PI32 / 2.0f; camera.pitch = 0;
+            camera.yaw = HMM_PI32 / 2.0f;  // face +Z (into shop)
+            camera.pitch = 0;
             noclip = false;
 
-            // Spawn enemies
-            for (const auto& es : pld.enemy_spawns) {
-                if (es.type == EntityType::Drone)
-                    drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
-                else if (es.type == EntityType::Rusher)
-                    rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
-                else if (es.type == EntityType::Turret)
-                    turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
-                else if (es.type == EntityType::Tank)
-                    tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
-                else if (es.type == EntityType::Bomber)
-                    bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
-                else if (es.type == EntityType::Shielder)
-                    shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
+            shop_interact_cooldown = 0.3f; // prevent instant-buy on entry
+
+            current_level_name = "Shop";
+            printf("Entering shop room...\n");
+        }
+
+        // --- Shop room interaction: stands + exit door ---
+        if (in_shop_room) {
+            shop_interact_cooldown -= dt;
+            if (shop_interact_cooldown < 0) shop_interact_cooldown = 0;
+
+            // Find nearest stand the player is close to
+            shop_nearby_stand = -1;
+            float best_dist_sq = 2.2f * 2.2f;  // interaction radius
+            for (int i = 0; i < (int)shop_data.stands.size(); i++) {
+                const auto& s = shop_data.stands[i];
+                HMM_Vec3 diff = HMM_SubV3(player.position, s.position);
+                diff.Y = 0;
+                float d2 = HMM_DotV3(diff, diff);
+                if (d2 < best_dist_sq) {
+                    best_dist_sq = d2;
+                    shop_nearby_stand = i;
+                }
             }
 
-            current_level_name = "Procedural";
-        }; // end do_room_transition
+            // Check proximity to exit door
+            bool near_shop_exit = false;
+            {
+                HMM_Vec3 diff = HMM_SubV3(player.position, shop_data.exit_door_pos);
+                diff.Y = 0;
+                if (HMM_DotV3(diff, diff) < 3.0f * 3.0f)
+                    near_shop_exit = true;
+            }
+
+            if (interact_pressed && shop_interact_cooldown <= 0) {
+                // Buy from stand
+                if (shop_nearby_stand >= 0) {
+                    ShopStand& s = shop_data.stands[shop_nearby_stand];
+                    if (!s.purchased && s.type != ShopStandType::Empty) {
+                        if (s.type == ShopStandType::Weapon) {
+                            int w = s.weapon_index;
+                            int lvl = weapon_level[w];
+                            if (currency >= s.cost) {
+                                if (lvl > 0) {
+                                    // Upgrade existing weapon
+                                    currency -= s.cost;
+                                    weapon_level[w]++;
+                                    switch (w) {
+                                        case 0: weapons[w].init_glock();   break;
+                                        case 1: weapons[w].init_wingman(); break;
+                                        case 2: weapons[w].init_knife();   break;
+                                    }
+                                    apply_weapon_upgrades(w);
+                                    s.purchased = true;
+                                    printf("Upgraded %s to Lv %d\n", s.label, weapon_level[w]);
+                                } else {
+                                    // Buy new weapon (replace current)
+                                    currency -= s.cost;
+                                    weapon_level[active_weapon] = 0;
+                                    weapon_level[w] = 1;
+                                    active_weapon = w;
+                                    weapons[w].ammo = weapons[w].config.mag_size;
+                                    weapons[w].state = WeaponState::IDLE;
+                                    num_weapons = 1;
+                                    s.purchased = true;
+                                    printf("Bought %s\n", s.label);
+                                }
+                                shop_interact_cooldown = 0.3f;
+                            }
+                        } else if (s.type == ShopStandType::Healthpack) {
+                            bool full_hp = (player.health >= player.max_health - 0.1f);
+                            if (!full_hp && currency >= s.cost) {
+                                currency -= s.cost;
+                                player.health += player.max_health * 0.25f;
+                                if (player.health > player.max_health) player.health = player.max_health;
+                                s.purchased = true;
+                                shop_interact_cooldown = 0.3f;
+                                printf("Bought healthpack\n");
+                            }
+                        }
+                    }
+                }
+                // Exit shop → next combat room
+                else if (near_shop_exit) {
+                    in_shop_room = false;
+                    show_shop = false;
+                    shop_weapon = -1;
+
+                    rooms_cleared++;
+                    player.health = player.max_health;
+                    player.damage_accum = 0.0f;
+                    for (int w = 0; w < MAX_WEAPONS; w++) {
+                        weapons[w].ammo = weapons[w].config.mag_size;
+                        weapons[w].state = WeaponState::IDLE;
+                        weapons[w].reload_phase = ReloadPhase::NONE;
+                    }
+                    printf("Entering room %d...\n", rooms_cleared + 1);
+                    procgen_cfg.seed = 0;
+                    procgen_cfg.room_number = rooms_cleared + 1;
+                    procgen_cfg.difficulty = 1.0f + rooms_cleared * 0.15f;
+
+                    LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
+
+                    for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
+                    effects.init();
+
+                    collision.triangles.clear();
+                    collision.ladder_volumes.clear();
+                    collision.build_from_mesh(pld.mesh);
+                    renderer.reload_mesh(pld.mesh);
+
+                    player.position = pld.spawn_pos;
+                    player.velocity = HMM_V3(0, 0, 0);
+                    camera.yaw = HMM_PI32 / 2.0f;
+                    camera.pitch = 0;
+                    noclip = false;
+
+                    for (const auto& es : pld.enemy_spawns) {
+                        if (es.type == EntityType::Drone)
+                            drone_spawn(entities, MAX_ENTITIES, es.position, drone_cfg);
+                        else if (es.type == EntityType::Rusher)
+                            rusher_spawn(entities, MAX_ENTITIES, es.position, rusher_cfg);
+                        else if (es.type == EntityType::Turret)
+                            turret_spawn(entities, MAX_ENTITIES, es.position, turret_cfg);
+                        else if (es.type == EntityType::Tank)
+                            tank_spawn(entities, MAX_ENTITIES, es.position, tank_cfg);
+                        else if (es.type == EntityType::Bomber)
+                            bomber_spawn(entities, MAX_ENTITIES, es.position, bomber_cfg);
+                        else if (es.type == EntityType::Shielder)
+                            shielder_spawn(entities, MAX_ENTITIES, es.position, shielder_cfg);
+                    }
+
+                    current_level_name = "Procedural";
+                    printf("Room transition complete.\n");
+                }
+            }
+        }
         interact_pressed = false; // consume
 
         // Build frustum from current camera for culling
@@ -1428,13 +1557,15 @@ int main(int argc, char* argv[]) {
             ImGui::Text("Gold: %d", currency);
             for (const auto& d : active_doors) {
                 if (d.is_exit) {
-                    if (d.locked)
-                        ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", enemy_count_hud);
-                    else if (near_exit_door)
-                        ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to open shop",
-                                           input_code_name(kb.get(Action::Interact, 0)));
-                    else
-                        ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "EXIT: UNLOCKED");
+                    if (!in_shop_room) {
+                        if (d.locked)
+                            ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "EXIT: LOCKED (%d remaining)", enemy_count_hud);
+                        else if (near_exit_door)
+                            ImGui::TextColored(ImVec4(1,1,0.3f,1), "Press [%s] to enter shop",
+                                               input_code_name(kb.get(Action::Interact, 0)));
+                        else
+                            ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "EXIT: UNLOCKED");
+                    }
                 }
             }
 
@@ -1465,110 +1596,92 @@ int main(int argc, char* argv[]) {
             ImGui::End();
         }
 
-        // --- Shop window ---
-        if (show_shop) {
-            // Pick a random weapon to offer on first open each room
-            if (shop_weapon < 0) {
-                // Offer a weapon other than current, randomly
-                int candidates[3] = {0, 1, 2};
-                int n_cand = 0;
-                for (int i = 0; i < 3; i++)
-                    if (i != active_weapon) candidates[n_cand++] = i;
-                shop_weapon = candidates[rand() % n_cand];
+        // --- Shop room HUD (centered prompts when near stands / exit) ---
+        if (in_shop_room && show_hud && !show_settings) {
+            // Gold display at top center
+            {
+                char gold_buf[64];
+                snprintf(gold_buf, sizeof(gold_buf), "Gold: %d", currency);
+                ImVec2 text_sz = ImGui::CalcTextSize(gold_buf);
+                float cx = renderer.swapchain_width() * 0.5f - text_sz.x * 0.5f;
+                ImGui::SetNextWindowPos(ImVec2(cx, 40));
+                ImGui::SetNextWindowBgAlpha(0.5f);
+                ImGui::Begin("##shop_gold", nullptr,
+                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "%s", gold_buf);
+                ImGui::End();
             }
 
-            ImVec2 center(renderer.swapchain_width() * 0.5f, renderer.swapchain_height() * 0.5f);
-            ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowSize(ImVec2(420, 0));
-            ImGui::Begin("Shop", nullptr,
-                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+            // Stand interaction prompt (bottom center)
+            if (shop_nearby_stand >= 0) {
+                const ShopStand& s = shop_data.stands[shop_nearby_stand];
+                ImVec2 prompt_pos(renderer.swapchain_width() * 0.5f,
+                                  renderer.swapchain_height() * 0.7f);
+                ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+                ImGui::SetNextWindowBgAlpha(0.6f);
+                ImGui::Begin("##shop_prompt", nullptr,
+                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
 
-            ImGui::Text("Gold: %d", currency);
-            ImGui::Separator();
-
-            const char* weapon_names[] = {"Glock", "Wingman", "Throwing Knife"};
-
-            // Current weapon display
-            ImGui::Text("Equipped: %s (Lv %d)", weapon_names[active_weapon], weapon_level[active_weapon]);
-            ImGui::Separator();
-
-            // Weapon slot
-            {
-                int w = shop_weapon;
-                int lvl = weapon_level[w];
-                bool is_upgrade = (lvl > 0); // already own this weapon
-                const char* upgrade_desc[] = {
-                    "+1 dmg, +5%% fire rate",    // Glock
-                    "1.1x damage",               // Wingman
-                    "+5 dmg, +0.1x crit mult"    // Knife
-                };
-                if (is_upgrade) {
-                    ImGui::Text("%s  Lv %d -> %d  (10 gold)", weapon_names[w], lvl, lvl + 1);
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "  %s", upgrade_desc[w]);
-                    ImGui::SameLine();
-                    if (currency >= 10) {
-                        if (ImGui::SmallButton("Upgrade")) {
-                            currency -= 10;
-                            weapon_level[w]++;
-                            // Re-init and apply upgrades
-                            switch (w) {
-                                case 0: weapons[w].init_glock();   break;
-                                case 1: weapons[w].init_wingman(); break;
-                                case 2: weapons[w].init_knife();   break;
-                            }
-                            apply_weapon_upgrades(w);
-                        }
-                    } else {
-                        ImGui::TextDisabled("(not enough)");
-                    }
+                if (s.type == ShopStandType::Empty) {
+                    ImGui::TextDisabled("Coming Soon");
+                } else if (s.purchased) {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "SOLD");
                 } else {
-                    ImGui::Text("%s  (10 gold)", weapon_names[w]);
-                    ImGui::SameLine();
-                    if (currency >= 10) {
-                        if (ImGui::SmallButton("Buy")) {
-                            currency -= 10;
-                            // Unown old weapon
-                            weapon_level[active_weapon] = 0;
-                            // Own new weapon
-                            weapon_level[w] = 1;
-                            active_weapon = w;
-                            weapons[w].ammo = weapons[w].config.mag_size;
-                            weapons[w].state = WeaponState::IDLE;
-                            num_weapons = 1;
+                    const char* interact_key = input_code_name(kb.get(Action::Interact, 0));
+                    if (s.type == ShopStandType::Weapon) {
+                        int w = s.weapon_index;
+                        int lvl = weapon_level[w];
+                        const char* wnames[] = {"Glock", "Wingman", "Throwing Knife"};
+                        const char* upgrade_desc[] = {
+                            "+1 dmg, +5%% fire rate",
+                            "1.1x damage",
+                            "+5 dmg, +0.1x crit mult"
+                        };
+                        if (lvl > 0) {
+                            ImGui::Text("%s  Lv %d -> %d", wnames[w], lvl, lvl + 1);
+                            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", upgrade_desc[w]);
+                        } else {
+                            ImGui::Text("%s", wnames[w]);
                         }
-                    } else {
-                        ImGui::TextDisabled("(not enough)");
+                        if (currency >= s.cost)
+                            ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] %s  (%d gold)",
+                                               interact_key, lvl > 0 ? "Upgrade" : "Buy", s.cost);
+                        else
+                            ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
+                    } else if (s.type == ShopStandType::Healthpack) {
+                        bool full_hp = (player.health >= player.max_health - 0.1f);
+                        ImGui::Text("Healthpack +25%%");
+                        if (full_hp)
+                            ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1), "Full HP");
+                        else if (currency >= s.cost)
+                            ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
+                                               interact_key, s.cost);
+                        else
+                            ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
                     }
                 }
+                ImGui::End();
             }
 
-            ImGui::Separator();
-
-            // Healthpack
+            // Exit door prompt
             {
-                int hp_cost = 5;
-                bool full_hp = (player.health >= player.max_health - 0.1f);
-                ImGui::Text("Healthpack +25%%  (%d gold)", hp_cost);
-                ImGui::SameLine();
-                if (full_hp) {
-                    ImGui::TextDisabled("(full HP)");
-                } else if (currency >= hp_cost) {
-                    if (ImGui::SmallButton("Buy##hp")) {
-                        currency -= hp_cost;
-                        player.health += player.max_health * 0.25f;
-                        if (player.health > player.max_health) player.health = player.max_health;
-                    }
-                } else {
-                    ImGui::TextDisabled("(not enough)");
+                HMM_Vec3 diff = HMM_SubV3(player.position, shop_data.exit_door_pos);
+                diff.Y = 0;
+                if (HMM_DotV3(diff, diff) < 3.0f * 3.0f && shop_nearby_stand < 0) {
+                    ImVec2 prompt_pos(renderer.swapchain_width() * 0.5f,
+                                      renderer.swapchain_height() * 0.7f);
+                    ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+                    ImGui::SetNextWindowBgAlpha(0.6f);
+                    ImGui::Begin("##shop_exit_prompt", nullptr,
+                        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+                    ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "Press [%s] to continue to next room",
+                                       input_code_name(kb.get(Action::Interact, 0)));
+                    ImGui::End();
                 }
             }
-
-            ImGui::Separator();
-            if (ImGui::Button("Continue to next room", ImVec2(-1, 30))) {
-                shop_weapon = -1; // reset for next shop
-                do_room_transition();
-            }
-            ImGui::End();
         }
 
         if (show_hud && !show_settings) {
