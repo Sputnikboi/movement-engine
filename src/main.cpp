@@ -380,12 +380,22 @@ int main(int argc, char* argv[]) {
 
     // Apply upgrade stats based on weapon level
     auto apply_weapon_upgrades = [&](int w) {
-        int lvl = weapon_level[w] - 1; // level 1 = base, 2 = +1 upgrade, etc.
-        if (lvl <= 0) return;
-        weapons[w].config.damage    *= (1.0f + lvl * 0.10f);  // +10% damage per upgrade
-        weapons[w].config.mag_size  += lvl;                     // +1 mag per upgrade
-        weapons[w].config.reload_time *= (1.0f - lvl * 0.05f); // -5% reload per upgrade
-        if (weapons[w].config.reload_time < 0.3f) weapons[w].config.reload_time = 0.3f;
+        int ups = weapon_level[w] - 1; // upgrades above base
+        if (ups <= 0) return;
+        switch (w) {
+            case 0: // Glock: +1 damage, +5% fire rate (additive) per upgrade
+                weapons[w].config.damage    += ups * 1.0f;
+                weapons[w].config.fire_rate *= (1.0f + ups * 0.05f);
+                break;
+            case 1: // Wingman: 1.1x damage per upgrade (multiplicative)
+                for (int i = 0; i < ups; i++)
+                    weapons[w].config.damage *= 1.1f;
+                break;
+            case 2: // Knife: +5 damage, +0.1x crit multiplier per upgrade
+                weapons[w].config.damage          += ups * 5.0f;
+                weapons[w].config.crit_multiplier += ups * 0.1f;
+                break;
+        }
         weapons[w].ammo = weapons[w].config.mag_size;
     };
 
@@ -1487,8 +1497,14 @@ int main(int argc, char* argv[]) {
                 int w = shop_weapon;
                 int lvl = weapon_level[w];
                 bool is_upgrade = (lvl > 0); // already own this weapon
+                const char* upgrade_desc[] = {
+                    "+1 dmg, +5%% fire rate",    // Glock
+                    "1.1x damage",               // Wingman
+                    "+5 dmg, +0.1x crit mult"    // Knife
+                };
                 if (is_upgrade) {
                     ImGui::Text("%s  Lv %d -> %d  (10 gold)", weapon_names[w], lvl, lvl + 1);
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "  %s", upgrade_desc[w]);
                     ImGui::SameLine();
                     if (currency >= 10) {
                         if (ImGui::SmallButton("Upgrade")) {
