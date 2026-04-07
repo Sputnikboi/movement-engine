@@ -19,6 +19,13 @@ static const char* action_ini_key(int i) {
         case Action::Sprint:      return "sprint";
         case Action::Noclip:      return "noclip";
         case Action::ToggleHUD:   return "toggle_hud";
+        case Action::ToggleFullscreen: return "toggle_fullscreen";
+        case Action::Interact:    return "interact";
+        case Action::Holster:     return "holster";
+        case Action::MagazineView: return "magazine_view";
+        case Action::Shoot:       return "shoot";
+        case Action::Reload:      return "reload";
+        case Action::ADS:         return "ads";
         default:                  return nullptr;
     }
 }

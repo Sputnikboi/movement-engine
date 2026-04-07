@@ -120,6 +120,7 @@ struct Keybinds {
         binds[static_cast<int>(Action::Interact)][0]        = SDL_SCANCODE_E;
         binds[static_cast<int>(Action::Holster)][0]         = SDL_SCANCODE_3;
         binds[static_cast<int>(Action::MagazineView)][0]   = SDL_SCANCODE_TAB;
+        binds[static_cast<int>(Action::MagazineView)][1]   = SDL_SCANCODE_Z;
     }
 
     InputCode get(Action a, int slot) const {
