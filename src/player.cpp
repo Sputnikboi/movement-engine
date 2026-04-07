@@ -421,6 +421,47 @@ void Player::ground_move(float dt, const InputState& input, const CollisionWorld
         if (!just_landed)
             apply_friction(dt, slide_friction);
 
+        // Slope acceleration: speed up downhill, slow down uphill
+        if (ground_normal.Y < 0.99f && ground_normal.Y > 0.1f) {
+            HMM_Vec3 grav = HMM_V3(0, -1, 0);
+            float d = HMM_DotV3(grav, ground_normal);
+            HMM_Vec3 slope_dir = HMM_SubV3(grav, HMM_MulV3F(ground_normal, d));
+            float slope_len = HMM_LenV3(slope_dir);
+            if (slope_len > 0.001f) {
+                slope_dir = HMM_MulV3F(slope_dir, 1.0f / slope_len);
+
+                // How aligned is the player's movement with the downhill direction?
+                HMM_Vec3 hvel = HMM_V3(velocity.X, 0, velocity.Z);
+                HMM_Vec3 hslope = HMM_V3(slope_dir.X, 0, slope_dir.Z);
+                float hslope_len = HMM_LenV3(hslope);
+                if (hslope_len > 0.001f) {
+                    hslope = HMM_MulV3F(hslope, 1.0f / hslope_len);
+                    float hvel_len = HMM_LenV3(hvel);
+                    float alignment = (hvel_len > 0.001f)
+                        ? HMM_DotV3(HMM_MulV3F(hvel, 1.0f / hvel_len), hslope)
+                        : 0.0f;
+
+                    // Steepness factor (steeper = stronger effect)
+                    float steepness = 1.0f - ground_normal.Y;
+                    float slope_force = gravity * steepness * 1.5f;
+
+                    if (alignment > 0.1f) {
+                        // Downhill — accelerate along slope direction
+                        velocity.X += hslope.X * slope_force * alignment * dt;
+                        velocity.Z += hslope.Z * slope_force * alignment * dt;
+                    } else if (alignment < -0.1f) {
+                        // Uphill — drag against movement
+                        float drag = slope_force * (-alignment) * dt;
+                        if (hvel_len > 0.001f && drag > 0) {
+                            float factor = fmaxf(0.0f, 1.0f - drag / hvel_len);
+                            velocity.X *= factor;
+                            velocity.Z *= factor;
+                        }
+                    }
+                }
+            }
+        }
+
         // Allow slight steering while sliding
         HMM_Vec3 wish_dir_raw = build_wish_dir(input);
         float wish_len = HMM_LenV3(wish_dir_raw);

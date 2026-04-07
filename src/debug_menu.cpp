@@ -540,7 +540,7 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
             gs.player.air_accel      = 70.0f;
             gs.player.friction       = 6.0f;
             gs.player.jump_speed     = 7.2f;
-            gs.player.slide_friction = 0.8f;
+            gs.player.slide_friction = 0.4f;
             gs.player.slide_boost    = 3.0f;
             gs.player.slide_min_speed = 6.0f;
             gs.player.slide_stop_speed = 3.0f;

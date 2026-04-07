@@ -47,7 +47,7 @@ struct Player {
     float step_height     = 0.5f;
 
     // --- Slide parameters ---
-    float slide_friction         = 0.8f;   // much lower than normal friction
+    float slide_friction         = 0.4f;   // much lower than normal friction
     float slide_boost            = 2.1f;   // speed burst on power slide start
     float slide_stop_speed       = 3.0f;   // auto-cancel slide below this speed
     float slide_boost_cooldown   = 1.5f;   // seconds between power slide boosts
