@@ -530,6 +530,18 @@ int main(int argc, char* argv[]) {
     };
 
     while (running) {
+        // Helper: is entity a live (non-dying) enemy?
+        auto is_live_enemy = [&](const Entity& e) -> bool {
+            if (!e.alive) return false;
+            if (e.type == EntityType::Drone)    return e.ai_state != DRONE_DYING    && e.ai_state != DRONE_DEAD;
+            if (e.type == EntityType::Rusher)   return e.ai_state != RUSHER_DYING   && e.ai_state != RUSHER_DEAD;
+            if (e.type == EntityType::Turret)   return e.ai_state != TURRET_DYING   && e.ai_state != TURRET_DEAD;
+            if (e.type == EntityType::Tank)     return e.ai_state != TANK_DYING     && e.ai_state != TANK_DEAD;
+            if (e.type == EntityType::Bomber)   return e.ai_state != BOMBER_DYING   && e.ai_state != BOMBER_DEAD;
+            if (e.type == EntityType::Shielder) return e.ai_state != SHIELDER_DYING && e.ai_state != SHIELDER_DEAD;
+            return false;
+        };
+
         float mouse_dx = 0.0f, mouse_dy = 0.0f;
 
         SDL_Event event;
@@ -916,8 +928,7 @@ int main(int argc, char* argv[]) {
 
                 for (int i = 0; i < MAX_ENTITIES; i++) {
                     Entity& e = entities[i];
-                    if (!e.alive) continue;
-                    if (e.type == EntityType::Projectile || e.type == EntityType::None) continue;
+                    if (!is_live_enemy(e)) continue;
 
                     // Ray-sphere intersection
                     HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
@@ -1135,18 +1146,6 @@ int main(int argc, char* argv[]) {
 
             projectiles_update(entities, MAX_ENTITIES, collision, dt);
 
-            // Helper: is entity a live (non-dying) enemy?
-            auto is_live_enemy = [](const Entity& e) -> bool {
-                if (!e.alive) return false;
-                if (e.type == EntityType::Drone)    return e.ai_state != DRONE_DYING    && e.ai_state != DRONE_DEAD;
-                if (e.type == EntityType::Rusher)   return e.ai_state != RUSHER_DYING   && e.ai_state != RUSHER_DEAD;
-                if (e.type == EntityType::Turret)   return e.ai_state != TURRET_DYING   && e.ai_state != TURRET_DEAD;
-                if (e.type == EntityType::Tank)     return e.ai_state != TANK_DYING     && e.ai_state != TANK_DEAD;
-                if (e.type == EntityType::Bomber)   return e.ai_state != BOMBER_DYING   && e.ai_state != BOMBER_DEAD;
-                if (e.type == EntityType::Shielder) return e.ai_state != SHIELDER_DYING && e.ai_state != SHIELDER_DEAD;
-                return false;
-            };
-
             // --- Enemy-player collision (push apart) ---
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& e = entities[i];
@@ -1197,8 +1196,8 @@ int main(int argc, char* argv[]) {
                 bool hit_something = false;
                 for (int j = 0; j < MAX_ENTITIES; j++) {
                     Entity& e = entities[j];
-                    if (!e.alive || j == i) continue;
-                    if (e.type == EntityType::Projectile || e.type == EntityType::None) continue;
+                    if (j == i) continue;
+                    if (!is_live_enemy(e)) continue;
 
                     float dist = HMM_LenV3(HMM_SubV3(proj.position, e.position));
                     if (dist < proj.radius + e.radius) {

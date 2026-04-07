@@ -73,19 +73,31 @@ void shop_enter(GameState& gs) {
 
 // Spawn enemies from level data with difficulty scaling
 static void spawn_enemies_from_level(GameState& gs, const LevelData& pld) {
+    float diff = gs.procgen_cfg.difficulty;
+    float hp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.hp_scale_per_room / 0.15f);
+    float dm_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.dmg_scale_per_room / 0.15f);
+    float sp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.spd_scale_per_room / 0.15f);
+
+    auto dr = gs.drone_cfg;   dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
+    auto ru = gs.rusher_cfg;   ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
+    auto tu = gs.turret_cfg;   tu.health *= hp_s; tu.beam_dps *= dm_s; tu.track_speed *= sp_s;
+    auto tk = gs.tank_cfg;     tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
+    auto bo = gs.bomber_cfg;   bo.health *= hp_s; bo.explosion_damage *= dm_s; bo.approach_speed *= sp_s; bo.dive_speed *= sp_s;
+    auto sh = gs.shielder_cfg; sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
+
     for (const auto& es : pld.enemy_spawns) {
         if (es.type == EntityType::Drone)
-            drone_spawn(gs.entities, gs.max_entities, es.position, gs.drone_cfg);
+            drone_spawn(gs.entities, gs.max_entities, es.position, dr);
         else if (es.type == EntityType::Rusher)
-            rusher_spawn(gs.entities, gs.max_entities, es.position, gs.rusher_cfg);
+            rusher_spawn(gs.entities, gs.max_entities, es.position, ru);
         else if (es.type == EntityType::Turret)
-            turret_spawn(gs.entities, gs.max_entities, es.position, gs.turret_cfg);
+            turret_spawn(gs.entities, gs.max_entities, es.position, tu);
         else if (es.type == EntityType::Tank)
-            tank_spawn(gs.entities, gs.max_entities, es.position, gs.tank_cfg);
+            tank_spawn(gs.entities, gs.max_entities, es.position, tk);
         else if (es.type == EntityType::Bomber)
-            bomber_spawn(gs.entities, gs.max_entities, es.position, gs.bomber_cfg);
+            bomber_spawn(gs.entities, gs.max_entities, es.position, bo);
         else if (es.type == EntityType::Shielder)
-            shielder_spawn(gs.entities, gs.max_entities, es.position, gs.shielder_cfg);
+            shielder_spawn(gs.entities, gs.max_entities, es.position, sh);
     }
 }
 
