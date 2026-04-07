@@ -154,22 +154,21 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         s.purchased = true;
                         printf("Upgraded %s to Lv %d\n", s.label, gs.weapon_level[w]);
                     } else {
-                        // Buy new weapon (replace current)
+                        // Swap to weapon (keep old weapon's level for later)
                         gs.currency -= s.cost;
-                        gs.weapon_level[gs.active_weapon] = 0;
-                        gs.weapon_level[w] = 1;
+                        if (gs.weapon_level[w] < 1) gs.weapon_level[w] = 1;
                         gs.active_weapon = w;
-                        // Re-init to base stats (clears stale leveled-up config)
+                        // Re-init to base stats then apply stored level
                         switch (w) {
                             case 0: gs.weapons[w].init_glock();   break;
                             case 1: gs.weapons[w].init_wingman(); break;
                             case 2: gs.weapons[w].init_knife();   break;
                         }
-                        gs.weapons[w].ammo = gs.weapons[w].config.mag_size;
+                        gs.apply_weapon_upgrades(w);
                         gs.weapons[w].state = WeaponState::IDLE;
                         gs.num_weapons = 1;
                         s.purchased = true;
-                        printf("Bought %s\n", s.label);
+                        printf("Bought %s (Lv %d)\n", s.label, gs.weapon_level[w]);
                     }
                     gs.shop_interact_cooldown = 0.3f;
                 }
