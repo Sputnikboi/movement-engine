@@ -975,6 +975,8 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
     HMM_Vec3 ped_top_weapon = {0.6f, 0.5f, 0.2f};    // gold top for weapon
     HMM_Vec3 ped_top_health = {0.2f, 0.6f, 0.3f};    // green top for health
     HMM_Vec3 ped_top_empty  = {0.3f, 0.3f, 0.35f};   // grey for empty
+    HMM_Vec3 ped_top_tipping = {0.7f, 0.35f, 0.2f};  // copper/orange for tipping
+    HMM_Vec3 ped_top_enchant = {0.3f, 0.2f, 0.7f};   // purple for enchantment
 
     struct StandPlacement {
         float x, z;
@@ -987,8 +989,8 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
     StandPlacement placements[] = {
         { -3.5f,  2.0f, ShopStandType::Weapon,     "Weapon",       ped_top_weapon },
         {  3.5f,  2.0f, ShopStandType::Healthpack,  "Healthpack",   ped_top_health },
-        { -3.5f,  6.0f, ShopStandType::Empty,       "Coming Soon",  ped_top_empty  },
-        {  3.5f,  6.0f, ShopStandType::Empty,       "Coming Soon",  ped_top_empty  },
+        { -3.5f,  6.0f, ShopStandType::ModTipping,    "Tipping",      ped_top_tipping },
+        {  3.5f,  6.0f, ShopStandType::ModEnchantment, "Enchantment",  ped_top_enchant },
     };
 
     for (const auto& sp : placements) {
@@ -1015,6 +1017,19 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
         add_box(m, hp_pos, 0.5f, 0.12f, 0.15f, hp_col, 0);
         // Vertical bar
         add_box(m, hp_pos, 0.15f, 0.12f, 0.5f, hp_col, 0);
+    }
+
+    // Tipping stand: small copper diamond
+    {
+        HMM_Vec3 tip_pos = HMM_V3(-3.5f, pedestal_height + 0.35f, 6.0f);
+        HMM_Vec3 tip_col = {0.7f, 0.35f, 0.2f};
+        add_box(m, tip_pos, 0.2f, 0.3f, 0.2f, tip_col, 0.15f);  // rotated box = diamond
+    }
+    // Enchantment stand: small purple crystal
+    {
+        HMM_Vec3 ench_pos = HMM_V3(3.5f, pedestal_height + 0.35f, 6.0f);
+        HMM_Vec3 ench_col = {0.3f, 0.2f, 0.7f};
+        add_box(m, ench_pos, 0.15f, 0.35f, 0.15f, ench_col, 0.1f);  // tall narrow crystal
     }
 
     // --- Spawn point (just inside entry door) ---

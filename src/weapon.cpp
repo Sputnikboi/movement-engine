@@ -105,7 +105,7 @@ void Weapon::init_knife() {
     config.damage          = 60.0f;
     config.fire_rate       = 1.5f;
     config.range           = 200.0f;
-    config.mag_size        = 1;
+    config.mag_size        = 15;
     config.reload_time     = 0.0f;
     config.crit_multiplier = 2.5f;
     config.infinite_ammo   = true;
@@ -328,6 +328,10 @@ bool Weapon::try_fire() {
     if (state == WeaponState::SWAPPING) return false;
     if (fire_timer > 0.0f) return false;
     if (ammo <= 0 && !config.infinite_ammo) return false;
+
+    // Record the mod on the round about to be fired
+    int round_index = config.mag_size - ammo;  // 0 = first shot
+    last_fired_mod = magazine.get(round_index);
 
     if (!config.infinite_ammo)
         ammo--;

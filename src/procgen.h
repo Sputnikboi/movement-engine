@@ -1,6 +1,7 @@
 #pragma once
 
 #include "level_loader.h"
+#include "bullet_mods.h"
 #include "vendor/HandmadeMath.h"
 
 struct ProcGenConfig {
@@ -104,7 +105,9 @@ LevelData generate_level(const ProcGenConfig& config,
 enum class ShopStandType : uint8_t {
     Weapon,
     Healthpack,
-    Empty,    // placeholder for future upgrades
+    ModTipping,
+    ModEnchantment,
+    Empty,
 };
 
 struct ShopStand {
@@ -114,6 +117,10 @@ struct ShopStand {
     int           cost;
     bool          purchased;      // already bought this visit
     const char*   label;          // display name
+
+    // Mod stand fields
+    Tipping       offered_tipping     = Tipping::None;
+    Enchantment   offered_enchantment = Enchantment::None;
 };
 
 struct ShopRoomData {

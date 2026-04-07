@@ -39,6 +39,18 @@ void shop_enter(GameState& gs) {
             s.cost = 10;
         } else if (s.type == ShopStandType::Healthpack) {
             s.cost = 5;
+        } else if (s.type == ShopStandType::ModTipping) {
+            // Offer a random non-None tipping
+            int t = 1 + rand() % ((int)Tipping::COUNT - 1);
+            s.offered_tipping = static_cast<Tipping>(t);
+            s.label = tipping_name(s.offered_tipping);
+            s.cost = 8;
+        } else if (s.type == ShopStandType::ModEnchantment) {
+            // Offer a random non-None enchantment
+            int e = 1 + rand() % ((int)Enchantment::COUNT - 1);
+            s.offered_enchantment = static_cast<Enchantment>(e);
+            s.label = enchantment_name(s.offered_enchantment);
+            s.cost = 8;
         }
     }
 
@@ -182,6 +194,28 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     s.purchased = true;
                     gs.shop_interact_cooldown = 0.3f;
                     printf("Bought healthpack\n");
+                }
+            } else if (s.type == ShopStandType::ModTipping) {
+                if (gs.currency >= s.cost) {
+                    gs.currency -= s.cost;
+                    // Apply tipping to all rounds in active weapon's magazine
+                    Weapon& w = gs.weapons[gs.active_weapon];
+                    for (int r = 0; r < w.magazine.capacity; r++)
+                        w.magazine.set_tipping(r, s.offered_tipping);
+                    s.purchased = true;
+                    gs.shop_interact_cooldown = 0.3f;
+                    printf("Applied %s tipping to all rounds\n", tipping_name(s.offered_tipping));
+                }
+            } else if (s.type == ShopStandType::ModEnchantment) {
+                if (gs.currency >= s.cost) {
+                    gs.currency -= s.cost;
+                    // Apply enchantment to all rounds in active weapon's magazine
+                    Weapon& w = gs.weapons[gs.active_weapon];
+                    for (int r = 0; r < w.magazine.capacity; r++)
+                        w.magazine.set_enchantment(r, s.offered_enchantment);
+                    s.purchased = true;
+                    gs.shop_interact_cooldown = 0.3f;
+                    printf("Applied %s enchantment to all rounds\n", enchantment_name(s.offered_enchantment));
                 }
             }
         }
@@ -365,6 +399,30 @@ void shop_draw_hud(GameState& gs) {
                 if (full_hp)
                     ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1), "Full HP");
                 else if (gs.currency >= s.cost)
+                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
+                                       interact_key, s.cost);
+                else
+                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
+            } else if (s.type == ShopStandType::ModTipping) {
+                ImGui::TextColored(ImVec4(0.9f,0.5f,0.2f,1), "Tipping: %s",
+                                   tipping_name(s.offered_tipping));
+                ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
+                                   tipping_desc(s.offered_tipping));
+                ImGui::Text("Applies to all %d rounds",
+                            gs.weapons[gs.active_weapon].magazine.capacity);
+                if (gs.currency >= s.cost)
+                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
+                                       interact_key, s.cost);
+                else
+                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
+            } else if (s.type == ShopStandType::ModEnchantment) {
+                ImGui::TextColored(ImVec4(0.5f,0.3f,0.9f,1), "Enchantment: %s",
+                                   enchantment_name(s.offered_enchantment));
+                ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
+                                   enchantment_desc(s.offered_enchantment));
+                ImGui::Text("Applies to all %d rounds",
+                            gs.weapons[gs.active_weapon].magazine.capacity);
+                if (gs.currency >= s.cost)
                     ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
                                        interact_key, s.cost);
                 else

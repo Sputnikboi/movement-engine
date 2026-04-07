@@ -1,5 +1,7 @@
 #pragma once
 
+#include "bullet_mods.h"
+
 #include "vendor/HandmadeMath.h"
 #include "mesh.h"
 #include "camera.h"
@@ -98,6 +100,8 @@ struct Weapon {
     WeaponState  state      = WeaponState::IDLE;
     int          ammo       = 6;
     float        fire_timer = 0.0f;   // counts down to 0
+    Magazine     magazine;             // per-round mod slots
+    RoundMod     last_fired_mod;       // mod on the most recently fired round
     float        reload_timer = 0.0f;
     float        ads_blend  = 0.0f;   // 0 = hip, 1 = ADS
     bool         ads_held   = false;

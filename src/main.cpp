@@ -35,6 +35,7 @@
 #include "hud.h"
 #include "debug_menu.h"
 #include "damage_numbers.h"
+#include "bullet_mods.h"
 
 namespace fs = std::filesystem;
 
@@ -950,7 +951,18 @@ int main(int argc, char* argv[]) {
 
                 if (best_idx >= 0) {
                     Entity& hit_ent = entities[best_idx];
-                    hit_ent.health -= weapon.config.damage;
+
+                    // Apply round mods to damage
+                    RoundMod rm = weapon.last_fired_mod;
+                    float base_dmg = weapon.config.damage;
+
+                    // Tipping effects
+                    if (rm.tipping == Tipping::Hollow_Point && hit_ent.shield_hp <= 0)
+                        base_dmg *= 1.5f;
+                    if (rm.tipping == Tipping::Sharpened)
+                        base_dmg *= weapon.config.crit_multiplier;
+
+                    hit_ent.health -= base_dmg;
                     // Set hit flash per type
                     if (hit_ent.type == EntityType::Turret)
                         hit_ent.hit_flash = turret_cfg.hit_flash_time;
@@ -966,11 +978,18 @@ int main(int argc, char* argv[]) {
                     // Apply shield barrier absorption
                     float actual_dmg_display;
                     {
-                        float raw_dmg = weapon.config.damage;
-                        float actual_dmg = shielder_absorb_damage(hit_ent, raw_dmg);
-                        // Refund the difference (damage was already fully applied above)
+                        bool ap = (rm.tipping == Tipping::Armor_Piercing);
+                        float raw_dmg = base_dmg;
+                        float actual_dmg = ap ? raw_dmg : shielder_absorb_damage(hit_ent, raw_dmg);
                         hit_ent.health += (raw_dmg - actual_dmg);
                         actual_dmg_display = actual_dmg;
+                    }
+
+                    // Enchantment effects
+                    if (rm.enchantment == Enchantment::Vampiric) {
+                        player.health += actual_dmg_display * 0.1f;
+                        if (player.health > player.max_health)
+                            player.health = player.max_health;
                     }
 
                     // Floating damage number at hit point
