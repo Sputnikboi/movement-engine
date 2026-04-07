@@ -159,6 +159,12 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         gs.weapon_level[gs.active_weapon] = 0;
                         gs.weapon_level[w] = 1;
                         gs.active_weapon = w;
+                        // Re-init to base stats (clears stale leveled-up config)
+                        switch (w) {
+                            case 0: gs.weapons[w].init_glock();   break;
+                            case 1: gs.weapons[w].init_wingman(); break;
+                            case 2: gs.weapons[w].init_knife();   break;
+                        }
                         gs.weapons[w].ammo = gs.weapons[w].config.mag_size;
                         gs.weapons[w].state = WeaponState::IDLE;
                         gs.num_weapons = 1;
