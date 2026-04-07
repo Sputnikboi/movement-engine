@@ -3,7 +3,7 @@
 #include "vendor/HandmadeMath.h"
 
 // ============================================================
-//  Floating damage numbers (screen-space UI)
+//  Floating damage numbers (screen-space UI, stacking)
 // ============================================================
 
 struct DamageNumber {
@@ -11,17 +11,20 @@ struct DamageNumber {
     float    velocity_y;   // upward drift
     float    lifetime;     // remaining seconds
     float    max_lifetime;
-    int      value;        // damage amount (integer display)
+    int      value;        // accumulated damage (integer display)
+    int      entity_id;    // entity index this is tracking (-1 = none)
     bool     is_kill;      // show as kill (different color)
     bool     active;
 };
 
 struct DamageNumberSystem {
     static constexpr int MAX_NUMBERS = 64;
+    static constexpr float STACK_WINDOW = 1.0f; // seconds to accumulate hits
     DamageNumber numbers[MAX_NUMBERS] = {};
 
-    // Spawn a new floating damage number at world position.
-    void spawn(HMM_Vec3 pos, int damage, bool is_kill = false);
+    // Spawn or stack a damage number at world position for a given entity.
+    // If entity_id >= 0 and a recent number exists for that entity, stacks.
+    void spawn(HMM_Vec3 pos, int damage, int entity_id = -1, bool is_kill = false);
 
     // Update positions + lifetimes. Call once per frame.
     void update(float dt);

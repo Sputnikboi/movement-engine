@@ -7,7 +7,26 @@
 //  Spawn / Update
 // ============================================================
 
-void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, bool is_kill) {
+void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, int entity_id, bool is_kill) {
+    // Try to stack onto an existing number for the same entity
+    if (entity_id >= 0) {
+        for (int i = 0; i < MAX_NUMBERS; i++) {
+            DamageNumber& dn = numbers[i];
+            if (!dn.active) continue;
+            if (dn.entity_id != entity_id) continue;
+            if ((dn.max_lifetime - dn.lifetime) > STACK_WINDOW) continue;
+
+            // Stack: add damage, refresh lifetime and position
+            dn.value += damage;
+            dn.lifetime = dn.max_lifetime;
+            dn.velocity_y = 1.8f;
+            dn.position = pos;
+            if (is_kill) dn.is_kill = true;
+            return;
+        }
+    }
+
+    // No existing number to stack on — find a free slot (or oldest)
     int best = -1;
     float oldest_life = 999.0f;
     for (int i = 0; i < MAX_NUMBERS; i++) {
@@ -25,6 +44,7 @@ void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, bool is_kill) {
     dn.max_lifetime = 0.9f;
     dn.lifetime = dn.max_lifetime;
     dn.value = damage;
+    dn.entity_id = entity_id;
     dn.is_kill = is_kill;
     dn.active = true;
 }

@@ -970,7 +970,7 @@ int main(int argc, char* argv[]) {
                         hit_pos.X += randf(-0.2f, 0.2f);
                         hit_pos.Z += randf(-0.2f, 0.2f);
                         bool is_kill = (hit_ent.health <= 0);
-                        dmg_numbers.spawn(hit_pos, (int)actual_dmg_display, is_kill);
+                        dmg_numbers.spawn(hit_pos, (int)actual_dmg_display, best_idx, is_kill);
                     }
 
                     // Wake up idle enemies on hit
@@ -1214,7 +1214,7 @@ int main(int argc, char* argv[]) {
                             hit_pos.X += randf(-0.2f, 0.2f);
                             hit_pos.Z += randf(-0.2f, 0.2f);
                             bool is_kill = (e.health <= 0);
-                            dmg_numbers.spawn(hit_pos, (int)actual_dmg, is_kill);
+                            dmg_numbers.spawn(hit_pos, (int)actual_dmg, j, is_kill);
                         }
 
                         // Hit flash
