@@ -588,8 +588,17 @@ int main(int argc, char* argv[]) {
                         jump_held = true;
                     if (kb.matches_scancode(Action::Interact, event.key.scancode) && !event.key.repeat)
                         interact_pressed = true;
-                    if (kb.matches_scancode(Action::Holster, event.key.scancode) && !event.key.repeat)
-                        player.weapon_holstered = !player.weapon_holstered;
+                    if (kb.matches_scancode(Action::Holster, event.key.scancode) && !event.key.repeat) {
+                        Weapon& hw = weapons[active_weapon];
+                        if (player.weapon_holstered) {
+                            // Unholster: start raising
+                            player.weapon_holstered = false;
+                            hw.begin_unholster();
+                        } else if (hw.state == WeaponState::IDLE || hw.state == WeaponState::FIRING) {
+                            // Holster: start lowering
+                            hw.begin_holster();
+                        }
+                    }
                 }
                 break;
 
@@ -768,13 +777,25 @@ int main(int argc, char* argv[]) {
             for (int w = 0; w < MAX_WEAPONS; w++) {
                 if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings && weapon_level[w] > 0 && !show_shop) {
                     // Unholster if holstered
-                    if (player.weapon_holstered)
+                    if (player.weapon_holstered) {
                         player.weapon_holstered = false;
+                        weapons[active_weapon].begin_unholster();
+                    }
                     // Switch weapon if different
                     if (w != active_weapon && weapons[active_weapon].state != WeaponState::SWAPPING) {
                         pending_weapon = w;
                         weapons[active_weapon].begin_swap();
                     }
+                }
+            }
+
+            // Check if holster lowering is done — set holstered flag
+            {
+                Weapon& hw = weapons[active_weapon];
+                if (hw.holster_lowering && hw.state == WeaponState::IDLE) {
+                    // Lowering animation finished, now mark holstered
+                    player.weapon_holstered = true;
+                    hw.holster_lowering = false;
                 }
             }
 
@@ -1423,7 +1444,12 @@ int main(int argc, char* argv[]) {
         scene.camera_pos = HMM_V4(camera.position.X, camera.position.Y, camera.position.Z, 0.0f);
 
         // Viewmodel scene data — same view, but tighter near plane to prevent clipping
-        const Mesh* vm_mesh_ptr = (weapons[active_weapon].mesh_loaded && !player.weapon_holstered) ? &weapons[active_weapon].viewmodel_mesh : nullptr;
+        const Mesh* vm_mesh_ptr = nullptr;
+        {
+            Weapon& vw = weapons[active_weapon];
+            bool show_vm = vw.mesh_loaded && (!player.weapon_holstered || vw.holster_raising);
+            if (show_vm) vm_mesh_ptr = &vw.viewmodel_mesh;
+        }
         HMM_Mat4 vm_model = weapons[active_weapon].get_viewmodel_matrix(camera);
         HMM_Mat4 vm_mag_model = weapons[active_weapon].get_mag_matrix(camera);
         SceneData vm_scene = scene;

@@ -159,9 +159,31 @@ void Weapon::begin_swap() {
     state = WeaponState::SWAPPING;
     swap_timer = swap_duration;
     swap_raising = false;  // lowering first
+    holster_lowering = false;
+    holster_raising = false;
     fire_timer = 0.0f;
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
+}
+
+void Weapon::begin_holster() {
+    if (state == WeaponState::SWAPPING) return;
+    state = WeaponState::SWAPPING;
+    swap_timer = swap_duration;
+    swap_raising = false;   // lowering
+    holster_lowering = true;
+    holster_raising = false;
+    fire_timer = 0.0f;
+    reload_buffered = false;
+    reload_phase = ReloadPhase::NONE;
+}
+
+void Weapon::begin_unholster() {
+    state = WeaponState::SWAPPING;
+    swap_timer = swap_duration;
+    swap_raising = true;    // raising
+    holster_lowering = false;
+    holster_raising = true;
 }
 
 // ============================================================
@@ -253,14 +275,22 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
         swap_timer -= dt;
         if (swap_timer <= 0.0f) {
             if (!swap_raising) {
-                // Lowered — caller should now switch weapon data
-                // Raise phase handled after weapon data swap in main.cpp
-                swap_timer = 0.0f;
-                // Stay in SWAPPING until caller sets swap_raising
+                if (holster_lowering) {
+                    // Holster complete — main.cpp will set weapon_holstered
+                    // and clear holster_lowering
+                    state = WeaponState::IDLE;
+                    swap_timer = 0.0f;
+                } else {
+                    // Lowered — caller should now switch weapon data
+                    // Raise phase handled after weapon data swap in main.cpp
+                    swap_timer = 0.0f;
+                    // Stay in SWAPPING until caller sets swap_raising
+                }
             } else {
                 // Raised — done
                 state = WeaponState::IDLE;
                 swap_timer = 0.0f;
+                holster_raising = false;
             }
         }
         break;

@@ -127,13 +127,19 @@ struct Weapon {
     float        swap_duration = 0.35f;  // seconds per half (lower + raise)
     bool         swap_raising  = false;  // false = lowering, true = raising
 
+    // Holster animation (reuses swap_timer/swap_blend visuals)
+    bool         holster_lowering = false; // lowering to holster
+    bool         holster_raising  = false; // raising from holster
+
     // --- Methods ---
     void init_wingman();
     void init_glock();
     void init_knife();
     void update(float dt, bool fire_pressed, bool reload_pressed, bool ads_held);
     bool try_fire();
-    void begin_swap();   // start lowering weapon for swap
+    void begin_swap();      // start lowering weapon for swap
+    void begin_holster();   // start lowering weapon to holster
+    void begin_unholster(); // start raising weapon from holster
 
     // Viewmodel matrices
     HMM_Mat4 get_viewmodel_matrix(const Camera& cam) const;
