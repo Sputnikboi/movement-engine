@@ -1286,6 +1286,9 @@ int main(int argc, char* argv[]) {
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);
         effects.append_to_mesh(entity_mesh);
 
+        // Shop: spinning weapon display models on stands
+        shop_build_display_meshes(gs, entity_mesh, total_time);
+
         // Transparent death effects (outer glow)
         Mesh transparent_mesh;
         effects.append_transparent(transparent_mesh);

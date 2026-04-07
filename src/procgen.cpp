@@ -815,10 +815,9 @@ static void add_pedestal(Mesh& m, HMM_Vec3 base_pos, float radius, float height,
         add_quad(m, bot[i], top_v[i], top_v[j], bot[j], normal, body_color);
     }
 
-    // Top face (fan of triangles)
+    // Top face (fan of triangles, CCW when viewed from +Y)
     {
         HMM_Vec3 center_top = HMM_V3(base_pos.X, base_pos.Y + height, base_pos.Z);
-        HMM_Vec3 up = HMM_V3(0, 1, 0);
         uint32_t center_idx = (uint32_t)m.vertices.size();
         Vertex3D cv;
         cv.pos[0] = center_top.X; cv.pos[1] = center_top.Y; cv.pos[2] = center_top.Z;
@@ -827,7 +826,6 @@ static void add_pedestal(Mesh& m, HMM_Vec3 base_pos, float radius, float height,
         m.vertices.push_back(cv);
 
         for (int i = 0; i < SIDES; i++) {
-            uint32_t vi = (uint32_t)m.vertices.size();
             Vertex3D v;
             v.pos[0] = top_v[i].X; v.pos[1] = top_v[i].Y; v.pos[2] = top_v[i].Z;
             v.normal[0] = 0; v.normal[1] = 1; v.normal[2] = 0;
@@ -837,12 +835,12 @@ static void add_pedestal(Mesh& m, HMM_Vec3 base_pos, float radius, float height,
         for (int i = 0; i < SIDES; i++) {
             int j = (i + 1) % SIDES;
             m.indices.push_back(center_idx);
-            m.indices.push_back(center_idx + 1 + i);
             m.indices.push_back(center_idx + 1 + j);
+            m.indices.push_back(center_idx + 1 + i);
         }
     }
 
-    // Bottom face (fan, facing down)
+    // Bottom face (fan, facing -Y)
     {
         HMM_Vec3 center_bot = base_pos;
         uint32_t center_idx = (uint32_t)m.vertices.size();
@@ -853,7 +851,6 @@ static void add_pedestal(Mesh& m, HMM_Vec3 base_pos, float radius, float height,
         m.vertices.push_back(cv);
 
         for (int i = 0; i < SIDES; i++) {
-            uint32_t vi = (uint32_t)m.vertices.size();
             Vertex3D v;
             v.pos[0] = bot[i].X; v.pos[1] = bot[i].Y; v.pos[2] = bot[i].Z;
             v.normal[0] = 0; v.normal[1] = -1; v.normal[2] = 0;
@@ -863,8 +860,8 @@ static void add_pedestal(Mesh& m, HMM_Vec3 base_pos, float radius, float height,
         for (int i = 0; i < SIDES; i++) {
             int j = (i + 1) % SIDES;
             m.indices.push_back(center_idx);
-            m.indices.push_back(center_idx + 1 + j);
             m.indices.push_back(center_idx + 1 + i);
+            m.indices.push_back(center_idx + 1 + j);
         }
     }
 }
@@ -1009,12 +1006,7 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
     }
 
     // --- Small floating item markers above stands ---
-    // Weapon stand: small rotating box (placeholder for weapon model)
-    {
-        HMM_Vec3 item_pos = HMM_V3(-3.5f, pedestal_height + 0.15f, 2.0f);
-        HMM_Vec3 item_col = {0.7f, 0.6f, 0.25f};
-        add_box(m, item_pos, 0.3f, 0.2f, 0.6f, item_col, 0.3f);
-    }
+    // Weapon stand: display model is added dynamically each frame (spinning)
     // Health stand: green cross
     {
         HMM_Vec3 hp_pos = HMM_V3(3.5f, pedestal_height + 0.15f, 2.0f);

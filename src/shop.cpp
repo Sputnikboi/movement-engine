@@ -21,13 +21,9 @@ void shop_enter(GameState& gs) {
     gs.in_shop_room = true;
     gs.show_shop = true;  // gates entity updates / weapon switching
 
-    // Pick weapon to offer this shop visit
+    // Pick weapon to offer this shop visit (can be active weapon for upgrade)
     if (gs.shop_weapon < 0) {
-        int candidates[3] = {0, 1, 2};
-        int n_cand = 0;
-        for (int i = 0; i < 3; i++)
-            if (i != gs.active_weapon) candidates[n_cand++] = i;
-        gs.shop_weapon = candidates[rand() % n_cand];
+        gs.shop_weapon = rand() % 3;
     }
 
     // Generate the shop room
@@ -218,6 +214,54 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
     }
 
     return false;
+}
+
+// ============================================================
+//  Shop display meshes (spinning weapon models on stands)
+// ============================================================
+
+static void append_mesh_rotated(Mesh& out, const Mesh& src,
+                                HMM_Vec3 pos, float yaw, float scale) {
+    uint32_t base = static_cast<uint32_t>(out.vertices.size());
+    HMM_Mat4 rot = HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0));
+
+    for (const auto& sv : src.vertices) {
+        Vertex3D v = sv;
+        HMM_Vec3 p = HMM_V3(sv.pos[0] * scale, sv.pos[1] * scale, sv.pos[2] * scale);
+        HMM_Vec4 rp = HMM_MulM4V4(rot, HMM_V4(p.X, p.Y, p.Z, 1.0f));
+        v.pos[0] = rp.X + pos.X;
+        v.pos[1] = rp.Y + pos.Y;
+        v.pos[2] = rp.Z + pos.Z;
+        HMM_Vec4 rn = HMM_MulM4V4(rot, HMM_V4(sv.normal[0], sv.normal[1], sv.normal[2], 0.0f));
+        v.normal[0] = rn.X;
+        v.normal[1] = rn.Y;
+        v.normal[2] = rn.Z;
+        out.vertices.push_back(v);
+    }
+    for (uint32_t idx : src.indices)
+        out.indices.push_back(base + idx);
+}
+
+void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
+    if (!gs.in_shop_room) return;
+
+    float spin_yaw = time * 1.5f;  // ~1.5 rad/s, smooth spin
+
+    for (const auto& s : gs.shop_data.stands) {
+        if (s.purchased) continue;
+
+        if (s.type == ShopStandType::Weapon) {
+            int w = s.weapon_index;
+            if (w >= 0 && w < GameState::MAX_WEAPONS && gs.weapons[w].mesh_loaded) {
+                float display_scale = gs.weapons[w].config.model_scale * 3.0f;
+                HMM_Vec3 display_pos = s.position;
+                display_pos.Y += 0.4f;  // float above pedestal
+                append_mesh_rotated(out, gs.weapons[w].viewmodel_mesh,
+                                    display_pos, spin_yaw, display_scale);
+            }
+        }
+        // Healthpack cross stays as static geometry (built into room mesh)
+    }
 }
 
 // ============================================================
