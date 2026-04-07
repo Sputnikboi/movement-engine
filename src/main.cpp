@@ -1335,11 +1335,10 @@ int main(int argc, char* argv[]) {
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);
         effects.append_to_mesh(entity_mesh);
 
-        // Health bars + damage numbers (billboarded)
+        // Health bars (billboarded geometry)
         HMM_Vec3 cam_right = camera.right();
         HMM_Vec3 cam_up = HMM_NormV3(HMM_Cross(camera.forward(), cam_right));
         build_health_bars(entity_mesh, entities, MAX_ENTITIES, frustum, cam_right, cam_up);
-        dmg_numbers.build_mesh(entity_mesh, cam_right, cam_up);
 
         // Shop: spinning weapon display models on stands
         shop_build_display_meshes(gs, entity_mesh, total_time);
@@ -1418,6 +1417,14 @@ int main(int argc, char* argv[]) {
         // --- Shop room HUD ---
         shop_draw_hud(gs);
 
+        // --- Floating damage numbers (screen-space) ---
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            float sw = io.DisplaySize.x, sh = io.DisplaySize.y;
+            float aspect_dmg = (sh > 0) ? sw / sh : 1.0f;
+            HMM_Mat4 vp = HMM_MulM4(camera.projection_matrix(aspect_dmg), camera.view_matrix());
+            dmg_numbers.draw_ui(vp, sw, sh);
+        }
 
         // --- Settings / debug menu ---
         debug_menu_draw(gs, load_level_fn);

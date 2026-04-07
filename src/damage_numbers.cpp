@@ -1,14 +1,13 @@
 #include "damage_numbers.h"
+#include "vendor/imgui/imgui.h"
 #include <cstdio>
 #include <cmath>
-#include <cstring>
 
 // ============================================================
 //  Spawn / Update
 // ============================================================
 
 void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, bool is_kill) {
-    // Find a free slot (or oldest)
     int best = -1;
     float oldest_life = 999.0f;
     for (int i = 0; i < MAX_NUMBERS; i++) {
@@ -22,7 +21,7 @@ void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, bool is_kill) {
 
     DamageNumber& dn = numbers[best];
     dn.position = pos;
-    dn.velocity_y = 1.8f;         // upward drift speed
+    dn.velocity_y = 1.8f;
     dn.max_lifetime = 0.9f;
     dn.lifetime = dn.max_lifetime;
     dn.value = damage;
@@ -45,155 +44,85 @@ void DamageNumberSystem::update(float dt) {
 }
 
 // ============================================================
-//  7-segment digit geometry
+//  Screen-space UI rendering
 // ============================================================
-//
-// Each digit is 7 segments arranged like:
-//   _
-//  |_|
-//  |_|
-//
-// Segment indices:
-//   0 = top horizontal
-//   1 = top-right vertical
-//   2 = bottom-right vertical
-//   3 = bottom horizontal
-//   4 = bottom-left vertical
-//   5 = top-left vertical
-//   6 = middle horizontal
 
-// Which segments are on for each digit 0-9
-static const uint8_t DIGIT_SEGMENTS[10] = {
-    0b0111111, // 0: all except middle
-    0b0000110, // 1: top-right, bottom-right
-    0b1011011, // 2: top, top-right, middle, bottom-left, bottom
-    0b1001111, // 3: top, top-right, middle, bottom-right, bottom
-    0b1100110, // 4: top-left, top-right, middle, bottom-right
-    0b1101101, // 5: top, top-left, middle, bottom-right, bottom
-    0b1111101, // 6: top, top-left, middle, bottom-left, bottom-right, bottom
-    0b0000111, // 7: top, top-right, bottom-right
-    0b1111111, // 8: all
-    0b1101111, // 9: all except bottom-left
-};
+// Project world position to screen coords. Returns false if behind camera.
+static bool world_to_screen(HMM_Vec3 world_pos, HMM_Mat4 view_proj,
+                            float screen_w, float screen_h,
+                            float& out_x, float& out_y) {
+    HMM_Vec4 clip = HMM_MulM4V4(view_proj, HMM_V4(world_pos.X, world_pos.Y, world_pos.Z, 1.0f));
 
-// Add a single billboard quad (two triangles)
-static void add_billboard_quad(Mesh& m,
-                               HMM_Vec3 center, HMM_Vec3 right, HMM_Vec3 up,
-                               float half_w, float half_h,
-                               HMM_Vec3 color) {
-    uint32_t base = (uint32_t)m.vertices.size();
-    // Normal facing camera (approximate: cross of right × up)
-    HMM_Vec3 normal = HMM_NormV3(HMM_Cross(right, up));
+    // Behind camera
+    if (clip.W <= 0.001f) return false;
 
-    auto push = [&](float rx, float uy) {
-        Vertex3D v;
-        HMM_Vec3 p = HMM_AddV3(center,
-            HMM_AddV3(HMM_MulV3F(right, rx), HMM_MulV3F(up, uy)));
-        v.pos[0] = p.X; v.pos[1] = p.Y; v.pos[2] = p.Z;
-        v.normal[0] = normal.X; v.normal[1] = normal.Y; v.normal[2] = normal.Z;
-        v.color[0] = color.X; v.color[1] = color.Y; v.color[2] = color.Z;
-        m.vertices.push_back(v);
-    };
+    float inv_w = 1.0f / clip.W;
+    float ndc_x = clip.X * inv_w;
+    float ndc_y = clip.Y * inv_w;
 
-    push(-half_w, -half_h);
-    push( half_w, -half_h);
-    push( half_w,  half_h);
-    push(-half_w,  half_h);
+    // NDC to screen (Vulkan NDC: X [-1,1] left-right, Y [-1,1] top-bottom)
+    out_x = (ndc_x * 0.5f + 0.5f) * screen_w;
+    out_y = (-ndc_y * 0.5f + 0.5f) * screen_h;  // flip Y: NDC Y+ is up, screen Y+ is down
 
-    m.indices.push_back(base + 0);
-    m.indices.push_back(base + 2);
-    m.indices.push_back(base + 1);
-    m.indices.push_back(base + 0);
-    m.indices.push_back(base + 3);
-    m.indices.push_back(base + 2);
+    return true;
 }
 
-// Draw one 7-segment digit at a given position
-static void draw_digit(Mesh& out, int digit,
-                       HMM_Vec3 center, HMM_Vec3 cam_right, HMM_Vec3 cam_up,
-                       float char_w, float char_h, HMM_Vec3 color) {
-    if (digit < 0 || digit > 9) return;
-    uint8_t segs = DIGIT_SEGMENTS[digit];
+void DamageNumberSystem::draw_ui(HMM_Mat4 view_proj, float screen_w, float screen_h) const {
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
 
-    // Segment dimensions — chunky and readable
-    float hw   = char_w * 0.5f;   // half digit width
-    float hh   = char_h * 0.5f;   // half digit height
-    float t    = char_w * 0.18f;  // segment thickness (half)
-
-    // Segment center positions
-    float top_y   =  hh;
-    float mid_y   =  0.0f;
-    float bot_y   = -hh;
-    float left_x  = -hw;
-    float right_x =  hw;
-    float vmid_top = (top_y + mid_y) * 0.5f;
-    float vmid_bot = (mid_y + bot_y) * 0.5f;
-    float vhalf   = (hh - t) * 0.5f; // vertical segment half-height
-
-    // Horizontal segment: wide, thin
-    auto h_seg = [&](float cx, float cy) {
-        HMM_Vec3 pos = HMM_AddV3(center,
-            HMM_AddV3(HMM_MulV3F(cam_right, cx), HMM_MulV3F(cam_up, cy)));
-        add_billboard_quad(out, pos, cam_right, cam_up, hw - t * 0.5f, t, color);
-    };
-
-    // Vertical segment: narrow, tall
-    auto v_seg = [&](float cx, float cy) {
-        HMM_Vec3 pos = HMM_AddV3(center,
-            HMM_AddV3(HMM_MulV3F(cam_right, cx), HMM_MulV3F(cam_up, cy)));
-        add_billboard_quad(out, pos, cam_right, cam_up, t, vhalf, color);
-    };
-
-    if (segs & (1 << 0)) h_seg(0, top_y);              // top
-    if (segs & (1 << 1)) v_seg(right_x, vmid_top);     // top-right
-    if (segs & (1 << 2)) v_seg(right_x, vmid_bot);     // bottom-right
-    if (segs & (1 << 3)) h_seg(0, bot_y);              // bottom
-    if (segs & (1 << 4)) v_seg(left_x, vmid_bot);      // bottom-left
-    if (segs & (1 << 5)) v_seg(left_x, vmid_top);      // top-left
-    if (segs & (1 << 6)) h_seg(0, mid_y);              // middle
-}
-
-// ============================================================
-//  Build mesh
-// ============================================================
-
-void DamageNumberSystem::build_mesh(Mesh& out, HMM_Vec3 cam_right, HMM_Vec3 cam_up) const {
     for (int i = 0; i < MAX_NUMBERS; i++) {
         const DamageNumber& dn = numbers[i];
         if (!dn.active) continue;
 
-        float t = 1.0f - dn.lifetime / dn.max_lifetime; // 0 → 1 over lifetime
-        float alpha = (t < 0.7f) ? 1.0f : (1.0f - (t - 0.7f) / 0.3f); // fade in last 30%
-        float scale = 1.0f + t * 0.3f; // grow slightly over time
+        float sx, sy;
+        if (!world_to_screen(dn.position, view_proj, screen_w, screen_h, sx, sy))
+            continue;
 
-        // Color: white for normal hits, red/orange for kills
-        HMM_Vec3 color;
+        // Off screen? Skip
+        if (sx < -50 || sx > screen_w + 50 || sy < -50 || sy > screen_h + 50)
+            continue;
+
+        float t = 1.0f - dn.lifetime / dn.max_lifetime; // 0 → 1
+        float alpha = (t < 0.6f) ? 1.0f : (1.0f - (t - 0.6f) / 0.4f); // fade last 40%
+
+        // Color
+        ImU32 color;
         if (dn.is_kill) {
-            color = HMM_V3(1.0f * alpha, 0.3f * alpha, 0.1f * alpha);
+            color = ImGui::ColorConvertFloat4ToU32(
+                ImVec4(1.0f, 0.25f, 0.1f, alpha));
         } else {
-            color = HMM_V3(1.0f * alpha, 0.95f * alpha, 0.8f * alpha);
+            color = ImGui::ColorConvertFloat4ToU32(
+                ImVec4(1.0f, 1.0f, 0.85f, alpha));
         }
 
-        // Extract digits
-        int val = dn.value;
-        if (val < 0) val = -val;
-        char digits_str[16];
-        snprintf(digits_str, sizeof(digits_str), "%d", val);
-        int num_digits = (int)strlen(digits_str);
+        // Shadow/outline color
+        ImU32 shadow = ImGui::ColorConvertFloat4ToU32(
+            ImVec4(0.0f, 0.0f, 0.0f, alpha * 0.7f));
 
-        float char_w = 0.25f * scale;
-        float char_h = 0.4f * scale;
-        float spacing = char_w * 1.3f;
-        float total_w = spacing * num_digits;
+        // Format text
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d", dn.value);
 
-        // Center the number string on the position
-        HMM_Vec3 start = HMM_SubV3(dn.position,
-            HMM_MulV3F(cam_right, (total_w - spacing) * 0.5f));
+        // Font size — slightly larger for kills
+        float font_size = dn.is_kill ? 24.0f : 20.0f;
+        // Slight upward drift on screen (in addition to world drift)
+        float screen_offset_y = -t * 15.0f;
 
-        for (int d = 0; d < num_digits; d++) {
-            int digit = digits_str[d] - '0';
-            HMM_Vec3 dpos = HMM_AddV3(start, HMM_MulV3F(cam_right, spacing * d));
-            draw_digit(out, digit, dpos, cam_right, cam_up, char_w, char_h, color);
+        ImFont* font = ImGui::GetFont();
+        ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, buf);
+        float tx = sx - text_size.x * 0.5f;
+        float ty = sy - text_size.y * 0.5f + screen_offset_y;
+
+        // Draw shadow (offset by 1px in each direction for outline effect)
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+                draw->AddText(font, font_size,
+                    ImVec2(tx + dx, ty + dy), shadow, buf);
+            }
         }
+
+        // Draw text
+        draw->AddText(font, font_size, ImVec2(tx, ty), color, buf);
     }
 }

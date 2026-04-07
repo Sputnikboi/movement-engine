@@ -1,10 +1,9 @@
 #pragma once
 
-#include "mesh.h"
 #include "vendor/HandmadeMath.h"
 
 // ============================================================
-//  Floating damage numbers
+//  Floating damage numbers (screen-space UI)
 // ============================================================
 
 struct DamageNumber {
@@ -27,7 +26,7 @@ struct DamageNumberSystem {
     // Update positions + lifetimes. Call once per frame.
     void update(float dt);
 
-    // Append billboard digit quads to the entity mesh.
-    // cam_right and cam_up are used for billboarding.
-    void build_mesh(Mesh& out, HMM_Vec3 cam_right, HMM_Vec3 cam_up) const;
+    // Draw damage numbers as screen-space UI text.
+    // Call during ImGui frame (after NewFrame, before Render).
+    void draw_ui(HMM_Mat4 view_proj, float screen_w, float screen_h) const;
 };
