@@ -220,12 +220,9 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
 //  Shop display meshes (spinning weapon models on stands)
 // ============================================================
 
-static void append_mesh_rotated(Mesh& out, const Mesh& src,
-                                HMM_Vec3 pos, float yaw, float pitch, float scale) {
+static void append_mesh_transformed(Mesh& out, const Mesh& src,
+                                    HMM_Vec3 pos, HMM_Mat4 rot, float scale) {
     uint32_t base = static_cast<uint32_t>(out.vertices.size());
-    // Pitch first (tilt forward/back around X), then yaw (spin around Y)
-    HMM_Mat4 rot = HMM_MulM4(HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0)),
-                              HMM_Rotate_RH(pitch, HMM_V3(1, 0, 0)));
 
     for (const auto& sv : src.vertices) {
         Vertex3D v = sv;
@@ -259,15 +256,26 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
                 HMM_Vec3 display_pos = s.position;
                 display_pos.Y += 0.4f;  // float above pedestal
 
-                // Per-weapon tilt: guns point barrel up, knife blade up
-                float tilt;
-                if (w == 2) // Knife — flip so blade points up
-                    tilt = 75.0f * (HMM_PI32 / 180.0f);
-                else        // Guns — barrel points up
-                    tilt = -75.0f * (HMM_PI32 / 180.0f);
+                // Build rotation: model_rotation fix first, then tilt barrel/blade up, then spin
+                HMM_Vec3 mr = gs.weapons[w].config.model_rotation;
+                HMM_Mat4 model_fix = HMM_MulM4(
+                    HMM_Rotate_RH(HMM_AngleDeg(mr.Z), HMM_V3(0, 0, 1)),
+                    HMM_MulM4(
+                        HMM_Rotate_RH(HMM_AngleDeg(mr.Y), HMM_V3(0, 1, 0)),
+                        HMM_Rotate_RH(HMM_AngleDeg(mr.X), HMM_V3(1, 0, 0))
+                    )
+                );
 
-                append_mesh_rotated(out, gs.weapons[w].viewmodel_mesh,
-                                    display_pos, spin_yaw, tilt, display_scale);
+                // After model_fix, barrel points along -Z. Tilt around X to point up.
+                float tilt_deg = (w == 2) ? 75.0f : -75.0f;
+                HMM_Mat4 tilt = HMM_Rotate_RH(HMM_AngleDeg(tilt_deg), HMM_V3(1, 0, 0));
+                HMM_Mat4 spin = HMM_Rotate_RH(spin_yaw, HMM_V3(0, 1, 0));
+
+                // Order: model_fix -> tilt -> spin
+                HMM_Mat4 rot = HMM_MulM4(spin, HMM_MulM4(tilt, model_fix));
+
+                append_mesh_transformed(out, gs.weapons[w].viewmodel_mesh,
+                                        display_pos, rot, display_scale);
             }
         }
         // Healthpack cross stays as static geometry (built into room mesh)
