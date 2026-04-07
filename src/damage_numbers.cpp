@@ -115,39 +115,42 @@ static void draw_digit(Mesh& out, int digit,
     if (digit < 0 || digit > 9) return;
     uint8_t segs = DIGIT_SEGMENTS[digit];
 
-    // Segment dimensions
-    float seg_len = char_w * 0.8f;    // horizontal segment length
-    float seg_thick = char_h * 0.08f;  // segment thickness
-    float vlen = char_h * 0.38f;      // vertical segment length
+    // Segment dimensions — chunky and readable
+    float hw   = char_w * 0.5f;   // half digit width
+    float hh   = char_h * 0.5f;   // half digit height
+    float t    = char_w * 0.18f;  // segment thickness (half)
 
-    // Positions relative to digit center
-    float top_y    =  char_h * 0.45f;
-    float mid_y    =  0.0f;
-    float bot_y    = -char_h * 0.45f;
-    float left_x   = -char_w * 0.35f;
-    float right_x  =  char_w * 0.35f;
+    // Segment center positions
+    float top_y   =  hh;
+    float mid_y   =  0.0f;
+    float bot_y   = -hh;
+    float left_x  = -hw;
+    float right_x =  hw;
+    float vmid_top = (top_y + mid_y) * 0.5f;
+    float vmid_bot = (mid_y + bot_y) * 0.5f;
+    float vhalf   = (hh - t) * 0.5f; // vertical segment half-height
 
-    // Horizontal segments: thin wide quads
+    // Horizontal segment: wide, thin
     auto h_seg = [&](float cx, float cy) {
         HMM_Vec3 pos = HMM_AddV3(center,
             HMM_AddV3(HMM_MulV3F(cam_right, cx), HMM_MulV3F(cam_up, cy)));
-        add_billboard_quad(out, pos, cam_right, cam_up, seg_len * 0.5f, seg_thick, color);
+        add_billboard_quad(out, pos, cam_right, cam_up, hw - t * 0.5f, t, color);
     };
 
-    // Vertical segments: tall narrow quads
+    // Vertical segment: narrow, tall
     auto v_seg = [&](float cx, float cy) {
         HMM_Vec3 pos = HMM_AddV3(center,
             HMM_AddV3(HMM_MulV3F(cam_right, cx), HMM_MulV3F(cam_up, cy)));
-        add_billboard_quad(out, pos, cam_right, cam_up, seg_thick, vlen * 0.5f, color);
+        add_billboard_quad(out, pos, cam_right, cam_up, t, vhalf, color);
     };
 
-    if (segs & (1 << 0)) h_seg(0, top_y);                           // top
-    if (segs & (1 << 1)) v_seg(right_x, (top_y + mid_y) * 0.5f);   // top-right
-    if (segs & (1 << 2)) v_seg(right_x, (mid_y + bot_y) * 0.5f);   // bottom-right
-    if (segs & (1 << 3)) h_seg(0, bot_y);                           // bottom
-    if (segs & (1 << 4)) v_seg(left_x, (mid_y + bot_y) * 0.5f);    // bottom-left
-    if (segs & (1 << 5)) v_seg(left_x, (top_y + mid_y) * 0.5f);    // top-left
-    if (segs & (1 << 6)) h_seg(0, mid_y);                           // middle
+    if (segs & (1 << 0)) h_seg(0, top_y);              // top
+    if (segs & (1 << 1)) v_seg(right_x, vmid_top);     // top-right
+    if (segs & (1 << 2)) v_seg(right_x, vmid_bot);     // bottom-right
+    if (segs & (1 << 3)) h_seg(0, bot_y);              // bottom
+    if (segs & (1 << 4)) v_seg(left_x, vmid_bot);      // bottom-left
+    if (segs & (1 << 5)) v_seg(left_x, vmid_top);      // top-left
+    if (segs & (1 << 6)) h_seg(0, mid_y);              // middle
 }
 
 // ============================================================
@@ -178,9 +181,9 @@ void DamageNumberSystem::build_mesh(Mesh& out, HMM_Vec3 cam_right, HMM_Vec3 cam_
         snprintf(digits_str, sizeof(digits_str), "%d", val);
         int num_digits = (int)strlen(digits_str);
 
-        float char_w = 0.18f * scale;
-        float char_h = 0.3f * scale;
-        float spacing = char_w * 1.2f;
+        float char_w = 0.25f * scale;
+        float char_h = 0.4f * scale;
+        float spacing = char_w * 1.3f;
         float total_w = spacing * num_digits;
 
         // Center the number string on the position
