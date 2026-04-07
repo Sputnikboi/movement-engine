@@ -21,11 +21,15 @@ Organized by priority/impact.
 | Slide (power slide + boost) | ✅ | ✅ | Speed boost, cooldown, low friction |
 | Slide-jump boost | ✅ | ✅ | Extra speed when jumping out of slide |
 | Lurch (momentum redirect) | ✅ | ✅ | Fires on input change during post-jump window |
-| Slope movement | ✅ | ✅ | Multi-ray ground check, slope sticking, no more ramp-edge bumps |
+| Slope movement | ✅ | ✅ | Multi-ray ground check, slope sticking |
 | Ground contact system | ✅ | ✅ | Multi-ray (5-point) ground probe + iterative depenetration |
 | Step climbing | ✅ | ✅ | Source-style up→forward→down step move |
-| Landing grace | ✅ | ✅ | Single-tick grace from new engine — feels good enough |
+| Wall jump | ✅ | ✅ | Air-jump off walls |
+| Ladder climbing | ✅ | ✅ | Volume-based detection, directional movement |
 | Coyote time | ✅ | ❌ | Low priority — grace period for jumping after leaving edge |
+| View bobbing | ✅ | ❌ | Low priority |
+| Camera smoothing | ✅ | ❌ | Low priority |
+| Crouch camera lerp | ✅ | ❌ | Low priority — eye height snaps currently |
 
 ## Camera
 
@@ -34,59 +38,69 @@ Organized by priority/impact.
 | FPS mouselook | ✅ | ✅ | |
 | FOV setting | ✅ | ✅ | Slider in settings |
 | Sensitivity + inversion | ✅ | ✅ | Per-axis inversion, saved in config |
-| ADS FOV scaling | ✅ | ❌ | **Soon** — FOV zoom for aim down sights |
-| View bobbing | ✅ | ❌ | Low priority |
-| Camera smoothing | ✅ | ❌ | Low priority |
-| Crouch camera lerp | ✅ | ❌ | Low priority |
+| ADS FOV scaling | ✅ | ✅ | Per-weapon FOV multiplier + sens scaling |
 | Screen shake | ✅ | ❌ | Low priority |
 
-## Weapons — HIGH PRIORITY
+## Weapons
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Hitscan shooting | ✅ | 🟡 | Engine: left click, 10 damage, no feedback |
-| Weapon viewmodel | ✅ | ❌ | **Next** — first-person gun model rendering |
-| ADS (aim down sights) | ✅ | ❌ | **Next** — FOV zoom + position offset |
-| Reload animation | ✅ | ❌ | **Next** — magazine drop, procedural animation |
-| Magazine / ammo system | ✅ | ❌ | **Next** — ammo count, reload mechanic |
-| Recoil (procedural) | ✅ | ❌ | **Next** — visual + spread |
-| Weapon switching | ✅ | ❌ | After core weapon loop works |
-| Muzzle flash | ✅ | ❌ | Particle + light flash |
+| Hitscan shooting | ✅ | ✅ | Per-weapon damage, range, fire rate |
+| Weapon viewmodel | ✅ | ✅ | GLB models, depth-separated rendering |
+| ADS (aim down sights) | ✅ | ✅ | FOV zoom + position offset + sens scaling |
+| Reload animation | ✅ | ✅ | 3-phase procedural (mag out/swap/gun up) |
+| Magazine / ammo system | ✅ | ✅ | Per-weapon mag size, reload mechanic |
+| Recoil (procedural) | ✅ | ✅ | Kick + pitch + roll + side + recovery |
+| Weapon switching | ✅ | ✅ | Swap animation with raise/lower |
+| Multiple weapons | ✅ | ✅ | 3 weapons (Glock, Wingman, Knife) |
+| Weapon upgrades | ✅ | ✅ | Per-weapon level, bought in shop |
+| Muzzle flash | ✅ | ✅ | Particle effect on fire |
+| Crosshair | ✅ | ✅ | White cross via ImGui foreground draw |
 | Tracers | ✅ | ❌ | Pooled tracer projectiles |
 | Damage numbers | ✅ | ❌ | Billboard floating text with crits |
 | Critical hit zones | ✅ | ❌ | Per-collider crit multiplier |
-| Crosshair | ✅ | ✅ | Simple white cross via ImGui |
 
-## Enemies — HIGH PRIORITY
+## Enemies
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Drone (chase/circle/attack) | ✅ | ✅ | AI states match Unity version — **needs work** |
-| Drone hover + bob | ✅ | ✅ | Raycast-based hover, noise bob |
-| Drone projectiles | ✅ | ✅ | Fired at player, wall collision |
-| Drone death animation | ✅ | 🟡 | **Needs work** — falls then explodes, needs polish |
-| Drone collision | ✅ | 🟡 | **Needs work** — collision issues |
-| Drone death explosion | ✅ | 🟡 | Engine has particles, Unity had fancier effects |
-| Rusher Drone | ✅ | ❌ | **Soon** — melee-charge enemy with dash + stun |
+| Drone (chase/circle/attack) | ✅ | ✅ | Projectile attacks, hover/bob, death ragdoll |
+| Rusher (melee charge) | ✅ | ✅ | Ground pursuit, dash attack with cooldown |
+| Turret (stationary beam) | N/A | ✅ | Engine-only: tracks player, beam DPS |
+| Tank (heavy melee) | N/A | ✅ | Engine-only: slow pursuit, stomp AoE |
+| Bomber (dive bomb) | N/A | ✅ | Engine-only: flying, explosion AoE |
+| Shielder (support) | N/A | ✅ | Engine-only: shields nearby allies |
+| Enemy death effects | ✅ | ✅ | Particles, ragdoll fall, explosions |
 | Enemy health bars | ✅ | ❌ | Billboard UI above enemies |
-| EnemyManager (waves) | ✅ | ❌ | Spawn waves, track alive enemies |
-| Object pooling | ✅ | ❌ | Engine uses direct allocation |
 | Boss enemy | ✅ | ❌ | Low priority — Unity version was placeholder |
+
+## Procedural Generation & Game Loop
+
+| Feature | Unity | Engine | Notes |
+|---------|-------|--------|-------|
+| Procedural rooms | ❌ | ✅ | Engine-only: boxes, pillars, hills, doors |
+| Room progression | ❌ | ✅ | Engine-only: clear enemies → shop → next room |
+| Difficulty scaling | ❌ | ✅ | Engine-only: HP/dmg/speed/count per room |
+| Physical shop room | ❌ | ✅ | Engine-only: walk to stands, interact to buy |
+| Shop currency | ❌ | ✅ | Engine-only: gold from kills, spend in shop |
+| Door lock mechanic | ❌ | ✅ | Engine-only: exit locked until room cleared |
+| Death / restart | ❌ | ✅ | Resets run on death |
 
 ## Player Health & Feedback
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Player health | ❌ | ❌ | Projectile collision detected but no health system |
-| Health HUD | ✅ | ❌ | |
-| Damage taken feedback | ✅ | ❌ | Screen flash, directional indicator |
-| Death / respawn | ❌ | 🟡 | Engine respawns on void-out only |
+| Player health system | ✅ | ✅ | HP with max, damage accumulator |
+| Health HUD | ✅ | ✅ | Color-coded progress bar |
+| Damage vignette | ✅ | ✅ | Red screen edges on damage |
+| Healthpack (shop) | ❌ | ✅ | Engine-only: buy +25% HP in shop |
+| Directional damage indicator | ✅ | ❌ | Shows which direction damage came from |
 
 ## Audio — HIGH PRIORITY
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Sound manager | ✅ | ❌ | SDL3 audio API |
+| Sound manager | ✅ | ❌ | SDL3 audio API available |
 | Footsteps | ✅ | ❌ | |
 | Gunshot sounds | ✅ | ❌ | |
 | Jump / land sounds | ✅ | ❌ | |
@@ -102,6 +116,7 @@ Organized by priority/impact.
 | Material colors from glTF | ✅ | ✅ | Base color as vertex color |
 | Transparent / additive rendering | ✅ | ✅ | Particle pipeline |
 | Distance fog | ✅ | ✅ | In mesh.frag |
+| Viewmodel depth separation | ✅ | ✅ | Own near/far to prevent wall clipping |
 | Textures | ✅ | ❌ | Art style TBD |
 | Normal maps | ✅ | ❌ | Art style TBD |
 | Shadows | ✅ | ❌ | Art style TBD |
@@ -112,11 +127,12 @@ Organized by priority/impact.
 
 | Feature | Unity | Engine | Notes |
 |---------|-------|--------|-------|
-| Settings menu | ✅ | ✅ | ImGui-based, all params tunable |
+| Settings menu | ✅ | ✅ | ImGui debug menu — placeholder, will be replaced |
 | Key rebinding | ✅ | ✅ | 2 slots per action, mouse/wheel support |
-| HUD (FPS, speed, state) | ✅ | ✅ | |
-| Pause menu | ✅ | ✅ | Escape toggles |
-| Level browser | ❌ | ✅ | Engine-only: in-game level selector |
+| HUD (HP, ammo, speed, state) | ✅ | ✅ | ImGui overlay — placeholder, will be replaced |
+| Pause menu | ✅ | ✅ | Escape toggles settings |
+| Level browser | ❌ | ✅ | Engine-only: debug menu level selector |
+| Shop UI (physical room) | ❌ | ✅ | Engine-only: walk-up interaction prompts |
 | Weapon mod UI | ✅ | ❌ | Low priority — mod system TBD |
 
 ## Level / World
@@ -127,39 +143,28 @@ Organized by priority/impact.
 | Spawn points | ✅ | ✅ | Empty named "spawn" in Blender |
 | Built-in test level | ✅ | ✅ | Hardcoded geometry |
 | Hot-reload levels | ❌ | ✅ | Engine-only: reload without restart |
+| Ladder volumes | ✅ | ✅ | Auto-extracted from "ladder" nodes in glTF |
 | Trigger volumes | ✅ | ❌ | Trivial to add when needed |
-| Scene transitions | ✅ | ❌ | |
 
 ---
 
 ## Current Focus
 
-### 🔴 Now — Weapons + Enemies
-1. **Weapon viewmodel** — load glTF gun model, render in first person
-2. **Shooting / reloading / ADS** — match Unity version's feel
-3. **Fix drone AI** — collision and behavior issues
-4. **Fix drone death animation** — polish the ragdoll/explosion
-5. **Rusher drone** — second enemy type
+### 🔴 Now — Audio + Polish
+1. **Audio system** — SDL3 audio, footsteps, gunshots, explosions
+2. **Enemy health bars** — billboard UI above enemies
+3. **Damage numbers** — floating text on hit
+4. **Directional damage indicator** — show damage source direction
 
-### 🟡 Soon — Audio + Polish
-6. **Audio system** — SDL3 audio, footsteps, gunshots, explosions
-7. **ADS FOV scaling** — camera zoom when aiming
-8. **Enemy health bars** — billboard UI
-9. **Player health + damage feedback**
+### 🟡 Soon — Content + Feel
+5. **More shop upgrades** — passive upgrades (max HP, move speed, slide boost)
+6. **Tracers** — visual bullet trails
+7. **Critical hit zones** — per-collider crit multiplier
+8. **Coyote time** — jump grace period after leaving edge
 
-### 🟢 Later
-10. **Coyote time**
-11. **Camera polish** (bobbing, smoothing, crouch lerp)
-12. **Wave spawner**
-13. **Weapon switching / multiple weapons**
-14. **Rendering upgrades** (pending art style decision)
-15. **Mod system** (TBD)
-
-## Shop System (Planned)
-- Opens between rooms at exit door (before entering next room, or dedicated shop phase)
-- Currency earned from killing enemies (per type: drone=1, rusher=1, turret=3, tank=5, bomber=3, shielder=4)
-- **Buy weapons** — unlock new weapons to add to loadout
-- **Weapon upgrades** — damage, mag size, fire rate, reload speed (per weapon, stacking)
-- **Passive upgrades** — max HP, movement speed, slide boost, jump height
-- UI: ImGui window with categories, costs, descriptions
-- Upgrades persist across rooms until run ends (death resets)
+### 🟢 Later — UI Rewrite + Visual
+9. **Complete UI rewrite** — replace ImGui debug menu with proper game UI
+10. **Camera polish** (bobbing, smoothing, crouch lerp, screen shake)
+11. **Boss enemy**
+12. **Rendering upgrades** (textures, shadows, post-processing — pending art style)
+13. **Mod system** (TBD)
