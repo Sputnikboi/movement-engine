@@ -221,9 +221,11 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
 // ============================================================
 
 static void append_mesh_rotated(Mesh& out, const Mesh& src,
-                                HMM_Vec3 pos, float yaw, float scale) {
+                                HMM_Vec3 pos, float yaw, float pitch, float scale) {
     uint32_t base = static_cast<uint32_t>(out.vertices.size());
-    HMM_Mat4 rot = HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0));
+    // Pitch first (tilt forward/back around X), then yaw (spin around Y)
+    HMM_Mat4 rot = HMM_MulM4(HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0)),
+                              HMM_Rotate_RH(pitch, HMM_V3(1, 0, 0)));
 
     for (const auto& sv : src.vertices) {
         Vertex3D v = sv;
@@ -253,11 +255,12 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
         if (s.type == ShopStandType::Weapon) {
             int w = s.weapon_index;
             if (w >= 0 && w < GameState::MAX_WEAPONS && gs.weapons[w].mesh_loaded) {
-                float display_scale = gs.weapons[w].config.model_scale * 3.0f;
+                float display_scale = gs.weapons[w].config.model_scale * 2.0f;
                 HMM_Vec3 display_pos = s.position;
                 display_pos.Y += 0.4f;  // float above pedestal
+                float tilt = -75.0f * (HMM_PI32 / 180.0f); // barrel points ~75° up
                 append_mesh_rotated(out, gs.weapons[w].viewmodel_mesh,
-                                    display_pos, spin_yaw, display_scale);
+                                    display_pos, spin_yaw, tilt, display_scale);
             }
         }
         // Healthpack cross stays as static geometry (built into room mesh)
