@@ -236,18 +236,19 @@ void bomber_update(Entity& bomber, Entity entities[], int max_entities,
 
         desired_hvel = HMM_MulV3F(hdir, config.approach_speed);
 
-        // Close enough horizontally? Start dive
+        // Close enough horizontally? Start dive — snapshot player position
         float hdist = sqrtf(to_player.X * to_player.X + to_player.Z * to_player.Z);
         if (hdist < config.dive_trigger_dist) {
             bomber.ai_state = BOMBER_DIVING;
-            // Invalidate hover so it doesn't fight the dive
+            bomber.wander_target = player_pos;  // lock-on position at dive start
             bomber.hover_cache_valid = false;
         }
     } break;
 
     case BOMBER_DIVING: {
-        // Kamikaze dive — aim directly at player, no hover
-        HMM_Vec3 dive_dir = HMM_NormV3(to_player);
+        // Kamikaze dive — aim at locked-on position (where player was), no tracking
+        HMM_Vec3 to_target = HMM_SubV3(bomber.wander_target, bomber.position);
+        HMM_Vec3 dive_dir = HMM_NormV3(to_target);
 
         // Accelerate towards player in 3D
         HMM_Vec3 desired_vel = HMM_MulV3F(dive_dir, config.dive_speed);
