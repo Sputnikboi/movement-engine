@@ -878,11 +878,11 @@ static void add_bar_quad(Mesh& m, HMM_Vec3 center, HMM_Vec3 right, HMM_Vec3 up,
     }
 
     m.indices.push_back(base + 0);
+    m.indices.push_back(base + 2);
     m.indices.push_back(base + 1);
-    m.indices.push_back(base + 2);
     m.indices.push_back(base + 0);
-    m.indices.push_back(base + 2);
     m.indices.push_back(base + 3);
+    m.indices.push_back(base + 2);
 }
 
 void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
@@ -908,7 +908,7 @@ void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
         float bar_w = e.radius * 1.8f;
         if (bar_w < 0.6f) bar_w = 0.6f;
         if (bar_w > 2.0f) bar_w = 2.0f;
-        float bar_h = 0.07f;
+        float bar_h = 0.12f;
 
         // Position above entity
         float y_offset = e.radius + 0.3f;

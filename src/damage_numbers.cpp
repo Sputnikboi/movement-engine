@@ -101,11 +101,11 @@ static void add_billboard_quad(Mesh& m,
     push(-half_w,  half_h);
 
     m.indices.push_back(base + 0);
+    m.indices.push_back(base + 2);
     m.indices.push_back(base + 1);
-    m.indices.push_back(base + 2);
     m.indices.push_back(base + 0);
-    m.indices.push_back(base + 2);
     m.indices.push_back(base + 3);
+    m.indices.push_back(base + 2);
 }
 
 // Draw one 7-segment digit at a given position
