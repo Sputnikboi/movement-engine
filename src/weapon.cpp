@@ -148,6 +148,8 @@ void Weapon::init_knife() {
     config.mag_insert_dist  = 0.0f;
 
     ammo  = 1;
+    magazine.init(config.mag_size);
+    last_fired_mod = {};
     state = WeaponState::IDLE;
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;

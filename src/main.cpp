@@ -880,7 +880,7 @@ int main(int argc, char* argv[]) {
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
                         p.ai_timer = GRACE; // render grace period
-                        p.yaw   = atan2f(fwd.X, fwd.Z) + HMM_PI32;
+                        p.yaw   = atan2f(fwd.X, fwd.Z);
                         p.pitch = asinf(fwd.Y);
                         real_idx = i;
                         break;
@@ -914,7 +914,7 @@ int main(int argc, char* argv[]) {
                             d.damage   = 0.0f;
                             d.owner    = -4; // dummy visual projectile
                             d.lifetime = GRACE;
-                            d.yaw   = atan2f(fwd.X, fwd.Z) + HMM_PI32;
+                            d.yaw   = atan2f(fwd.X, fwd.Z);
                             d.pitch = asinf(fwd.Y);
                             break;
                         }
@@ -1164,8 +1164,6 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            projectiles_update(entities, MAX_ENTITIES, collision, dt);
-
             // --- Enemy-player collision (push apart) ---
             for (int i = 0; i < MAX_ENTITIES; i++) {
                 Entity& e = entities[i];
@@ -1294,6 +1292,9 @@ int main(int argc, char* argv[]) {
                 }
             }
         } // end !show_settings
+
+        // Projectiles always update (even in shop) so knives don't freeze mid-air
+        projectiles_update(entities, MAX_ENTITIES, collision, dt);
 
         // Update effects
         effects.update(dt);
