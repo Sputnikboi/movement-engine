@@ -193,7 +193,7 @@ void magazine_view_draw(GameState& gs) {
         if (hovered) cy -= 18.0f;
 
         // Highlight clickable cards during mod application
-        if (applying && hovered && !is_spent) {
+        if (applying && hovered) {
             cy -= 4.0f; // extra lift for clickable cards
         }
 
@@ -202,7 +202,7 @@ void magazine_view_draw(GameState& gs) {
                   is_current, hovered, is_spent);
 
         // Applying glow effect on clickable cards
-        if (applying && hovered && !is_spent) {
+        if (applying && hovered) {
             float cos_a = cosf(angle), sin_a = sinf(angle);
             auto rot = [&](float lx, float ly) -> ImVec2 {
                 return ImVec2(cx + lx * cos_a - ly * sin_a,
@@ -217,22 +217,19 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
-    // --- Handle click to apply mod ---
+    // --- Handle click to apply mod (spent rounds included) ---
     if (applying && mouse_clicked && hovered_card >= 0) {
-        bool is_spent = (hovered_card < current_round);
-        if (!is_spent) {
-            if (pm.is_tipping) {
-                mag.set_tipping(hovered_card, pm.tipping);
-                printf("Applied %s to round %d\n", tipping_name(pm.tipping), hovered_card + 1);
-            } else {
-                mag.set_enchantment(hovered_card, pm.enchantment);
-                printf("Applied %s to round %d\n", enchantment_name(pm.enchantment), hovered_card + 1);
-            }
-            pm.applications_left--;
-            if (pm.applications_left <= 0) {
-                pm.active = false;
-                // Keep magazine view open so player can see results
-            }
+        if (pm.is_tipping) {
+            mag.set_tipping(hovered_card, pm.tipping);
+            printf("Applied %s to round %d\n", tipping_name(pm.tipping), hovered_card + 1);
+        } else {
+            mag.set_enchantment(hovered_card, pm.enchantment);
+            printf("Applied %s to round %d\n", enchantment_name(pm.enchantment), hovered_card + 1);
+        }
+        pm.applications_left--;
+        if (pm.applications_left <= 0) {
+            pm.active = false;
+            // Keep magazine view open so player can see results
         }
     }
 
@@ -268,7 +265,7 @@ void magazine_view_draw(GameState& gs) {
         else if (i == current_round)
             ImGui::TextColored(ImVec4(1.0f,0.9f,0.3f,1), ">> NEXT <<");
 
-        if (applying && i >= current_round) {
+        if (applying) {
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.3f,1.0f,0.3f,1), "Click to apply mod");
         }
