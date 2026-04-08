@@ -71,6 +71,7 @@ struct GameState {
     ShopRoomData&     shop_data;
     int&              shop_nearby_stand;
     float&            shop_interact_cooldown;
+    PendingModApplication& pending_mod;
 
     // UI flags
     bool&             show_settings;

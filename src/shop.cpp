@@ -198,24 +198,32 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
             } else if (s.type == ShopStandType::ModTipping) {
                 if (gs.currency >= s.cost) {
                     gs.currency -= s.cost;
-                    // Apply tipping to all rounds in active weapon's magazine
-                    Weapon& w = gs.weapons[gs.active_weapon];
-                    for (int r = 0; r < w.magazine.capacity; r++)
-                        w.magazine.set_tipping(r, s.offered_tipping);
+                    // Open magazine view to apply tipping to 2 rounds
+                    gs.pending_mod = {};
+                    gs.pending_mod.active = true;
+                    gs.pending_mod.is_tipping = true;
+                    gs.pending_mod.tipping = s.offered_tipping;
+                    gs.pending_mod.applications_left = gs.pending_mod.max_applications;
+                    gs.show_magazine_view = true;
                     s.purchased = true;
                     gs.shop_interact_cooldown = 0.3f;
-                    printf("Applied %s tipping to all rounds\n", tipping_name(s.offered_tipping));
+                    printf("Bought %s tipping — select %d rounds\n",
+                           tipping_name(s.offered_tipping), gs.pending_mod.max_applications);
                 }
             } else if (s.type == ShopStandType::ModEnchantment) {
                 if (gs.currency >= s.cost) {
                     gs.currency -= s.cost;
-                    // Apply enchantment to all rounds in active weapon's magazine
-                    Weapon& w = gs.weapons[gs.active_weapon];
-                    for (int r = 0; r < w.magazine.capacity; r++)
-                        w.magazine.set_enchantment(r, s.offered_enchantment);
+                    // Open magazine view to apply enchantment to 2 rounds
+                    gs.pending_mod = {};
+                    gs.pending_mod.active = true;
+                    gs.pending_mod.is_tipping = false;
+                    gs.pending_mod.enchantment = s.offered_enchantment;
+                    gs.pending_mod.applications_left = gs.pending_mod.max_applications;
+                    gs.show_magazine_view = true;
                     s.purchased = true;
                     gs.shop_interact_cooldown = 0.3f;
-                    printf("Applied %s enchantment to all rounds\n", enchantment_name(s.offered_enchantment));
+                    printf("Bought %s enchantment — select %d rounds\n",
+                           enchantment_name(s.offered_enchantment), gs.pending_mod.max_applications);
                 }
             }
         }

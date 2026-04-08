@@ -361,6 +361,7 @@ int main(int argc, char* argv[]) {
     ShopRoomData shop_data;         // current shop room geometry + stands
     int    shop_nearby_stand = -1;  // index of stand player is near (-1 = none)
     float  shop_interact_cooldown = 0.0f; // prevent double-buy
+    PendingModApplication pending_mod;
 
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
@@ -511,6 +512,7 @@ int main(int argc, char* argv[]) {
         /* shop_data */         shop_data,
         /* shop_nearby_stand */ shop_nearby_stand,
         /* shop_interact_cooldown */ shop_interact_cooldown,
+        /* pending_mod */       pending_mod,
         /* show_settings */     show_settings,
         /* show_hud */          show_hud,
         /* show_ladder_debug */ show_ladder_debug,
@@ -550,7 +552,7 @@ int main(int argc, char* argv[]) {
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (show_settings)
+            if (show_settings || show_magazine_view)
                 ImGui_ImplSDL3_ProcessEvent(&event);
 
             switch (event.type) {
@@ -578,9 +580,14 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
-                    show_settings = !show_settings;
-                    rebinding_action = -1;
-                    SDL_SetWindowRelativeMouseMode(window, !show_settings);
+                    if (show_magazine_view) {
+                        show_magazine_view = false;
+                        SDL_SetWindowRelativeMouseMode(window, true);
+                    } else {
+                        show_settings = !show_settings;
+                        rebinding_action = -1;
+                        SDL_SetWindowRelativeMouseMode(window, !show_settings);
+                    }
                 }
                 if (!show_settings) {
                     if (kb.matches_scancode(Action::Noclip, event.key.scancode) && !event.key.repeat) {
@@ -598,6 +605,7 @@ int main(int argc, char* argv[]) {
                         show_hud = !show_hud;
                     if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat) {
                         show_magazine_view = !show_magazine_view;
+                        SDL_SetWindowRelativeMouseMode(window, !show_magazine_view && !show_settings);
                     }
                     if (kb.matches_scancode(Action::ToggleFullscreen, event.key.scancode) && !event.key.repeat) {
                         Uint32 flags = SDL_GetWindowFlags(window);
@@ -711,7 +719,7 @@ int main(int argc, char* argv[]) {
         const bool* keys_frame = SDL_GetKeyboardState(nullptr);
 
         // --- Movement ---
-        if (noclip && !show_settings) {
+        if (noclip && !show_settings && !show_magazine_view) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             HMM_Vec3 move_dir = HMM_V3(0, 0, 0);
             HMM_Vec3 fwd   = camera.forward_flat();
@@ -731,7 +739,7 @@ int main(int argc, char* argv[]) {
                 if (kb.held(Action::Sprint, keys)) speed *= 3.0f;
                 camera.position = HMM_AddV3(camera.position, HMM_MulV3F(move_dir, speed * dt));
             }
-        } else if (!show_settings) {
+        } else if (!show_settings && !show_magazine_view) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
 
             input.forward = 0.0f;
@@ -836,9 +844,9 @@ int main(int argc, char* argv[]) {
             Weapon& weapon = weapons[active_weapon];
             player.weapon_lightweight = weapon.config.lightweight;
             bool holstered = player.weapon_holstered;
-            bool fire_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Shoot, keys_frame);
-            bool reload_pressed = !show_settings && !noclip && !holstered && kb.held(Action::Reload, keys_frame);
-            bool ads_input = !show_settings && !noclip && !holstered && kb.held(Action::ADS, keys_frame);
+            bool fire_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::Shoot, keys_frame);
+            bool reload_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::Reload, keys_frame);
+            bool ads_input = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::ADS, keys_frame);
 
             weapon.update(dt, fire_pressed, reload_pressed, ads_input);
 
@@ -1051,7 +1059,7 @@ int main(int argc, char* argv[]) {
         }
 
         // --- Update entities (only when not paused) ---
-        if (!show_settings && !show_shop) {
+        if (!show_settings && !show_shop && !show_magazine_view) {
             // --- Player damage decay ---
             if (player.damage_accum > 0.0f) {
                 player.damage_accum -= player.damage_accum * (2.0f / player.damage_decay) * dt;

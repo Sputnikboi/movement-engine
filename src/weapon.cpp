@@ -314,7 +314,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
         if (reload_timer <= 0.0f) {
             ammo = config.mag_size;
-            magazine.init(config.mag_size);
+            // Don't reinit magazine — mods persist across reloads
             last_fired_mod = {};
             state = WeaponState::IDLE;
             reload_phase = ReloadPhase::NONE;

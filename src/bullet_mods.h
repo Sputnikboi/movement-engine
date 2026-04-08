@@ -136,3 +136,13 @@ inline const char* enchantment_desc(Enchantment e) {
         default:                      return "";
     }
 }
+
+// Magazine mod application state (after buying from shop)
+struct PendingModApplication {
+    bool active = false;
+    bool is_tipping = false;     // true = tipping, false = enchantment
+    Tipping tipping = Tipping::None;
+    Enchantment enchantment = Enchantment::None;
+    int applications_left = 0;   // how many rounds can still be modded
+    int max_applications = 2;    // total allowed per purchase
+};
