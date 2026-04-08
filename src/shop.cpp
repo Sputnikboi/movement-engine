@@ -154,14 +154,16 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                 int lvl = gs.weapon_level[w];
                 if (gs.currency >= s.cost) {
                     if (w == gs.active_weapon) {
-                        // Upgrade current weapon
+                        // Upgrade current weapon — preserve magazine mods
                         gs.currency -= s.cost;
                         gs.weapon_level[w]++;
+                        Magazine saved_mag = gs.weapons[w].magazine;
                         switch (w) {
                             case 0: gs.weapons[w].init_glock();   break;
                             case 1: gs.weapons[w].init_wingman(); break;
                             case 2: gs.weapons[w].init_knife();   break;
                         }
+                        gs.weapons[w].magazine = saved_mag;
                         gs.apply_weapon_upgrades(w);
                         s.purchased = true;
                         printf("Upgraded %s to Lv %d\n", s.label, gs.weapon_level[w]);
@@ -170,13 +172,16 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         // Old weapon keeps its level and magazine
                         gs.currency -= s.cost;
                         int old = gs.active_weapon;
-                        if (gs.weapon_level[w] < 1) gs.weapon_level[w] = 1;
+                        bool previously_owned = (gs.weapon_level[w] >= 1);
+                        if (!previously_owned) gs.weapon_level[w] = 1;
+                        Magazine saved_mag = gs.weapons[w].magazine;
                         gs.active_weapon = w;
                         switch (w) {
                             case 0: gs.weapons[w].init_glock();   break;
                             case 1: gs.weapons[w].init_wingman(); break;
                             case 2: gs.weapons[w].init_knife();   break;
                         }
+                        if (previously_owned) gs.weapons[w].magazine = saved_mag;
                         gs.apply_weapon_upgrades(w);
                         gs.weapons[w].state = WeaponState::IDLE;
                         s.purchased = true;
