@@ -710,7 +710,7 @@ int main(int argc, char* argv[]) {
             fps_timer = 0.0f;
         }
 
-        if (!show_settings) {
+        if (!show_settings && !show_magazine_view) {
             float sens_scale = 1.0f - weapons[active_weapon].ads_blend * (1.0f - weapons[active_weapon].config.ads_sens_mult);
             camera.mouse_look(mouse_dx * sens_scale, mouse_dy * sens_scale);
         }
@@ -800,21 +800,8 @@ int main(int argc, char* argv[]) {
 
         // --- Weapon switching ---
         {
-            // Number keys to switch weapons (only owned)
-            for (int w = 0; w < MAX_WEAPONS; w++) {
-                if (keys_frame[SDL_SCANCODE_1 + w] && !show_settings && weapon_level[w] > 0 && !show_shop) {
-                    // Unholster if holstered
-                    if (player.weapon_holstered) {
-                        player.weapon_holstered = false;
-                        weapons[active_weapon].begin_unholster();
-                    }
-                    // Switch weapon if different
-                    if (w != active_weapon && weapons[active_weapon].state != WeaponState::SWAPPING) {
-                        pending_weapon = w;
-                        weapons[active_weapon].begin_swap();
-                    }
-                }
-            }
+            // Single-weapon system: no number-key switching.
+            // Weapon swaps only happen via the shop (buy replaces current).
 
             // Check if holster lowering is done — set holstered flag
             {

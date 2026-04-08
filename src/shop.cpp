@@ -166,11 +166,12 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         s.purchased = true;
                         printf("Upgraded %s to Lv %d\n", s.label, gs.weapon_level[w]);
                     } else {
-                        // Swap to weapon (keep old weapon's level for later)
+                        // Buy new weapon — replaces current weapon
+                        // Old weapon keeps its level and magazine for future re-purchase
                         gs.currency -= s.cost;
-                        if (gs.weapon_level[w] < 1) gs.weapon_level[w] = 1;
+                        int old = gs.active_weapon;
+                        gs.weapon_level[w] = 1;
                         gs.active_weapon = w;
-                        // Re-init to base stats then apply stored level
                         switch (w) {
                             case 0: gs.weapons[w].init_glock();   break;
                             case 1: gs.weapons[w].init_wingman(); break;
@@ -178,9 +179,9 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         }
                         gs.apply_weapon_upgrades(w);
                         gs.weapons[w].state = WeaponState::IDLE;
-                        gs.num_weapons = 1;
                         s.purchased = true;
-                        printf("Bought %s (Lv %d)\n", s.label, gs.weapon_level[w]);
+                        printf("Swapped %s for %s (Lv %d)\n",
+                               gs.weapons[old].config.name, s.label, gs.weapon_level[w]);
                     }
                     gs.shop_interact_cooldown = 0.3f;
                 }
@@ -205,6 +206,7 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     gs.pending_mod.tipping = s.offered_tipping;
                     gs.pending_mod.applications_left = gs.pending_mod.max_applications;
                     gs.show_magazine_view = true;
+                    SDL_SetWindowRelativeMouseMode(gs.window, false);
                     s.purchased = true;
                     gs.shop_interact_cooldown = 0.3f;
                     printf("Bought %s tipping — select %d rounds\n",
@@ -220,6 +222,7 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     gs.pending_mod.enchantment = s.offered_enchantment;
                     gs.pending_mod.applications_left = gs.pending_mod.max_applications;
                     gs.show_magazine_view = true;
+                    SDL_SetWindowRelativeMouseMode(gs.window, false);
                     s.purchased = true;
                     gs.shop_interact_cooldown = 0.3f;
                     printf("Bought %s enchantment — select %d rounds\n",
@@ -391,10 +394,14 @@ void shop_draw_hud(GameState& gs) {
                     "+5 dmg, +0.1x crit mult"
                 };
                 if (lvl > 0) {
+                    // Already own this weapon — offer upgrade
                     ImGui::Text("%s  Lv %d -> %d", wnames[w], lvl, lvl + 1);
                     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", upgrade_desc[w]);
                 } else {
+                    // New weapon — will replace current
                     ImGui::Text("%s", wnames[w]);
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                                       "Replaces %s", gs.weapons[gs.active_weapon].config.name);
                 }
                 if (gs.currency >= s.cost)
                     ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] %s  (%d gold)",

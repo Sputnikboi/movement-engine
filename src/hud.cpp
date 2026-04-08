@@ -73,8 +73,7 @@ void hud_draw(GameState& gs, const HudContext& ctx) {
     ImGui::Separator();
     {
         Weapon& w = gs.weapons[gs.active_weapon];
-        ImGui::Text("[%d] %s  %d / %d", gs.active_weapon + 1, w.config.name,
-                    w.ammo, w.config.mag_size);
+        ImGui::Text("%s  %d / %d", w.config.name, w.ammo, w.config.mag_size);
         if (w.state == WeaponState::RELOADING) {
             float pct = 1.0f - w.reload_timer / w.config.reload_time;
             ImGui::ProgressBar(pct, ImVec2(-1, 4), "");

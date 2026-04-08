@@ -212,8 +212,9 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
         for (int w = 0; w < 3; w++) {
             Weapon& wep = gs.weapons[w];
             char label[64];
-            snprintf(label, sizeof(label), "[%d] %s%s", w + 1, wep.config.name,
-                     (w == gs.active_weapon) ? " (active)" : "");
+            snprintf(label, sizeof(label), "%s%s%s", wep.config.name,
+                     (w == gs.active_weapon) ? " (active)" : "",
+                     (gs.weapon_level[w] == 0) ? " (unowned)" : "");
             if (ImGui::TreeNode(label)) {
                 ImGui::PushID(w);
                 if (w == gs.active_weapon) {
