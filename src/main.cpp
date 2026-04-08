@@ -970,8 +970,6 @@ int main(int argc, char* argv[]) {
                         base_dmg += 10.0f;
                     if (rm.tipping == Tipping::Crystal_Tipped)
                         base_dmg *= 2.0f;
-                    if (rm.tipping == Tipping::Aerodynamic)
-                        base_dmg *= 1.2f;
 
                     // Apply shield barrier absorption (Piercing bypasses)
                     bool piercing = (rm.tipping == Tipping::Piercing);
