@@ -233,7 +233,7 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
-    // --- Tooltip on hover ---
+    // --- Tooltip on hover (drawn on foreground draw list so it sits above cards) ---
     if (hovered_card >= 0) {
         int i = hovered_card;
         float t = (n > 1) ? ((float)i / (float)(n - 1) - 0.5f) * 2.0f : 0.0f;
@@ -241,35 +241,77 @@ void magazine_view_draw(GameState& gs) {
 
         RoundMod mod = mag.get(i);
 
-        ImGui::SetNextWindowPos(ImVec2(cx + card_w * 0.6f, fan_center_y - card_h * 0.5f));
-        ImGui::SetNextWindowBgAlpha(0.85f);
-        ImGui::Begin("##mag_tooltip", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::Text("Round %d", i + 1);
-        ImGui::Separator();
-        if (mod.tipping != Tipping::None) {
-            ImGui::TextColored(ImVec4(0.9f,0.6f,0.2f,1), "Tip: %s", tipping_name(mod.tipping));
-            ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "  %s", tipping_desc(mod.tipping));
-        } else {
-            ImGui::TextDisabled("Tip: None");
-        }
-        if (mod.enchantment != Enchantment::None) {
-            ImGui::TextColored(ImVec4(0.5f,0.3f,0.9f,1), "Ench: %s", enchantment_name(mod.enchantment));
-            ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "  %s", enchantment_desc(mod.enchantment));
-        } else {
-            ImGui::TextDisabled("Ench: None");
-        }
-        if (i < current_round)
-            ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1), "(spent)");
-        else if (i == current_round)
-            ImGui::TextColored(ImVec4(1.0f,0.9f,0.3f,1), ">> NEXT <<");
+        // Build tooltip lines
+        struct TipLine { const char* text; ImU32 color; };
+        char line_round[32];
+        char line_tip[64], line_tip_desc[96];
+        char line_ench[64], line_ench_desc[96];
+        char line_status[32];
+        char line_apply[32];
 
-        if (applying) {
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.3f,1.0f,0.3f,1), "Click to apply mod");
+        TipLine lines[8];
+        int lc = 0;
+
+        snprintf(line_round, sizeof(line_round), "Round %d", i + 1);
+        lines[lc++] = {line_round, IM_COL32(220, 215, 200, 255)};
+
+        if (mod.tipping != Tipping::None) {
+            snprintf(line_tip, sizeof(line_tip), "Tip: %s", tipping_name(mod.tipping));
+            snprintf(line_tip_desc, sizeof(line_tip_desc), "  %s", tipping_desc(mod.tipping));
+            lines[lc++] = {line_tip, IM_COL32(230, 155, 50, 255)};
+            lines[lc++] = {line_tip_desc, IM_COL32(180, 180, 180, 255)};
+        } else {
+            lines[lc++] = {"Tip: None", IM_COL32(120, 120, 120, 255)};
         }
-        ImGui::End();
+
+        if (mod.enchantment != Enchantment::None) {
+            snprintf(line_ench, sizeof(line_ench), "Ench: %s", enchantment_name(mod.enchantment));
+            snprintf(line_ench_desc, sizeof(line_ench_desc), "  %s", enchantment_desc(mod.enchantment));
+            lines[lc++] = {line_ench, IM_COL32(130, 75, 230, 255)};
+            lines[lc++] = {line_ench_desc, IM_COL32(180, 180, 180, 255)};
+        } else {
+            lines[lc++] = {"Ench: None", IM_COL32(120, 120, 120, 255)};
+        }
+
+        if (i < current_round)
+            lines[lc++] = {"(spent)", IM_COL32(130, 130, 130, 255)};
+        else if (i == current_round)
+            lines[lc++] = {">> NEXT <<", IM_COL32(255, 230, 75, 255)};
+
+        if (applying)
+            lines[lc++] = {"Click to apply mod", IM_COL32(75, 255, 75, 255)};
+
+        // Measure tooltip size
+        float pad = 8.0f;
+        float line_h = ImGui::GetTextLineHeightWithSpacing();
+        float tip_w = 0.0f;
+        for (int l = 0; l < lc; l++) {
+            ImVec2 sz = ImGui::CalcTextSize(lines[l].text);
+            if (sz.x > tip_w) tip_w = sz.x;
+        }
+        tip_w += pad * 2;
+        float tip_h = line_h * lc + pad * 2;
+
+        // Position to the right of the hovered card
+        float tx = cx + card_w * 0.6f;
+        float ty = fan_center_y - tip_h * 0.5f;
+        // Clamp to screen
+        if (tx + tip_w > screen_w - 4) tx = cx - card_w * 0.6f - tip_w;
+        if (ty < 4) ty = 4;
+        if (ty + tip_h > screen_h - 4) ty = screen_h - 4 - tip_h;
+
+        // Background + border
+        draw->AddRectFilled(ImVec2(tx, ty), ImVec2(tx + tip_w, ty + tip_h),
+                            IM_COL32(30, 28, 35, 216), 4.0f);
+        draw->AddRect(ImVec2(tx, ty), ImVec2(tx + tip_w, ty + tip_h),
+                      IM_COL32(90, 85, 100, 255), 4.0f);
+
+        // Draw lines
+        float ly = ty + pad;
+        for (int l = 0; l < lc; l++) {
+            draw->AddText(ImVec2(tx + pad, ly), lines[l].color, lines[l].text);
+            ly += line_h;
+        }
     }
 
     // --- Legend ---
