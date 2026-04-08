@@ -432,8 +432,8 @@ void shop_draw_hud(GameState& gs) {
                                    tipping_name(s.offered_tipping));
                 ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
                                    tipping_desc(s.offered_tipping));
-                ImGui::Text("Applies to all %d rounds",
-                            gs.weapons[gs.active_weapon].magazine.capacity);
+                int app = tipping_max_applications(s.offered_tipping);
+                ImGui::Text("Applies to %d round%s", app, app == 1 ? "" : "s");
                 if (gs.currency >= s.cost)
                     ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
                                        interact_key, s.cost);
@@ -444,8 +444,8 @@ void shop_draw_hud(GameState& gs) {
                                    enchantment_name(s.offered_enchantment));
                 ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
                                    enchantment_desc(s.offered_enchantment));
-                ImGui::Text("Applies to all %d rounds",
-                            gs.weapons[gs.active_weapon].magazine.capacity);
+                ImGui::Text("Applies to %d rounds",
+                            gs.pending_mod.max_applications);
                 if (gs.currency >= s.cost)
                     ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
                                        interact_key, s.cost);
