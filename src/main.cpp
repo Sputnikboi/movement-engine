@@ -929,15 +929,24 @@ int main(int argc, char* argv[]) {
                 // Hitscan
                 HMM_Vec3 ray_origin = camera.position;
                 HMM_Vec3 ray_dir    = camera.forward();
+                RoundMod rm = weapon.last_fired_mod;
+                bool piercing = (rm.tipping == Tipping::Piercing);
 
-                float best_t = weapon.config.range;
-                int best_idx = -1;
+                // Collect all hits along the ray (sorted by distance)
+                struct RayHit { float t; int idx; };
+                RayHit hits[MAX_ENTITIES];
+                int hit_count = 0;
+
+                float wall_t = weapon.config.range;
+                {
+                    HitResult wall = collision.raycast(ray_origin, ray_dir, weapon.config.range);
+                    if (wall.hit) wall_t = wall.t;
+                }
 
                 for (int i = 0; i < MAX_ENTITIES; i++) {
                     Entity& e = entities[i];
                     if (!is_live_enemy(e)) continue;
 
-                    // Ray-sphere intersection
                     HMM_Vec3 oc = HMM_SubV3(ray_origin, e.position);
                     float b = HMM_DotV3(oc, ray_dir);
                     float c = HMM_DotV3(oc, oc) - e.radius * e.radius;
@@ -946,20 +955,24 @@ int main(int argc, char* argv[]) {
 
                     float t = -b - sqrtf(disc);
                     if (t < 0) t = -b + sqrtf(disc);
-                    if (t > 0 && t < best_t) {
-                        HitResult wall = collision.raycast(ray_origin, ray_dir, t);
-                        if (!wall.hit) {
-                            best_t = t;
-                            best_idx = i;
-                        }
+                    if (t > 0 && t < wall_t) {
+                        hits[hit_count++] = {t, i};
                     }
                 }
 
-                if (best_idx >= 0) {
-                    Entity& hit_ent = entities[best_idx];
+                // Sort by distance
+                for (int a = 0; a < hit_count - 1; a++)
+                    for (int b2 = a + 1; b2 < hit_count; b2++)
+                        if (hits[b2].t < hits[a].t) { RayHit tmp = hits[a]; hits[a] = hits[b2]; hits[b2] = tmp; }
 
-                    // Apply round mods to damage
-                    RoundMod rm = weapon.last_fired_mod;
+                // Apply damage to first hit, or all hits if piercing
+                int apply_count = piercing ? hit_count : (hit_count > 0 ? 1 : 0);
+
+                for (int h = 0; h < apply_count; h++) {
+                    int eidx = hits[h].idx;
+                    float hit_t = hits[h].t;
+                    Entity& hit_ent = entities[eidx];
+
                     float base_dmg = weapon.config.damage;
 
                     // Bleed multiplier (Serrated stacks — applied before tipping)
@@ -972,7 +985,6 @@ int main(int argc, char* argv[]) {
                         base_dmg *= 2.0f;
 
                     // Apply shield barrier absorption (Piercing bypasses)
-                    bool piercing = (rm.tipping == Tipping::Piercing);
                     float actual_dmg = piercing ? base_dmg : shielder_absorb_damage(hit_ent, base_dmg);
                     hit_ent.health -= actual_dmg;
                     float actual_dmg_display = actual_dmg;
@@ -1008,13 +1020,12 @@ int main(int argc, char* argv[]) {
 
                     // Floating damage number at hit point
                     {
-                        HMM_Vec3 hit_pos = HMM_AddV3(ray_origin, HMM_MulV3F(ray_dir, best_t));
-                        // Offset slightly up and random horizontal jitter
+                        HMM_Vec3 hit_pos = HMM_AddV3(ray_origin, HMM_MulV3F(ray_dir, hit_t));
                         hit_pos.Y += 0.3f;
                         hit_pos.X += randf(-0.2f, 0.2f);
                         hit_pos.Z += randf(-0.2f, 0.2f);
                         bool is_kill = (hit_ent.health <= 0);
-                        dmg_numbers.spawn(hit_pos, (int)actual_dmg_display, best_idx, is_kill);
+                        dmg_numbers.spawn(hit_pos, (int)actual_dmg_display, eidx, is_kill);
                     }
 
                     // Wake up idle enemies on hit
