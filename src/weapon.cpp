@@ -340,7 +340,15 @@ bool Weapon::try_fire() {
 
     // Record the mod on the round about to be fired
     int round_index;
-    if (config.infinite_ammo) {
+    if (split_pending > 0) {
+        // Split: refire the same round without advancing
+        split_pending--;
+        if (config.infinite_ammo) {
+            round_index = (current_round + config.mag_size - 1) % config.mag_size;
+        } else {
+            round_index = config.mag_size - ammo - 1;  // previous round
+        }
+    } else if (config.infinite_ammo) {
         round_index = current_round;
         current_round = (current_round + 1) % config.mag_size;
     } else {
@@ -360,6 +368,10 @@ bool Weapon::try_fire() {
         }
         return false;
     }
+
+    // Split: queue an extra shot of the same round
+    if (last_fired_mod.tipping == Tipping::Split && split_pending == 0)
+        split_pending = 1;
 
     // Aerodynamic: 20% faster fire rate
     float rate = config.fire_rate;

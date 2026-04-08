@@ -72,6 +72,9 @@ struct Entity {
     int      poison_stacks = 0;   // number of active poison stacks
     float    poison_timer  = 0.0f; // remaining poison duration (refreshes on new stack)
 
+    // Bleed (Serrated tipping) — permanent stacks, +10% damage taken per stack
+    int      bleed_stacks  = 0;
+
     // AI throttle
     uint8_t  ai_frame_id  = 0;     // assigned at spawn, used for staggering
     HMM_Vec3 cached_avoid = {};     // cached wall avoidance force

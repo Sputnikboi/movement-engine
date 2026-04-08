@@ -23,6 +23,8 @@ enum class Tipping : uint8_t {
     Aerodynamic,     // 20% faster fire rate, 2x proj speed, 20% more damage
     Poison_Tipped,   // applies poison stack (4 dmg/s per stack, 5s, refreshes)
     Blank,           // round is skipped entirely when firing
+    Split,           // round fires twice
+    Serrated,        // applies bleed stack: +10% damage taken per stack (permanent)
     COUNT
 };
 
@@ -102,6 +104,8 @@ inline int tipping_max_applications(Tipping t) {
         case Tipping::Aerodynamic:    return 1;
         case Tipping::Poison_Tipped:  return 2;
         case Tipping::Blank:          return 1;
+        case Tipping::Split:          return 2;
+        case Tipping::Serrated:       return 2;
         default:                      return 1;
     }
 }
@@ -116,6 +120,8 @@ inline const char* tipping_name(Tipping t) {
         case Tipping::Aerodynamic:    return "Aerodynamic";
         case Tipping::Poison_Tipped:  return "Poison Tipped";
         case Tipping::Blank:          return "Blank";
+        case Tipping::Split:          return "Split";
+        case Tipping::Serrated:       return "Serrated";
         default:                      return "???";
     }
 }
@@ -141,6 +147,8 @@ inline const char* tipping_desc(Tipping t) {
         case Tipping::Aerodynamic:    return "+20% fire rate & dmg, 2x proj speed";
         case Tipping::Poison_Tipped:  return "Poison: 4 dmg/s per stack, 5s";
         case Tipping::Blank:          return "Round is skipped when firing";
+        case Tipping::Split:          return "Fires this round twice";
+        case Tipping::Serrated:       return "+10% damage taken per stack (permanent)";
         default:                      return "";
     }
 }

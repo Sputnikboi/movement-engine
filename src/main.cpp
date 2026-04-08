@@ -962,6 +962,9 @@ int main(int argc, char* argv[]) {
                     RoundMod rm = weapon.last_fired_mod;
                     float base_dmg = weapon.config.damage;
 
+                    // Bleed multiplier (Serrated stacks — applied before tipping)
+                    base_dmg *= (1.0f + 0.1f * hit_ent.bleed_stacks);
+
                     // Tipping effects
                     if (rm.tipping == Tipping::Sharpened)
                         base_dmg += 10.0f;
@@ -993,6 +996,10 @@ int main(int argc, char* argv[]) {
                         hit_ent.poison_stacks++;
                         hit_ent.poison_timer = 5.0f;
                     }
+
+                    // Serrated: apply bleed stack (permanent)
+                    if (rm.tipping == Tipping::Serrated)
+                        hit_ent.bleed_stacks++;
 
                     // Enchantment effects
                     if (rm.enchantment == Enchantment::Vampiric) {
@@ -1240,6 +1247,10 @@ int main(int argc, char* argv[]) {
                         // Apply tipping mods to base damage
                         RoundMod rm = proj.round_mod;
                         float base_dmg = proj.damage;
+
+                        // Bleed multiplier (Serrated stacks — applied before tipping)
+                        base_dmg *= (1.0f + 0.1f * e.bleed_stacks);
+
                         if (rm.tipping == Tipping::Sharpened)
                             base_dmg += 10.0f;
                         if (rm.tipping == Tipping::Crystal_Tipped)
@@ -1257,6 +1268,10 @@ int main(int argc, char* argv[]) {
                             e.poison_stacks++;
                             e.poison_timer = 5.0f;
                         }
+
+                        // Serrated: apply bleed stack (permanent)
+                        if (rm.tipping == Tipping::Serrated)
+                            e.bleed_stacks++;
 
                         // Crystal Tipped: 1/10 chance to shatter (lose tipping)
                         if (rm.tipping == Tipping::Crystal_Tipped) {

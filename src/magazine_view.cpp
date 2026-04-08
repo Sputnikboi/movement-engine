@@ -18,6 +18,8 @@ static ImU32 tipping_color(Tipping t) {
         case Tipping::Aerodynamic:    return IM_COL32(100, 220, 180, 255);
         case Tipping::Poison_Tipped:  return IM_COL32(80, 200, 80, 255);
         case Tipping::Blank:          return IM_COL32(60, 60, 60, 255);
+        case Tipping::Split:          return IM_COL32(220, 180, 60, 255);
+        case Tipping::Serrated:       return IM_COL32(200, 60, 60, 255);
         default:                      return IM_COL32(100, 100, 110, 255);
     }
 }
@@ -324,7 +326,7 @@ void magazine_view_draw(GameState& gs) {
                       IM_COL32(200, 160, 80, 255), "Tipping (top)");
         draw->AddText(ImVec2(lx - 200, ly + 18),
                       IM_COL32(160, 155, 170, 200),
-                      "Sh=Sharpened  Pi=Piercing  Cr=Crystal  Ae=Aerodynamic  Po=Poison  Bl=Blank");
+                      "Sh=Sharpened  Pi=Piercing  Cr=Crystal  Ae=Aerodynamic  Po=Poison  Bl=Blank  Sp=Split  Se=Serrated");
         draw->AddText(ImVec2(lx - 200, ly + 42),
                       IM_COL32(120, 90, 200, 255), "Enchantment (bottom)");
         draw->AddText(ImVec2(lx - 200, ly + 60),
