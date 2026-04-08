@@ -153,8 +153,8 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                 int w = s.weapon_index;
                 int lvl = gs.weapon_level[w];
                 if (gs.currency >= s.cost) {
-                    if (lvl > 0) {
-                        // Upgrade existing weapon
+                    if (w == gs.active_weapon) {
+                        // Upgrade current weapon
                         gs.currency -= s.cost;
                         gs.weapon_level[w]++;
                         switch (w) {
@@ -166,11 +166,11 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         s.purchased = true;
                         printf("Upgraded %s to Lv %d\n", s.label, gs.weapon_level[w]);
                     } else {
-                        // Buy new weapon — replaces current weapon
-                        // Old weapon keeps its level and magazine for future re-purchase
+                        // Swap to different weapon (new or previously owned)
+                        // Old weapon keeps its level and magazine
                         gs.currency -= s.cost;
                         int old = gs.active_weapon;
-                        gs.weapon_level[w] = 1;
+                        if (gs.weapon_level[w] < 1) gs.weapon_level[w] = 1;
                         gs.active_weapon = w;
                         switch (w) {
                             case 0: gs.weapons[w].init_glock();   break;
@@ -393,19 +393,23 @@ void shop_draw_hud(GameState& gs) {
                     "1.1x damage",
                     "+5 dmg, +0.1x crit mult"
                 };
-                if (lvl > 0) {
-                    // Already own this weapon — offer upgrade
+                if (w == gs.active_weapon) {
+                    // Current weapon — offer upgrade
                     ImGui::Text("%s  Lv %d -> %d", wnames[w], lvl, lvl + 1);
                     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", upgrade_desc[w]);
                 } else {
-                    // New weapon — will replace current
-                    ImGui::Text("%s", wnames[w]);
+                    // Different weapon — swap (show existing level if previously owned)
+                    if (lvl > 0)
+                        ImGui::Text("%s  Lv %d", wnames[w], lvl);
+                    else
+                        ImGui::Text("%s", wnames[w]);
                     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
                                        "Replaces %s", gs.weapons[gs.active_weapon].config.name);
                 }
+                const char* action = (w == gs.active_weapon) ? "Upgrade" : (lvl > 0 ? "Swap" : "Buy");
                 if (gs.currency >= s.cost)
                     ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] %s  (%d gold)",
-                                       interact_key, lvl > 0 ? "Upgrade" : "Buy", s.cost);
+                                       interact_key, action, s.cost);
                 else
                     ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
             } else if (s.type == ShopStandType::Healthpack) {
