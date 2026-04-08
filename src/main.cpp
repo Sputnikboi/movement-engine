@@ -598,7 +598,6 @@ int main(int argc, char* argv[]) {
                         show_hud = !show_hud;
                     if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat) {
                         show_magazine_view = !show_magazine_view;
-                        printf("Magazine view: %s\n", show_magazine_view ? "OPEN" : "CLOSED");
                     }
                     if (kb.matches_scancode(Action::ToggleFullscreen, event.key.scancode) && !event.key.repeat) {
                         Uint32 flags = SDL_GetWindowFlags(window);

@@ -43,6 +43,8 @@ void Weapon::init_wingman() {
     config.mag_insert_dist  = 0.6f;
 
     ammo  = config.mag_size;
+    magazine.init(config.mag_size);
+    last_fired_mod = {};
     state = WeaponState::IDLE;
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
@@ -89,6 +91,8 @@ void Weapon::init_glock() {
     config.mag_insert_dist  = 0.5f;
 
     ammo  = config.mag_size;
+    magazine.init(config.mag_size);
+    last_fired_mod = {};
     state = WeaponState::IDLE;
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
@@ -310,6 +314,8 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
         if (reload_timer <= 0.0f) {
             ammo = config.mag_size;
+            magazine.init(config.mag_size);
+            last_fired_mod = {};
             state = WeaponState::IDLE;
             reload_phase = ReloadPhase::NONE;
             reload_progress = 0.0f;
