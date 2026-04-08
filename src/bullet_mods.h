@@ -17,10 +17,12 @@
 // --- Tipping types (physical projectile mods) ---
 enum class Tipping : uint8_t {
     None = 0,
-    Hollow_Point,   // bonus damage to unshielded enemies
-    Armor_Piercing, // ignores shield HP
-    Sharpened,      // increased crit multiplier for this round
-    Splitting,      // round splits into multiple on hit (future)
+    Sharpened,       // +10 flat damage
+    Piercing,        // passes through enemies and shields
+    Crystal_Tipped,  // 2x damage, 1/10 chance to lose tipping on hit
+    Aerodynamic,     // 20% faster fire rate, 2x proj speed, 20% more damage
+    Poison_Tipped,   // applies poison stack (4 dmg/s per stack, 5s, refreshes)
+    Blank,           // round is skipped entirely when firing
     COUNT
 };
 
@@ -91,14 +93,29 @@ struct Magazine {
     bool has_enchantment(Enchantment e) const { return count_enchantment(e) > 0; }
 };
 
+// --- Per-tipping application counts ---
+inline int tipping_max_applications(Tipping t) {
+    switch (t) {
+        case Tipping::Sharpened:      return 3;
+        case Tipping::Piercing:       return 2;
+        case Tipping::Crystal_Tipped: return 1;
+        case Tipping::Aerodynamic:    return 1;
+        case Tipping::Poison_Tipped:  return 2;
+        case Tipping::Blank:          return 1;
+        default:                      return 1;
+    }
+}
+
 // --- Display names ---
 inline const char* tipping_name(Tipping t) {
     switch (t) {
         case Tipping::None:           return "None";
-        case Tipping::Hollow_Point:   return "Hollow Point";
-        case Tipping::Armor_Piercing: return "Armor Piercing";
         case Tipping::Sharpened:      return "Sharpened";
-        case Tipping::Splitting:      return "Splitting";
+        case Tipping::Piercing:       return "Piercing";
+        case Tipping::Crystal_Tipped: return "Crystal Tipped";
+        case Tipping::Aerodynamic:    return "Aerodynamic";
+        case Tipping::Poison_Tipped:  return "Poison Tipped";
+        case Tipping::Blank:          return "Blank";
         default:                      return "???";
     }
 }
@@ -118,10 +135,12 @@ inline const char* enchantment_name(Enchantment e) {
 // Short color-coded descriptions for HUD/shop
 inline const char* tipping_desc(Tipping t) {
     switch (t) {
-        case Tipping::Hollow_Point:   return "+50% dmg to unshielded";
-        case Tipping::Armor_Piercing: return "Ignores shields";
-        case Tipping::Sharpened:      return "+1.5x crit multiplier";
-        case Tipping::Splitting:      return "Splits on hit";
+        case Tipping::Sharpened:      return "+10 flat damage";
+        case Tipping::Piercing:       return "Pierces enemies & shields";
+        case Tipping::Crystal_Tipped: return "2x dmg, 10% chance to shatter";
+        case Tipping::Aerodynamic:    return "+20% fire rate & dmg, 2x proj speed";
+        case Tipping::Poison_Tipped:  return "Poison: 4 dmg/s per stack, 5s";
+        case Tipping::Blank:          return "Round is skipped when firing";
         default:                      return "";
     }
 }

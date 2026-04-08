@@ -68,6 +68,10 @@ struct Entity {
     float    hit_flash    = 0.0f; // > 0 means flashing white
     float    shield_hp    = 0.0f; // barrier HP from shielder aura
 
+    // Poison DoT
+    int      poison_stacks = 0;   // number of active poison stacks
+    float    poison_timer  = 0.0f; // remaining poison duration (refreshes on new stack)
+
     // AI throttle
     uint8_t  ai_frame_id  = 0;     // assigned at spawn, used for staggering
     HMM_Vec3 cached_avoid = {};     // cached wall avoidance force

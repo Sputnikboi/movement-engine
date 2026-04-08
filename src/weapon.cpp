@@ -348,7 +348,23 @@ bool Weapon::try_fire() {
         ammo--;
     }
     last_fired_mod = magazine.get(round_index);
-    fire_timer = 1.0f / config.fire_rate;
+
+    // Blank round: skip entirely, consume minimal cooldown, don't fire
+    if (last_fired_mod.tipping == Tipping::Blank) {
+        fire_timer = 0.05f; // tiny cooldown so next round fires almost immediately
+        // Auto-reload on empty
+        if (ammo <= 0 && !config.infinite_ammo) {
+            state = WeaponState::RELOADING;
+            reload_timer = config.reload_time;
+            reload_phase = ReloadPhase::MAG_OUT;
+        }
+        return false;
+    }
+
+    // Aerodynamic: 20% faster fire rate
+    float rate = config.fire_rate;
+    if (last_fired_mod.tipping == Tipping::Aerodynamic) rate *= 1.2f;
+    fire_timer = 1.0f / rate;
     state = WeaponState::FIRING;
 
     // Apply recoil — side follows tilt direction

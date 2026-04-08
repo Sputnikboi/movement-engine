@@ -874,7 +874,9 @@ int main(int argc, char* argv[]) {
                         p.type     = EntityType::Projectile;
                         p.alive    = true;
                         p.position = HMM_AddV3(camera.position, HMM_MulV3F(fwd, SPAWN_FWD));
-                        p.velocity = HMM_MulV3F(fwd, weapon.config.proj_speed);
+                        float pspeed = weapon.config.proj_speed;
+                        if (weapon.last_fired_mod.tipping == Tipping::Aerodynamic) pspeed *= 2.0f;
+                        p.velocity = HMM_MulV3F(fwd, pspeed);
                         p.radius   = weapon.config.proj_radius;
                         p.damage   = weapon.config.damage;
                         p.round_mod = weapon.last_fired_mod;
@@ -898,9 +900,11 @@ int main(int argc, char* argv[]) {
                         HMM_AddV3(HMM_MulV3F(cam_up, hip.Y),
                                   HMM_MulV3F(fwd, hip.Z))));
                     // Target: where real projectile will be when grace ends
+                    float dspeed = weapon.config.proj_speed;
+                    if (weapon.last_fired_mod.tipping == Tipping::Aerodynamic) dspeed *= 2.0f;
                     HMM_Vec3 target = HMM_AddV3(
                         HMM_AddV3(camera.position, HMM_MulV3F(fwd, SPAWN_FWD)),
-                        HMM_MulV3F(fwd, weapon.config.proj_speed * GRACE));
+                        HMM_MulV3F(fwd, dspeed * GRACE));
                     HMM_Vec3 dummy_vel = HMM_MulV3F(HMM_SubV3(target, hand_pos), 1.0f / GRACE);
 
                     for (int i = 0; i < MAX_ENTITIES; i++) {
@@ -959,12 +963,19 @@ int main(int argc, char* argv[]) {
                     float base_dmg = weapon.config.damage;
 
                     // Tipping effects
-                    if (rm.tipping == Tipping::Hollow_Point && hit_ent.shield_hp <= 0)
-                        base_dmg *= 1.5f;
                     if (rm.tipping == Tipping::Sharpened)
-                        base_dmg *= weapon.config.crit_multiplier;
+                        base_dmg += 10.0f;
+                    if (rm.tipping == Tipping::Crystal_Tipped)
+                        base_dmg *= 2.0f;
+                    if (rm.tipping == Tipping::Aerodynamic)
+                        base_dmg *= 1.2f;
 
-                    hit_ent.health -= base_dmg;
+                    // Apply shield barrier absorption (Piercing bypasses)
+                    bool piercing = (rm.tipping == Tipping::Piercing);
+                    float actual_dmg = piercing ? base_dmg : shielder_absorb_damage(hit_ent, base_dmg);
+                    hit_ent.health -= actual_dmg;
+                    float actual_dmg_display = actual_dmg;
+
                     // Set hit flash per type
                     if (hit_ent.type == EntityType::Turret)
                         hit_ent.hit_flash = turret_cfg.hit_flash_time;
@@ -977,14 +988,10 @@ int main(int argc, char* argv[]) {
                     else
                         hit_ent.hit_flash = drone_cfg.hit_flash_time;
 
-                    // Apply shield barrier absorption
-                    float actual_dmg_display;
-                    {
-                        bool ap = (rm.tipping == Tipping::Armor_Piercing);
-                        float raw_dmg = base_dmg;
-                        float actual_dmg = ap ? raw_dmg : shielder_absorb_damage(hit_ent, raw_dmg);
-                        hit_ent.health += (raw_dmg - actual_dmg);
-                        actual_dmg_display = actual_dmg;
+                    // Poison tipping
+                    if (rm.tipping == Tipping::Poison_Tipped) {
+                        hit_ent.poison_stacks++;
+                        hit_ent.poison_timer = 5.0f;
                     }
 
                     // Enchantment effects
@@ -1147,6 +1154,16 @@ int main(int argc, char* argv[]) {
                         shielder_update(e, entities, MAX_ENTITIES,
                                         player.position, collision, shielder_cfg, dt, total_time);
                 }
+
+                // Poison DoT tick
+                if (e.poison_stacks > 0 && e.type != EntityType::Projectile) {
+                    e.health -= 4.0f * e.poison_stacks * dt;
+                    e.poison_timer -= dt;
+                    if (e.poison_timer <= 0.0f) {
+                        e.poison_stacks = 0;
+                        e.poison_timer = 0.0f;
+                    }
+                }
             }
 
             // Apply shielder barriers to allies
@@ -1223,15 +1240,29 @@ int main(int argc, char* argv[]) {
                         // Apply tipping mods to base damage
                         RoundMod rm = proj.round_mod;
                         float base_dmg = proj.damage;
-                        if (rm.tipping == Tipping::Hollow_Point && e.shield_hp <= 0)
-                            base_dmg *= 1.5f;
                         if (rm.tipping == Tipping::Sharpened)
-                            base_dmg *= 1.5f; // crit
+                            base_dmg += 10.0f;
+                        if (rm.tipping == Tipping::Crystal_Tipped)
+                            base_dmg *= 2.0f;
+                        if (rm.tipping == Tipping::Aerodynamic)
+                            base_dmg *= 1.2f;
 
-                        // Apply shield absorption (armor-piercing bypasses)
-                        bool ap = (rm.tipping == Tipping::Armor_Piercing);
-                        float actual_dmg = ap ? base_dmg : shielder_absorb_damage(e, base_dmg);
+                        // Apply shield absorption (Piercing bypasses)
+                        bool piercing = (rm.tipping == Tipping::Piercing);
+                        float actual_dmg = piercing ? base_dmg : shielder_absorb_damage(e, base_dmg);
                         e.health -= actual_dmg;
+
+                        // Poison tipping
+                        if (rm.tipping == Tipping::Poison_Tipped) {
+                            e.poison_stacks++;
+                            e.poison_timer = 5.0f;
+                        }
+
+                        // Crystal Tipped: 1/10 chance to shatter (lose tipping)
+                        if (rm.tipping == Tipping::Crystal_Tipped) {
+                            if (rand() % 10 == 0)
+                                proj.round_mod.tipping = Tipping::None;
+                        }
 
                         // Enchantment effects
                         if (rm.enchantment == Enchantment::Vampiric) {
@@ -1286,8 +1317,10 @@ int main(int argc, char* argv[]) {
                                 randf(-1.0f, 1.0f) * tumble * 57.3f);
                         }
 
-                        hit_something = true;
-                        break; // one hit per projectile
+                        if (!piercing) {
+                            hit_something = true;
+                            break; // one hit per projectile (unless piercing)
+                        }
                     }
                 }
                 if (hit_something) proj.alive = false;

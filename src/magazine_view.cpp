@@ -12,10 +12,12 @@
 
 static ImU32 tipping_color(Tipping t) {
     switch (t) {
-        case Tipping::Hollow_Point:   return IM_COL32(220, 160, 60, 255);
-        case Tipping::Armor_Piercing: return IM_COL32(180, 180, 200, 255);
         case Tipping::Sharpened:      return IM_COL32(200, 80, 80, 255);
-        case Tipping::Splitting:      return IM_COL32(100, 200, 100, 255);
+        case Tipping::Piercing:       return IM_COL32(180, 180, 200, 255);
+        case Tipping::Crystal_Tipped: return IM_COL32(140, 200, 240, 255);
+        case Tipping::Aerodynamic:    return IM_COL32(100, 220, 180, 255);
+        case Tipping::Poison_Tipped:  return IM_COL32(80, 200, 80, 255);
+        case Tipping::Blank:          return IM_COL32(60, 60, 60, 255);
         default:                      return IM_COL32(100, 100, 110, 255);
     }
 }
@@ -322,7 +324,7 @@ void magazine_view_draw(GameState& gs) {
                       IM_COL32(200, 160, 80, 255), "Tipping (top)");
         draw->AddText(ImVec2(lx - 200, ly + 18),
                       IM_COL32(160, 155, 170, 200),
-                      "HP=Hollow Point  AP=Armor Pierce  Sh=Sharpened  Sp=Splitting");
+                      "Sh=Sharpened  Pi=Piercing  Cr=Crystal  Ae=Aerodynamic  Po=Poison  Bl=Blank");
         draw->AddText(ImVec2(lx - 200, ly + 42),
                       IM_COL32(120, 90, 200, 255), "Enchantment (bottom)");
         draw->AddText(ImVec2(lx - 200, ly + 60),

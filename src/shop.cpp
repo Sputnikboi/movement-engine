@@ -209,13 +209,13 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     gs.pending_mod.active = true;
                     gs.pending_mod.is_tipping = true;
                     gs.pending_mod.tipping = s.offered_tipping;
-                    gs.pending_mod.applications_left = gs.pending_mod.max_applications;
+                    gs.pending_mod.applications_left = tipping_max_applications(s.offered_tipping);
                     gs.show_magazine_view = true;
                     SDL_SetWindowRelativeMouseMode(gs.window, false);
                     s.purchased = true;
                     gs.shop_interact_cooldown = 0.3f;
                     printf("Bought %s tipping — select %d rounds\n",
-                           tipping_name(s.offered_tipping), gs.pending_mod.max_applications);
+                           tipping_name(s.offered_tipping), gs.pending_mod.applications_left);
                 }
             } else if (s.type == ShopStandType::ModEnchantment) {
                 if (gs.currency >= s.cost) {
