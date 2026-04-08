@@ -316,6 +316,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
         if (reload_timer <= 0.0f) {
             ammo = config.mag_size;
+            current_round = 0;
             // Don't reinit magazine — mods persist across reloads
             last_fired_mod = {};
             state = WeaponState::IDLE;
@@ -338,11 +339,15 @@ bool Weapon::try_fire() {
     if (ammo <= 0 && !config.infinite_ammo) return false;
 
     // Record the mod on the round about to be fired
-    int round_index = config.mag_size - ammo;  // 0 = first shot
-    last_fired_mod = magazine.get(round_index);
-
-    if (!config.infinite_ammo)
+    int round_index;
+    if (config.infinite_ammo) {
+        round_index = current_round;
+        current_round = (current_round + 1) % config.mag_size;
+    } else {
+        round_index = config.mag_size - ammo;  // 0 = first shot
         ammo--;
+    }
+    last_fired_mod = magazine.get(round_index);
     fire_timer = 1.0f / config.fire_rate;
     state = WeaponState::FIRING;
 

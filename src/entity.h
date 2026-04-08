@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vendor/HandmadeMath.h"
+#include "bullet_mods.h"
 #include <cstdint>
 
 // ============================================================
@@ -42,6 +43,7 @@ struct Entity {
     int      owner = -1;
     float    damage = 0.0f;
     float    lifetime = 0.0f;
+    RoundMod round_mod = {};  // tipping + enchantment carried by this projectile
 
     // Spawn / wander
     HMM_Vec3 spawn_pos    = {};     // original spawn position (wander home)

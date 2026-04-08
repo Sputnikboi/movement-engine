@@ -877,6 +877,7 @@ int main(int argc, char* argv[]) {
                         p.velocity = HMM_MulV3F(fwd, weapon.config.proj_speed);
                         p.radius   = weapon.config.proj_radius;
                         p.damage   = weapon.config.damage;
+                        p.round_mod = weapon.last_fired_mod;
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
                         p.ai_timer = GRACE; // render grace period
@@ -1219,10 +1220,25 @@ int main(int argc, char* argv[]) {
 
                     float dist = HMM_LenV3(HMM_SubV3(proj.position, e.position));
                     if (dist < proj.radius + e.radius) {
-                        // Apply damage with shield absorption
-                        float raw_dmg = proj.damage;
-                        float actual_dmg = shielder_absorb_damage(e, raw_dmg);
+                        // Apply tipping mods to base damage
+                        RoundMod rm = proj.round_mod;
+                        float base_dmg = proj.damage;
+                        if (rm.tipping == Tipping::Hollow_Point && e.shield_hp <= 0)
+                            base_dmg *= 1.5f;
+                        if (rm.tipping == Tipping::Sharpened)
+                            base_dmg *= 1.5f; // crit
+
+                        // Apply shield absorption (armor-piercing bypasses)
+                        bool ap = (rm.tipping == Tipping::Armor_Piercing);
+                        float actual_dmg = ap ? base_dmg : shielder_absorb_damage(e, base_dmg);
                         e.health -= actual_dmg;
+
+                        // Enchantment effects
+                        if (rm.enchantment == Enchantment::Vampiric) {
+                            player.health += actual_dmg * 0.1f;
+                            if (player.health > player.max_health)
+                                player.health = player.max_health;
+                        }
 
                         // Floating damage number at hit point
                         {

@@ -157,7 +157,7 @@ void magazine_view_draw(GameState& gs) {
     float max_arc_angle = 0.3f;
     float arc_radius = 600.0f;
 
-    int current_round = mag.capacity - w.ammo;
+    int current_round = w.config.infinite_ammo ? w.current_round : (mag.capacity - w.ammo);
     ImVec2 mouse = io.MousePos;
     bool mouse_clicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
