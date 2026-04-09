@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
         printf("No spawn point — starting in noclip. Press V to drop in.\n");
     }
     bool show_settings = false;
-    bool show_hud = true;
+    bool show_hud = false;
     bool show_ladder_debug = false;
     bool show_magazine_view = false;
     bool ai_enabled = true;

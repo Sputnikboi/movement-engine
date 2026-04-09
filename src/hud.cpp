@@ -113,14 +113,14 @@ void hud_draw_game(GameState& gs, const HudContext& ctx, ImFont* font, ImFont* f
             float rb_w = 200.0f;
             float rb_h = 6.0f;
             float rb_x = ax;
-            float rb_y = ay + 70.0f;
+            float rb_y = ay - 14.0f;
 
             dl->AddRectFilled(ImVec2(rb_x, rb_y), ImVec2(rb_x + rb_w, rb_y + rb_h),
                               IM_COL32(0, 0, 0, 140), 3.0f);
             dl->AddRectFilled(ImVec2(rb_x, rb_y), ImVec2(rb_x + rb_w * reload_frac, rb_y + rb_h),
                               IM_COL32(255, 220, 60, 220), 3.0f);
 
-            draw_text_shadowed(dl, font, 21.0f, ImVec2(rb_x + rb_w + 8, rb_y - 6),
+            draw_text_shadowed(dl, font, 21.0f, ImVec2(rb_x + rb_w + 8, rb_y - 8),
                                IM_COL32(255, 220, 60, 220), "RELOADING");
         }
     }
@@ -142,15 +142,7 @@ void hud_draw_game(GameState& gs, const HudContext& ctx, ImFont* font, ImFont* f
                            IM_COL32(200, 200, 210, 200), room_text);
     }
 
-    // ---- Enemy count (top right, below room) ----
-    if (ctx.enemy_count > 0 && !gs.in_shop_room) {
-        char enemy_text[32];
-        snprintf(enemy_text, sizeof(enemy_text), "%d ENEMIES", ctx.enemy_count);
-        ImVec2 et_sz = font->CalcTextSizeA(21.0f, FLT_MAX, 0.0f, enemy_text);
-        float ex = sw - et_sz.x - 20.0f;
-        draw_text_shadowed(dl, font, 21.0f, ImVec2(ex, 70.0f),
-                           IM_COL32(255, 100, 100, 200), enemy_text);
-    }
+
 
     // ---- Door prompts (bottom center) ----
     if (!gs.in_shop_room) {

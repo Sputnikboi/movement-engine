@@ -115,7 +115,7 @@ struct Keybinds {
         binds[static_cast<int>(Action::Reload)][0]      = SDL_SCANCODE_R;
         binds[static_cast<int>(Action::ADS)][0]         = INPUT_MOUSE_RIGHT;
         binds[static_cast<int>(Action::Noclip)][0]      = SDL_SCANCODE_V;
-        binds[static_cast<int>(Action::ToggleHUD)][0]        = SDL_SCANCODE_H;
+        binds[static_cast<int>(Action::ToggleHUD)][0]        = SDL_SCANCODE_F3;
         binds[static_cast<int>(Action::ToggleFullscreen)][0] = SDL_SCANCODE_F11;
         binds[static_cast<int>(Action::Interact)][0]        = SDL_SCANCODE_E;
         binds[static_cast<int>(Action::Holster)][0]         = SDL_SCANCODE_3;
