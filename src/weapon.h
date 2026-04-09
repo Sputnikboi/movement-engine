@@ -149,7 +149,11 @@ struct Weapon {
         int effective_mag = config.mag_size + bonuses.bonus_mag;
         if (effective_mag > MAX_MAGAZINE_CAPACITY) effective_mag = MAX_MAGAZINE_CAPACITY;
         if (magazine.capacity != effective_mag) {
+            int old_cap = magazine.capacity;
             magazine.resize(effective_mag);
+            // Grant extra ammo for newly added slots
+            if (effective_mag > old_cap)
+                ammo += (effective_mag - old_cap);
             if (ammo > effective_mag) ammo = effective_mag;
         }
     }

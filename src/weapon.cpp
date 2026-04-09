@@ -205,7 +205,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
     // Always buffer the reload press during FIRING — we check the delay
     // when deciding whether to consume the buffer, not when capturing it.
-    if (reload_pressed && state == WeaponState::FIRING && ammo < config.mag_size)
+    if (reload_pressed && state == WeaponState::FIRING && ammo < magazine.capacity)
         reload_buffered = true;
 
     // ADS blend
@@ -241,7 +241,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
     case WeaponState::IDLE:
         reload_phase = ReloadPhase::NONE;
         reload_progress = 0.0f;
-        if ((reload_pressed || reload_buffered) && ammo < config.mag_size) {
+        if ((reload_pressed || reload_buffered) && ammo < magazine.capacity) {
             state = WeaponState::RELOADING;
             reload_timer = config.reload_time / bonuses.reload_speed_mult;
             reload_buffered = false;
@@ -256,7 +256,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
         // If we have a buffered reload and enough time has passed,
         // transition to RELOADING early (don't wait for full cooldown).
-        if (reload_buffered && ammo < config.mag_size &&
+        if (reload_buffered && ammo < magazine.capacity &&
             time_since_shot >= config.reload_buffer_delay)
         {
             state = WeaponState::RELOADING;
@@ -270,7 +270,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
         if (fire_timer <= 0.0f) {
             state = WeaponState::IDLE;
             // Consume buffered reload on natural cooldown end too
-            if (reload_buffered && ammo < config.mag_size) {
+            if (reload_buffered && ammo < magazine.capacity) {
                 state = WeaponState::RELOADING;
                 reload_timer = config.reload_time / bonuses.reload_speed_mult;
                 reload_buffered = false;
@@ -318,7 +318,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
             reload_phase = ReloadPhase::GUN_UP;
 
         if (reload_timer <= 0.0f) {
-            ammo = config.mag_size;
+            ammo = magazine.capacity;
             current_round = 0;
             // Don't reinit magazine — mods persist across reloads
             last_fired_mod = {};
@@ -349,15 +349,15 @@ bool Weapon::try_fire() {
         split_pending--;
         is_split_refire = true;
         if (config.infinite_ammo) {
-            round_index = (current_round + config.mag_size - 1) % config.mag_size;
+            round_index = (current_round + magazine.capacity - 1) % magazine.capacity;
         } else {
-            round_index = config.mag_size - ammo - 1;  // previous round
+            round_index = magazine.capacity - ammo - 1;  // previous round
         }
     } else if (config.infinite_ammo) {
         round_index = current_round;
-        current_round = (current_round + 1) % config.mag_size;
+        current_round = (current_round + 1) % magazine.capacity;
     } else {
-        round_index = config.mag_size - ammo;  // 0 = first shot
+        round_index = magazine.capacity - ammo;  // 0 = first shot
         ammo--;
     }
     last_fired_round = round_index;

@@ -73,7 +73,7 @@ void hud_draw(GameState& gs, const HudContext& ctx) {
     ImGui::Separator();
     {
         Weapon& w = gs.weapons[gs.active_weapon];
-        ImGui::Text("%s  %d / %d", w.config.name, w.ammo, w.config.mag_size);
+        ImGui::Text("%s  %d / %d", w.config.name, w.ammo, w.magazine.capacity);
 
         // Effective fire rate (accounts for next round's Aerodynamic tipping)
         {
