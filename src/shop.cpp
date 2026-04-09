@@ -374,11 +374,13 @@ static void shop_text_shadowed(ImDrawList* dl, ImFont* font, float size,
     dl->AddText(font, size, pos, color, text);
 }
 
-// Helper: draw centered text line, returns y advance
+// Helper: draw centered text line, returns y advance. Updates max_w if provided.
 static float shop_text_centered(ImDrawList* dl, ImFont* font, float size,
-                                 float cx, float y, ImU32 color, const char* text) {
+                                 float cx, float y, ImU32 color, const char* text,
+                                 float* max_w = nullptr) {
     ImVec2 sz = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
     shop_text_shadowed(dl, font, size, ImVec2(cx - sz.x * 0.5f, y), color, text);
+    if (max_w && sz.x > *max_w) *max_w = sz.x;
     return sz.y + 4.0f;
 }
 
@@ -457,17 +459,21 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
         float cx = sw * 0.5f;
         float base_y = sh * 0.6f;
         float y = base_y;
+        float max_text_w = 0.0f; // track widest line for box sizing
 
-        // Background box (drawn after measuring content, so pre-calculate)
-        float box_w = 400.0f;
-        float box_pad = 12.0f;
+        float box_pad = 16.0f;
+
+        // Use channel splitter: ch0 = bg (behind), ch1 = text (front)
+        ImDrawListSplitter splitter;
+        splitter.Split(dl, 2);
+        splitter.SetCurrentChannel(dl, 1); // draw text on front channel
 
         const char* interact_key = input_code_name(gs.kb.get(Action::Interact, 0));
 
         if (s.type == ShopStandType::Empty) {
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(120, 120, 120, 200), "COMING SOON");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(120, 120, 120, 200), "COMING SOON", &max_text_w);
         } else if (s.purchased) {
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(120, 120, 120, 200), "SOLD");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(120, 120, 120, 200), "SOLD", &max_text_w);
         } else if (s.type == ShopStandType::Weapon) {
             int w = s.weapon_index;
             int lvl = gs.weapon_level[w];
@@ -483,26 +489,26 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
             if (w == gs.active_weapon) {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "%s  LV %d > %d", wnames[w], lvl, lvl + 1);
-                y += shop_text_centered(dl, font, fs, cx, y, title_col, buf);
+                y += shop_text_centered(dl, font, fs, cx, y, title_col, buf, &max_text_w);
             } else {
                 if (lvl > 0) {
                     char buf[64];
                     snprintf(buf, sizeof(buf), "%s  LV %d", wnames[w], lvl);
-                    y += shop_text_centered(dl, font, fs, cx, y, title_col, buf);
+                    y += shop_text_centered(dl, font, fs, cx, y, title_col, buf, &max_text_w);
                 } else {
-                    y += shop_text_centered(dl, font, fs, cx, y, title_col, wnames[w]);
+                    y += shop_text_centered(dl, font, fs, cx, y, title_col, wnames[w], &max_text_w);
                 }
             }
 
             // Desc
             if (w == gs.active_weapon) {
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), upgrade_desc[w]);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), upgrade_desc[w], &max_text_w);
             } else {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "REPLACES %s", gs.weapons[gs.active_weapon].config.name);
                 // Uppercase the weapon name
                 for (char* p = buf; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), buf, &max_text_w);
             }
 
             y += 4.0f;
@@ -510,82 +516,89 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
             if (gs.currency >= s.cost) {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "%s %s  %dG", interact_key, action, s.cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf, &max_text_w);
             } else {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf, &max_text_w);
             }
         } else if (s.type == ShopStandType::Reroll) {
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(200, 200, 210, 255), "REROLL SHOP");
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(150, 150, 160, 200), "RANDOMIZE ALL ITEMS");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(200, 200, 210, 255), "REROLL SHOP", &max_text_w);
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(150, 150, 160, 200), "RANDOMIZE ALL ITEMS", &max_text_w);
             y += 4.0f;
             if (gs.currency >= s.reroll_cost) {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "%s REROLL  %dG", interact_key, s.reroll_cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf, &max_text_w);
             } else {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.reroll_cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf, &max_text_w);
             }
         } else if (s.type == ShopStandType::ModTipping) {
             ImU32 tip_col = IM_COL32(230, 130, 50, 255);
             char title[64];
             snprintf(title, sizeof(title), "TIPPING: %s", tipping_name(s.offered_tipping));
             for (char* p = title; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
-            y += shop_text_centered(dl, font, fs, cx, y, tip_col, title);
+            y += shop_text_centered(dl, font, fs, cx, y, tip_col, title, &max_text_w);
             // Description — uppercase it
             char desc[128];
             snprintf(desc, sizeof(desc), "%s", tipping_desc(s.offered_tipping));
             for (char* p = desc; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), desc);
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), desc, &max_text_w);
             int app = tipping_max_applications(s.offered_tipping);
             char abuf[32];
             snprintf(abuf, sizeof(abuf), "APPLIES TO %d ROUND%s", app, app == 1 ? "" : "S");
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(160, 160, 170, 200), abuf);
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(160, 160, 170, 200), abuf, &max_text_w);
             y += 4.0f;
             if (gs.currency >= s.cost) {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "%s BUY  %dG", interact_key, s.cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf, &max_text_w);
             } else {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf, &max_text_w);
             }
         } else if (s.type == ShopStandType::ModEnchantment) {
             ImU32 ench_col = IM_COL32(130, 70, 230, 255);
             char title[64];
             snprintf(title, sizeof(title), "ENCHANTMENT: %s", enchantment_name(s.offered_enchantment));
             for (char* p = title; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
-            y += shop_text_centered(dl, font, fs, cx, y, ench_col, title);
+            y += shop_text_centered(dl, font, fs, cx, y, ench_col, title, &max_text_w);
             char desc[128];
             snprintf(desc, sizeof(desc), "%s", enchantment_desc(s.offered_enchantment));
             for (char* p = desc; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), desc);
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), desc, &max_text_w);
             int eapp = enchantment_max_applications(s.offered_enchantment);
             char abuf[32];
             snprintf(abuf, sizeof(abuf), "APPLIES TO %d ROUND%s", eapp, eapp == 1 ? "" : "S");
-            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(160, 160, 170, 200), abuf);
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(160, 160, 170, 200), abuf, &max_text_w);
             y += 4.0f;
             if (gs.currency >= s.cost) {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "%s BUY  %dG", interact_key, s.cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf, &max_text_w);
             } else {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.cost);
-                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf, &max_text_w);
             }
         }
 
-        // Draw background box behind everything we just drew
+        // Draw background box on channel 0 (behind text)
+        splitter.SetCurrentChannel(dl, 0);
         float box_h = y - base_y + box_pad * 2;
+        float box_w = fmaxf(max_text_w + box_pad * 2, 200.0f);
         dl->AddRectFilled(
             ImVec2(cx - box_w * 0.5f, base_y - box_pad),
-            ImVec2(cx + box_w * 0.5f, base_y + box_h - box_pad),
-            IM_COL32(30, 30, 35, 220), 8.0f);
+            ImVec2(cx + box_w * 0.5f, base_y - box_pad + box_h),
+            IM_COL32(30, 30, 35, 230), 8.0f);
+        dl->AddRect(
+            ImVec2(cx - box_w * 0.5f, base_y - box_pad),
+            ImVec2(cx + box_w * 0.5f, base_y - box_pad + box_h),
+            IM_COL32(120, 115, 130, 100), 8.0f, 0, 1.5f);
+        splitter.Merge(dl);
     }
 
     // ---- Exit door prompt ----
