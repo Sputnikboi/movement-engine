@@ -111,7 +111,7 @@ void Weapon::init_knife() {
     config.damage          = 60.0f;
     config.fire_rate       = 1.5f;
     config.range           = 200.0f;
-    config.mag_size        = 15;
+    config.mag_size        = 10;
     config.reload_time     = 0.0f;
     config.crit_multiplier = 2.5f;
     config.infinite_ammo   = true;

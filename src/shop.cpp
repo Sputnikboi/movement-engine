@@ -516,7 +516,7 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
             const char* wnames[] = {"GLOCK", "WINGMAN", "THROWING KNIFE"};
             const char* upgrade_desc[] = {
                 "+2 DMG  +15% RELOAD SPEED",
-                "1.1X DAMAGE",
+                "1.2X DAMAGE",
                 "+5 DMG  +10% ATTACK SPEED"
             };
 

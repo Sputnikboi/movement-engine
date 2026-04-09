@@ -114,7 +114,7 @@ struct GameState {
                 break;
             case 1: // Wingman: 1.1x damage per level
                 for (int i = 0; i < ups; i++)
-                    weapons[w].config.damage *= 1.1f;
+                    weapons[w].config.damage *= 1.2f;
                 break;
             case 2: // Knife: +5 dmg, +10% attack speed per level
                 weapons[w].config.damage    += ups * 5.0f;
