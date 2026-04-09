@@ -3,6 +3,10 @@
 #include "mesh.h"
 
 struct GameState;
+struct LevelData; // defined in level_loader.h
+
+// Spawn enemies from a generated level's enemy_spawns list, applying difficulty scaling.
+void spawn_enemies_from_level(GameState& gs, const LevelData& pld);
 
 // Called when player interacts with exit door in a combat room.
 // Generates the shop room, teleports the player in.

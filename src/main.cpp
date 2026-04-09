@@ -368,6 +368,12 @@ int main(int argc, char* argv[]) {
     RoomStats room_stats;
     bool show_room_summary = false;
 
+    // Death / restart state
+    bool  player_dead = false;
+    float death_timer = 0.0f;          // seconds since death
+    float death_cam_pitch_vel = 0.0f;  // camera slump velocity
+    bool  show_death_screen = false;   // true once death_timer > delay
+
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
             case EntityType::Drone:    return 1;
@@ -521,6 +527,9 @@ int main(int argc, char* argv[]) {
         /* pending_stand_idx */ pending_stand_idx,
         /* room_stats */        room_stats,
         /* show_room_summary */ show_room_summary,
+        /* player_dead */       player_dead,
+        /* death_timer */       death_timer,
+        /* show_death_screen */ show_death_screen,
         /* show_settings */     show_settings,
         /* show_hud */          show_hud,
         /* show_ladder_debug */ show_ladder_debug,
@@ -587,7 +596,7 @@ int main(int argc, char* argv[]) {
                     printf("Collision logging: %s\n", g_collision_log ? "ON" : "OFF");
                 }
 
-                if (event.key.key == SDLK_ESCAPE && !event.key.repeat && !show_room_summary) {
+                if (event.key.key == SDLK_ESCAPE && !event.key.repeat && !show_room_summary && !player_dead) {
                     if (show_magazine_view && pending_mod.active) {
                         // Cancel mod application — refund
                         currency += pending_mod.cost;
@@ -604,7 +613,7 @@ int main(int argc, char* argv[]) {
                         SDL_SetWindowRelativeMouseMode(window, !show_settings);
                     }
                 }
-                if (!show_settings) {
+                if (!show_settings && !player_dead) {
                     if (kb.matches_scancode(Action::Noclip, event.key.scancode) && !event.key.repeat) {
                         noclip = !noclip;
                         printf("Noclip: %s\n", noclip ? "ON" : "OFF");
@@ -725,7 +734,7 @@ int main(int argc, char* argv[]) {
             fps_timer = 0.0f;
         }
 
-        if (!show_settings && !show_magazine_view && !show_room_summary) {
+        if (!show_settings && !show_magazine_view && !show_room_summary && !player_dead) {
             float sens_scale = 1.0f - weapons[active_weapon].ads_blend * (1.0f - weapons[active_weapon].config.ads_sens_mult);
             camera.mouse_look(mouse_dx * sens_scale, mouse_dy * sens_scale);
         }
@@ -734,7 +743,7 @@ int main(int argc, char* argv[]) {
         const bool* keys_frame = SDL_GetKeyboardState(nullptr);
 
         // --- Movement ---
-        if (noclip && !show_settings && !show_magazine_view) {
+        if (noclip && !show_settings && !show_magazine_view && !player_dead) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             HMM_Vec3 move_dir = HMM_V3(0, 0, 0);
             HMM_Vec3 fwd   = camera.forward_flat();
@@ -754,7 +763,7 @@ int main(int argc, char* argv[]) {
                 if (kb.held(Action::Sprint, keys)) speed *= 3.0f;
                 camera.position = HMM_AddV3(camera.position, HMM_MulV3F(move_dir, speed * dt));
             }
-        } else if (!show_settings && !show_magazine_view) {
+        } else if (!show_settings && !show_magazine_view && !player_dead) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
 
             input.forward = 0.0f;
@@ -821,6 +830,24 @@ int main(int argc, char* argv[]) {
             camera.position = player.eye_position();
         }
 
+        // --- Death camera slump ---
+        if (player_dead) {
+            death_timer += dt;
+            // Slowly pitch camera down (head slump)
+            constexpr float DEATH_CAM_ACCEL = 0.4f;   // rad/s²
+            constexpr float DEATH_CAM_MAX_PITCH = -1.2f; // radians (~70° down)
+            constexpr float DEATH_SCREEN_DELAY = 1.8f; // seconds before showing UI
+            if (camera.pitch > DEATH_CAM_MAX_PITCH) {
+                death_cam_pitch_vel -= DEATH_CAM_ACCEL * dt;
+                camera.pitch += death_cam_pitch_vel * dt;
+                if (camera.pitch < DEATH_CAM_MAX_PITCH)
+                    camera.pitch = DEATH_CAM_MAX_PITCH;
+            }
+            if (death_timer >= DEATH_SCREEN_DELAY && !show_death_screen) {
+                show_death_screen = true;
+            }
+        }
+
         total_time += dt;
 
         // --- Weapon switching ---
@@ -856,11 +883,11 @@ int main(int argc, char* argv[]) {
             Weapon& weapon = weapons[active_weapon];
             player.weapon_lightweight = weapon.config.lightweight;
             bool holstered = player.weapon_holstered;
-            bool fire_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::Shoot, keys_frame);
-            bool reload_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::Reload, keys_frame);
-            bool ads_input = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::ADS, keys_frame);
+            bool fire_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && !player_dead && kb.held(Action::Shoot, keys_frame);
+            bool reload_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && !player_dead && kb.held(Action::Reload, keys_frame);
+            bool ads_input = !show_settings && !show_magazine_view && !noclip && !holstered && !player_dead && kb.held(Action::ADS, keys_frame);
 
-            float weapon_dt = (show_settings || show_magazine_view) ? 0.0f : dt;
+            float weapon_dt = (show_settings || show_magazine_view || player_dead) ? 0.0f : dt;
             weapon.update(weapon_dt, fire_pressed, reload_pressed, ads_input);
 
             // Try to fire — if weapon fires, do hitscan
@@ -1107,12 +1134,27 @@ int main(int argc, char* argv[]) {
 
         // --- Update entities (only when not paused) ---
         if (!show_settings && !show_shop && !show_magazine_view) {
-            // --- Player damage decay ---
-            if (player.damage_accum > 0.0f) {
+            // --- Player damage decay (freeze when dead for persistent vignette) ---
+            if (!player_dead && player.damage_accum > 0.0f) {
                 player.damage_accum -= player.damage_accum * (2.0f / player.damage_decay) * dt;
                 if (player.damage_accum < 0.1f) player.damage_accum = 0.0f;
             }
+            if (player_dead) player.damage_accum = 40.0f; // max vignette
             if (player.health < 0.0f) player.health = 0.0f;
+
+            // --- Player death trigger ---
+            if (player.health <= 0.0f && !player_dead) {
+                player_dead = true;
+                death_timer = 0.0f;
+                show_death_screen = false;
+                death_cam_pitch_vel = 0.0f;
+                SDL_SetWindowRelativeMouseMode(window, false);
+                show_magazine_view = false;
+                show_room_summary = false;
+                pending_mod = {};
+                pending_stand_idx = -1;
+                printf("Player died in room %d\n", rooms_cleared + 1);
+            }
 
             // Track dying drones to spawn explosions when they hit ground
             struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
@@ -1142,7 +1184,7 @@ int main(int argc, char* argv[]) {
                     if (ai_enabled) {
                         rusher_update(e, entities, MAX_ENTITIES,
                                       player.position, collision, rusher_cfg, dt, total_time);
-                        if (rusher_check_player_hit(e, player.capsule_bottom(), player.capsule_top(), player.radius, rusher_cfg)) {
+                        if (!player_dead && rusher_check_player_hit(e, player.capsule_bottom(), player.capsule_top(), player.radius, rusher_cfg)) {
                             player.health -= rusher_cfg.melee_damage;
                             player.damage_accum += rusher_cfg.melee_damage;
                             room_stats.record_taken(rusher_cfg.melee_damage, EntityType::Rusher);
@@ -1156,7 +1198,7 @@ int main(int argc, char* argv[]) {
                         turret_update(e, entities, MAX_ENTITIES,
                                       player.position, collision, turret_cfg, dt, total_time);
                         float tdmg = 0.0f;
-                        if (turret_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
+                        if (!player_dead && turret_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
                                                     player.radius, collision, turret_cfg, tdmg)) {
                             float dmg = tdmg * dt;  // beam_dps * dt
                             player.health -= dmg;
@@ -1173,7 +1215,7 @@ int main(int argc, char* argv[]) {
                                     player.position, collision, tank_cfg, dt, total_time);
                         float tdmg = 0.0f;
                         HMM_Vec3 kb = {};
-                        if (tank_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
+                        if (!player_dead && tank_check_player_hit(e, player.capsule_bottom(), player.capsule_top(),
                                                   player.radius, tank_cfg, tdmg, kb)) {
                             // Apply knockback to player
                             player.velocity = HMM_AddV3(player.velocity, kb);
@@ -1194,7 +1236,7 @@ int main(int argc, char* argv[]) {
                                       player.position, collision, bomber_cfg, dt, total_time);
                         float bdmg = 0.0f;
                         HMM_Vec3 bkb = {};
-                        if (bomber_check_explosion(e, player.capsule_bottom(), player.capsule_top(),
+                        if (!player_dead && bomber_check_explosion(e, player.capsule_bottom(), player.capsule_top(),
                                                    player.radius, bomber_cfg, bdmg, bkb)) {
                             player.velocity = HMM_AddV3(player.velocity, bkb);
                             player.health -= bdmg;
@@ -1444,7 +1486,7 @@ int main(int argc, char* argv[]) {
                 if (!e.alive || e.type != EntityType::Projectile) continue;
 
                 if (e.owner == -3 || e.owner == -4) continue; // skip player projectiles + dummy
-                if (sphere_capsule_overlap(e.position, e.radius,
+                if (!player_dead && sphere_capsule_overlap(e.position, e.radius,
                                            player.capsule_bottom(), player.capsule_top(),
                                            player.radius)) {
                     player.health -= e.damage;
@@ -1494,7 +1536,7 @@ int main(int argc, char* argv[]) {
         }
 
         // --- Door interact → stats screen → shop ---
-        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room && !show_room_summary) {
+        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room && !show_room_summary && !player_dead) {
             // Show stats screen first; shop_enter happens on dismiss
             int gilded_gold = weapons[active_weapon].bonuses.bonus_gold;
             room_stats.finalize(gilded_gold);
@@ -1648,12 +1690,14 @@ int main(int argc, char* argv[]) {
                     e.type == EntityType::Bomber || e.type == EntityType::Shielder)
                     enemy_count_hud++;
             }
-            HudContext ctx{display_fps, near_exit_door, exit_door_locked, enemy_count_hud};
-            hud_draw(gs, ctx);
+            if (!player_dead) {
+                HudContext ctx{display_fps, near_exit_door, exit_door_locked, enemy_count_hud};
+                hud_draw(gs, ctx);
+            }
         }
 
         // --- Shop room HUD ---
-        shop_draw_hud(gs);
+        if (!player_dead) shop_draw_hud(gs);
 
         // --- Magazine card view ---
         magazine_view_draw(gs);
@@ -1670,6 +1714,165 @@ int main(int argc, char* argv[]) {
                     start_next_room(gs);
                 }
             }
+        }
+
+        // --- Death screen ---
+        if (player_dead && show_death_screen) {
+            ImGuiIO& io = ImGui::GetIO();
+            ImVec2 ds = io.DisplaySize;
+
+            // Full-screen dark overlay — fade in
+            float fade = (death_timer - 1.8f) / 1.0f; // 1s fade-in after delay
+            if (fade > 1.0f) fade = 1.0f;
+            if (fade > 0.0f) {
+                ImGui::GetForegroundDrawList()->AddRectFilled(
+                    ImVec2(0, 0), ds,
+                    ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, fade * 0.7f)));
+            }
+
+            // Center window
+            ImVec2 win_size(400, 320);
+            ImGui::SetNextWindowPos(ImVec2(ds.x * 0.5f, ds.y * 0.45f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(win_size);
+            ImGui::SetNextWindowBgAlpha(0.85f * fade);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.15f, 0.15f, fade));
+
+            if (ImGui::Begin("##DeathScreen", nullptr,
+                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoNav)) {
+
+                // "YOU DIED" title
+                {
+                    const char* title = "YOU DIED";
+                    ImGui::PushFont(nullptr); // default font, we'll scale
+                    float title_w = ImGui::CalcTextSize(title).x * 2.0f;
+                    ImGui::SetCursorPosX((win_size.x - title_w) * 0.5f);
+                    ImGui::SetCursorPosY(20.0f);
+
+                    // Draw scaled title manually
+                    ImVec2 pos = ImGui::GetCursorScreenPos();
+                    ImGui::GetWindowDrawList()->AddText(nullptr, 36.0f, pos,
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.9f, 0.15f, 0.15f, fade)),
+                        title);
+                    ImGui::Dummy(ImVec2(0, 44.0f));
+                    ImGui::PopFont();
+                }
+
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                // Run stats
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Room Reached:");
+                ImGui::SameLine(220);
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, fade), "%d", rooms_cleared + 1);
+
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Gold Earned:");
+                ImGui::SameLine(220);
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, fade), "%d", room_stats.gold_total);
+
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Total Damage Dealt:");
+                ImGui::SameLine(220);
+                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, fade), "%.0f", room_stats.dmg_total);
+
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Weapon:");
+                ImGui::SameLine(220);
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, fade), "%s Lv%d",
+                    weapons[active_weapon].config.name, weapon_level[active_weapon]);
+
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                // Restart button
+                float btn_w = 180.0f;
+                ImGui::SetCursorPosX((win_size.x - btn_w) * 0.5f);
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.12f, 0.12f, fade));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, fade));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.3f, 0.3f, fade));
+                if (ImGui::Button("Restart Run", ImVec2(btn_w, 40.0f))) {
+                    // === FULL RUN RESET ===
+                    player_dead = false;
+                    death_timer = 0.0f;
+                    show_death_screen = false;
+                    death_cam_pitch_vel = 0.0f;
+
+                    // Reset player
+                    player.health = 100.0f;
+                    player.max_health = 100.0f;
+                    player.damage_accum = 0.0f;
+                    player.velocity = HMM_V3(0, 0, 0);
+                    player.weapon_holstered = false;
+                    player.crouched = false;
+                    player.sliding = false;
+                    player.power_sliding = false;
+
+                    // Reset weapons — back to default glock
+                    active_weapon = 0;
+                    pending_weapon = -1;
+                    num_weapons = 1;
+                    weapons[0].init_glock();
+                    weapons[1].init_wingman();
+                    weapons[2].init_knife();
+                    for (int w = 0; w < MAX_WEAPONS; w++) weapon_level[w] = 0;
+                    weapon_level[0] = 1;
+
+                    // Reset economy
+                    currency = 0;
+
+                    // Reset shop state
+                    show_shop = false;
+                    in_shop_room = false;
+                    shop_weapon = -1;
+                    shop_nearby_stand = -1;
+                    shop_interact_cooldown = 0.0f;
+                    pending_mod = {};
+                    pending_stand_idx = -1;
+
+                    // Reset rooms
+                    rooms_cleared = 0;
+                    room_stats.reset();
+                    show_room_summary = false;
+                    show_magazine_view = false;
+                    show_settings = false;
+
+                    // Reset camera
+                    camera.pitch = 0.0f;
+
+                    // Clear damage numbers
+                    dmg_numbers = {};
+
+                    // Generate room 1
+                    procgen_cfg.seed = 0;
+                    procgen_cfg.room_number = 1;
+                    procgen_cfg.difficulty = 1.0f;
+                    LevelData pld = generate_level(procgen_cfg, door_mesh_ptr, &active_doors);
+
+                    for (int i = 0; i < MAX_ENTITIES; i++) entities[i].alive = false;
+                    effects.init();
+                    collision.triangles.clear();
+                    collision.ladder_volumes.clear();
+                    collision.build_from_mesh(pld.mesh);
+                    renderer.reload_mesh(pld.mesh);
+
+                    player.position = pld.spawn_pos;
+                    camera.yaw = HMM_PI32 / 2.0f;
+                    noclip = false;
+
+                    spawn_enemies_from_level(gs, pld);
+                    current_level_name = "Procedural";
+
+                    SDL_SetWindowRelativeMouseMode(window, true);
+                    printf("=== RUN RESTARTED ===\n");
+                }
+                ImGui::PopStyleColor(3);
+            }
+            ImGui::End();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
         }
 
         // --- Floating damage numbers (screen-space) ---
@@ -1709,7 +1912,7 @@ int main(int argc, char* argv[]) {
         const Mesh* vm_mesh_ptr = nullptr;
         {
             Weapon& vw = weapons[active_weapon];
-            bool show_vm = vw.mesh_loaded && (!player.weapon_holstered || vw.holster_raising);
+            bool show_vm = vw.mesh_loaded && (!player.weapon_holstered || vw.holster_raising) && !player_dead;
             if (show_vm) vm_mesh_ptr = &vw.viewmodel_mesh;
         }
         HMM_Mat4 vm_model = weapons[active_weapon].get_viewmodel_matrix(camera);

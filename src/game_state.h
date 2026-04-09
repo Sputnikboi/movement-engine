@@ -79,6 +79,11 @@ struct GameState {
     RoomStats&        room_stats;
     bool&             show_room_summary;
 
+    // Death / restart
+    bool&             player_dead;
+    float&            death_timer;
+    bool&             show_death_screen;
+
     // UI flags
     bool&             show_settings;
     bool&             show_hud;
