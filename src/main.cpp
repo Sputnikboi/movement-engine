@@ -273,6 +273,17 @@ int main(int argc, char* argv[]) {
 
     ImGui_ImplVulkan_Init(&init_info);
 
+    // --- Load custom game font (Daydream pixel font) ---
+    ImFont* game_font = nullptr;
+    ImFont* game_font_large = nullptr;
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        game_font       = io.Fonts->AddFontFromFileTTF("assets/fonts/Daydream.ttf", 21.0f);
+        game_font_large = io.Fonts->AddFontFromFileTTF("assets/fonts/Daydream.ttf", 42.0f);
+        if (!game_font)       printf("WARNING: Failed to load Daydream.ttf at 21px\n");
+        if (!game_font_large) printf("WARNING: Failed to load Daydream.ttf at 42px\n");
+    }
+
     // --- Player + camera + config ---
     Camera camera;
     Player player;
@@ -1704,7 +1715,9 @@ int main(int argc, char* argv[]) {
             }
             if (!player_dead) {
                 HudContext ctx{display_fps, near_exit_door, exit_door_locked, enemy_count_hud};
-                hud_draw(gs, ctx);
+                hud_draw_game(gs, ctx, game_font, game_font_large);
+                hud_draw_debug(gs, ctx);
+                hud_draw_overlay(gs);
             }
         }
 
