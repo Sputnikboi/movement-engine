@@ -95,14 +95,24 @@ void hud_draw_game(GameState& gs, const HudContext& ctx, ImFont* font, ImFont* f
                            IM_COL32(180, 190, 200, 220), w.config.name);
 
         // Ammo count (large)
-        char ammo_text[32];
         if (w.config.infinite_ammo) {
-            snprintf(ammo_text, sizeof(ammo_text), "INF");
+            // Draw infinity symbol as two overlapping circles
+            float cx = ax + 28.0f;
+            float cy = ay + 24.0f + 21.0f;
+            float r = 10.0f;
+            float sep = 9.0f;
+            ImU32 shadow = IM_COL32(0, 0, 0, 180);
+            ImU32 col = IM_COL32(255, 255, 255, 255);
+            dl->AddCircle(ImVec2(cx - sep + 1, cy + 1), r, shadow, 0, 3.0f);
+            dl->AddCircle(ImVec2(cx + sep + 1, cy + 1), r, shadow, 0, 3.0f);
+            dl->AddCircle(ImVec2(cx - sep, cy), r, col, 0, 3.0f);
+            dl->AddCircle(ImVec2(cx + sep, cy), r, col, 0, 3.0f);
         } else {
+            char ammo_text[32];
             snprintf(ammo_text, sizeof(ammo_text), "%d / %d", w.ammo, w.magazine.capacity);
+            draw_text_shadowed(dl, font_large, 42.0f, ImVec2(ax, ay + 24.0f),
+                               IM_COL32(255, 255, 255, 255), ammo_text);
         }
-        draw_text_shadowed(dl, font_large, 42.0f, ImVec2(ax, ay + 24.0f),
-                           IM_COL32(255, 255, 255, 255), ammo_text);
 
         // Reload progress bar
         if (w.state == WeaponState::RELOADING) {
