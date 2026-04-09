@@ -1169,10 +1169,10 @@ int main(int argc, char* argv[]) {
                 pending_mod = {};
                 pending_stand_idx = -1;
                 printf("Player died in room %d\n", rooms_cleared + 1);
-            }
                 // Accumulate current room partial stats into run totals
                 run_dmg_dealt   += room_stats.dmg_total;
                 run_gold_earned += room_stats.gold_total;
+            }
 
             // Track dying drones to spawn explosions when they hit ground
             struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
@@ -1271,8 +1271,11 @@ int main(int argc, char* argv[]) {
                                         player.position, collision, shielder_cfg, dt, total_time);
                 }
 
-                // Poison DoT tick
-                if (e.poison_stacks > 0 && e.type != EntityType::Projectile) {
+                // Poison DoT tick (skip dying enemies)
+                bool is_dying = (e.ai_state == DRONE_DYING || e.ai_state == RUSHER_DYING ||
+                                 e.ai_state == TURRET_DYING || e.ai_state == TANK_DYING ||
+                                 e.ai_state == BOMBER_DYING || e.ai_state == SHIELDER_DYING);
+                if (e.poison_stacks > 0 && e.type != EntityType::Projectile && !is_dying) {
                     float poison_dps = 4.0f * 1.5f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks;
                     float poison_dmg = poison_dps * dt;
                     e.health -= poison_dmg;
