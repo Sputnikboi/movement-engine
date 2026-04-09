@@ -75,6 +75,15 @@ struct Magazine {
         if (slot >= 0 && slot < capacity) rounds[slot].enchantment = e;
     }
 
+    // Swap two round slots (for reordering in shop)
+    void swap(int a, int b) {
+        if (a >= 0 && a < capacity && b >= 0 && b < capacity && a != b) {
+            RoundMod tmp = rounds[a];
+            rounds[a] = rounds[b];
+            rounds[b] = tmp;
+        }
+    }
+
     // Count how many rounds have a specific tipping/enchantment
     // (useful for passive effects that scale with count).
     int count_tipping(Tipping t) const {
@@ -170,6 +179,26 @@ struct PendingModApplication {
     bool is_tipping = false;     // true = tipping, false = enchantment
     Tipping tipping = Tipping::None;
     Enchantment enchantment = Enchantment::None;
-    int applications_left = 0;   // how many rounds can still be modded
-    int max_applications = 2;    // total allowed per purchase
+    int max_applications = 2;    // max rounds selectable
+    int cost = 0;                // purchase cost (for cancel refund)
+
+    // Selection state (toggle per round)
+    bool selected[MAX_MAGAZINE_CAPACITY] = {};
+    int  selected_count = 0;
+
+    void clear_selection() {
+        for (int i = 0; i < MAX_MAGAZINE_CAPACITY; i++) selected[i] = false;
+        selected_count = 0;
+    }
+
+    void toggle(int slot) {
+        if (slot < 0 || slot >= MAX_MAGAZINE_CAPACITY) return;
+        if (selected[slot]) {
+            selected[slot] = false;
+            selected_count--;
+        } else if (selected_count < max_applications) {
+            selected[slot] = true;
+            selected_count++;
+        }
+    }
 };

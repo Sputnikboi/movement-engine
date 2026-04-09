@@ -73,6 +73,7 @@ struct GameState {
     int&              shop_nearby_stand;
     float&            shop_interact_cooldown;
     PendingModApplication& pending_mod;
+    int&                  pending_stand_idx;  // shop stand to mark purchased on Apply
 
     // Room stats
     RoomStats&        room_stats;

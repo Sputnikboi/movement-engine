@@ -362,6 +362,7 @@ int main(int argc, char* argv[]) {
     int    shop_nearby_stand = -1;  // index of stand player is near (-1 = none)
     float  shop_interact_cooldown = 0.0f; // prevent double-buy
     PendingModApplication pending_mod;
+    int pending_stand_idx = -1;
 
     // Room stats
     RoomStats room_stats;
@@ -517,6 +518,7 @@ int main(int argc, char* argv[]) {
         /* shop_nearby_stand */ shop_nearby_stand,
         /* shop_interact_cooldown */ shop_interact_cooldown,
         /* pending_mod */       pending_mod,
+        /* pending_stand_idx */ pending_stand_idx,
         /* room_stats */        room_stats,
         /* show_room_summary */ show_room_summary,
         /* show_settings */     show_settings,
@@ -586,7 +588,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
-                    if (show_magazine_view) {
+                    if (show_magazine_view && !pending_mod.active) {
                         show_magazine_view = false;
                         SDL_SetWindowRelativeMouseMode(window, true);
                     } else {
@@ -609,7 +611,7 @@ int main(int argc, char* argv[]) {
                     }
                     if (kb.matches_scancode(Action::ToggleHUD, event.key.scancode) && !event.key.repeat)
                         show_hud = !show_hud;
-                    if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat) {
+                    if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat && !pending_mod.active) {
                         show_magazine_view = !show_magazine_view;
                         SDL_SetWindowRelativeMouseMode(window, !show_magazine_view && !show_settings);
                     }

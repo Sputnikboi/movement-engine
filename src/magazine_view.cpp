@@ -37,7 +37,8 @@ static ImU32 enchantment_color(Enchantment e) {
 
 static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_h,
                       float angle, const RoundMod& mod, int round_num,
-                      bool is_current_round, bool hovered, bool is_spent) {
+                      bool is_current_round, bool hovered, bool is_spent,
+                      bool is_selected) {
     float hw = card_w * 0.5f, hh = card_h * 0.5f;
     float cos_a = cosf(angle), sin_a = sinf(angle);
 
@@ -54,12 +55,15 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
     // Card background
     ImU32 bg = hovered ? IM_COL32(65, 65, 75, 245) : IM_COL32(45, 42, 52, 240);
     if (is_current_round) bg = IM_COL32(60, 55, 80, 245);
+    if (is_selected) bg = IM_COL32(50, 70, 50, 245);
     draw->AddQuadFilled(tl, tr, br, bl, bg);
 
     // Border
     ImU32 border = is_current_round ? IM_COL32(200, 180, 80, 255) : IM_COL32(90, 85, 100, 255);
-    if (hovered) border = IM_COL32(220, 210, 160, 255);
-    draw->AddQuad(tl, tr, br, bl, border, 1.5f);
+    if (is_selected) border = IM_COL32(80, 255, 80, 255);
+    else if (hovered) border = IM_COL32(220, 210, 160, 255);
+    float border_thick = is_selected ? 2.5f : 1.5f;
+    draw->AddQuad(tl, tr, br, bl, border, border_thick);
 
     // Tipping indicator (top half)
     {
@@ -101,7 +105,16 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
     if (is_spent) {
         draw->AddQuadFilled(tl, tr, br, bl, IM_COL32(0, 0, 0, 140));
     }
+
+    // Selection checkmark
+    if (is_selected) {
+        draw->AddText(rot(hw - 16, -hh + 3), IM_COL32(80, 255, 80, 255), "OK");
+    }
 }
+
+// Persistent drag state for reordering
+static int drag_source = -1;
+static bool dragging = false;
 
 void magazine_view_draw(GameState& gs) {
     if (!gs.show_magazine_view) return;
@@ -116,7 +129,9 @@ void magazine_view_draw(GameState& gs) {
     ImDrawList* draw = ImGui::GetForegroundDrawList();
 
     PendingModApplication& pm = gs.pending_mod;
-    bool applying = pm.active && pm.applications_left > 0;
+    bool applying = pm.active;
+    bool in_shop = gs.in_shop_room;
+    bool can_reorder = in_shop && !applying;
 
     // --- Dark overlay ---
     draw->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h),
@@ -128,24 +143,44 @@ void magazine_view_draw(GameState& gs) {
         snprintf(title, sizeof(title), "%s  -  Magazine  (%d/%d)",
                  w.config.name, w.ammo, mag.capacity);
         ImVec2 title_size = ImGui::CalcTextSize(title);
-        draw->AddText(ImVec2(screen_w * 0.5f - title_size.x * 0.5f, screen_h * 0.20f),
+        draw->AddText(ImVec2(screen_w * 0.5f - title_size.x * 0.5f, screen_h * 0.15f),
                       IM_COL32(220, 215, 200, 255), title);
     }
 
-    // --- Application prompt ---
+    // --- Mod info panel (when applying) ---
     if (applying) {
-        char prompt[128];
         const char* mod_name = pm.is_tipping
-            ? tipping_name(pm.tipping)
-            : enchantment_name(pm.enchantment);
-        snprintf(prompt, sizeof(prompt), "Click %d round%s to apply: %s",
-                 pm.applications_left, pm.applications_left > 1 ? "s" : "", mod_name);
-        ImVec2 prompt_size = ImGui::CalcTextSize(prompt);
-        ImU32 prompt_col = pm.is_tipping
-            ? IM_COL32(220, 160, 60, 255)
-            : IM_COL32(120, 90, 200, 255);
-        draw->AddText(ImVec2(screen_w * 0.5f - prompt_size.x * 0.5f, screen_h * 0.25f),
-                      prompt_col, prompt);
+            ? tipping_name(pm.tipping) : enchantment_name(pm.enchantment);
+        const char* mod_desc = pm.is_tipping
+            ? tipping_desc(pm.tipping) : enchantment_desc(pm.enchantment);
+        ImU32 mod_col = pm.is_tipping
+            ? IM_COL32(220, 160, 60, 255) : IM_COL32(120, 90, 200, 255);
+
+        char info[128];
+        snprintf(info, sizeof(info), "Applying: %s", mod_name);
+        ImVec2 info_size = ImGui::CalcTextSize(info);
+        draw->AddText(ImVec2(screen_w * 0.5f - info_size.x * 0.5f, screen_h * 0.20f),
+                      mod_col, info);
+
+        ImVec2 desc_size = ImGui::CalcTextSize(mod_desc);
+        draw->AddText(ImVec2(screen_w * 0.5f - desc_size.x * 0.5f, screen_h * 0.20f + 20),
+                      IM_COL32(180, 180, 180, 255), mod_desc);
+
+        char slots[64];
+        snprintf(slots, sizeof(slots), "Select up to %d round%s  (%d/%d selected)",
+                 pm.max_applications, pm.max_applications > 1 ? "s" : "",
+                 pm.selected_count, pm.max_applications);
+        ImVec2 slots_size = ImGui::CalcTextSize(slots);
+        draw->AddText(ImVec2(screen_w * 0.5f - slots_size.x * 0.5f, screen_h * 0.20f + 42),
+                      IM_COL32(160, 160, 170, 255), slots);
+    }
+
+    // --- Reorder hint ---
+    if (can_reorder) {
+        const char* reorder_hint = "Drag cards to reorder";
+        ImVec2 rh_size = ImGui::CalcTextSize(reorder_hint);
+        draw->AddText(ImVec2(screen_w * 0.5f - rh_size.x * 0.5f, screen_h * 0.20f),
+                      IM_COL32(150, 200, 150, 200), reorder_hint);
     }
 
     // --- Fan layout ---
@@ -154,27 +189,33 @@ void magazine_view_draw(GameState& gs) {
     float card_h = 68.0f;
 
     float max_total = screen_w * 0.75f;
-    float spacing = (n > 1) ? fminf(card_w + 8.0f, max_total / (float)n) : 0.0f;
-    float fan_width = spacing * (n - 1);
+    float spacing_v = (n > 1) ? fminf(card_w + 8.0f, max_total / (float)n) : 0.0f;
+    float fan_width = spacing_v * (n - 1);
     float fan_center_x = screen_w * 0.5f;
-    float fan_center_y = screen_h * 0.50f;
+    float fan_center_y = screen_h * 0.45f;
     float max_arc_angle = 0.3f;
     float arc_radius = 600.0f;
 
     int current_round = w.config.infinite_ammo ? w.current_round : (mag.capacity - w.ammo);
     ImVec2 mouse = io.MousePos;
     bool mouse_clicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    bool mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-    // --- Draw cards + handle interaction ---
-    int hovered_card = -1;
-
-    // First pass: find hovered card
-    for (int i = 0; i < n; i++) {
+    auto card_cx = [&](int i) -> float {
         float t = (n > 1) ? ((float)i / (float)(n - 1) - 0.5f) * 2.0f : 0.0f;
-        float cx = fan_center_x + t * fan_width * 0.5f;
-        float arc_y = t * t * arc_radius * 0.02f;
-        float cy = fan_center_y + arc_y;
+        return fan_center_x + t * fan_width * 0.5f;
+    };
+    auto card_cy = [&](int i) -> float {
+        float t = (n > 1) ? ((float)i / (float)(n - 1) - 0.5f) * 2.0f : 0.0f;
+        return fan_center_y + t * t * arc_radius * 0.02f;
+    };
 
+    // --- Find hovered card ---
+    int hovered_card = -1;
+    for (int i = 0; i < n; i++) {
+        float cx = card_cx(i);
+        float cy = card_cy(i);
         float hw = card_w * 0.5f + 2, hh = card_h * 0.5f + 2;
         if (mouse.x >= cx - hw && mouse.x <= cx + hw &&
             mouse.y >= cy - hh && mouse.y <= cy + hh) {
@@ -182,30 +223,50 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
-    // Second pass: draw
+    // --- Drag reorder logic (shop only, not while applying) ---
+    if (can_reorder) {
+        if (mouse_clicked && hovered_card >= 0) {
+            drag_source = hovered_card;
+            dragging = true;
+        }
+        if (dragging && mouse_released) {
+            if (drag_source >= 0 && hovered_card >= 0 && drag_source != hovered_card) {
+                mag.swap(drag_source, hovered_card);
+                printf("Swapped round %d <-> %d\n", drag_source + 1, hovered_card + 1);
+            }
+            drag_source = -1;
+            dragging = false;
+        }
+        if (!mouse_down) {
+            drag_source = -1;
+            dragging = false;
+        }
+    } else {
+        drag_source = -1;
+        dragging = false;
+    }
+
+    // --- Draw cards ---
     for (int i = 0; i < n; i++) {
         float t = (n > 1) ? ((float)i / (float)(n - 1) - 0.5f) * 2.0f : 0.0f;
-        float cx = fan_center_x + t * fan_width * 0.5f;
+        float cx = card_cx(i);
         float angle = t * max_arc_angle * 0.5f;
-        float arc_y = t * t * arc_radius * 0.02f;
-        float cy = fan_center_y + arc_y;
+        float cy = card_cy(i);
 
         bool hovered = (i == hovered_card);
         bool is_spent = (i < current_round);
         bool is_current = (i == current_round);
+        bool is_selected = applying && pm.selected[i];
 
         if (hovered) cy -= 18.0f;
-
-        // Highlight clickable cards during mod application
-        if (applying && hovered) {
-            cy -= 4.0f; // extra lift for clickable cards
-        }
+        if (is_selected) cy -= 6.0f;
+        if (dragging && i == drag_source) cy -= 12.0f;
 
         RoundMod mod = mag.get(i);
         draw_card(draw, ImVec2(cx, cy), card_w, card_h, angle, mod, i,
-                  is_current, hovered, is_spent);
+                  is_current, hovered, is_spent, is_selected);
 
-        // Applying glow effect on clickable cards
+        // Hover glow when applying
         if (applying && hovered) {
             float cos_a = cosf(angle), sin_a = sinf(angle);
             auto rot = [&](float lx, float ly) -> ImVec2 {
@@ -219,39 +280,48 @@ void magazine_view_draw(GameState& gs) {
             draw->AddQuadFilled(rot(-chw, -chh), rot(chw, -chh),
                                 rot(chw, chh), rot(-chw, chh), glow);
         }
+
+        // Drop target indicator
+        if (dragging && hovered && i != drag_source) {
+            float cos_a = cosf(angle), sin_a = sinf(angle);
+            auto rot = [&](float lx, float ly) -> ImVec2 {
+                return ImVec2(cx + lx * cos_a - ly * sin_a,
+                              cy + lx * sin_a + ly * cos_a);
+            };
+            float chw = card_w * 0.5f, chh = card_h * 0.5f;
+            draw->AddQuad(rot(-chw, -chh), rot(chw, -chh),
+                          rot(chw, chh), rot(-chw, chh),
+                          IM_COL32(100, 200, 255, 180), 2.0f);
+        }
     }
 
-    // --- Handle click to apply mod (spent rounds included) ---
+    // --- Handle click to toggle selection (applying mode) ---
     if (applying && mouse_clicked && hovered_card >= 0) {
-        if (pm.is_tipping) {
-            mag.set_tipping(hovered_card, pm.tipping);
-            printf("Applied %s to round %d\n", tipping_name(pm.tipping), hovered_card + 1);
-        } else {
-            mag.set_enchantment(hovered_card, pm.enchantment);
-            printf("Applied %s to round %d\n", enchantment_name(pm.enchantment), hovered_card + 1);
-        }
-        pm.applications_left--;
-        if (pm.applications_left <= 0) {
-            pm.active = false;
-            // Keep magazine view open so player can see results
+        // Don't toggle if click was on Apply/Cancel buttons
+        float btn_w = 100.0f;
+        float btn_h = 30.0f;
+        float btn_gap = 20.0f;
+        float btn_y = screen_h * 0.70f;
+        float total_btn_w = btn_w * 2 + btn_gap;
+        float btn_x = screen_w * 0.5f - total_btn_w * 0.5f;
+        bool on_buttons = (mouse.y >= btn_y && mouse.y <= btn_y + btn_h &&
+                           mouse.x >= btn_x && mouse.x <= btn_x + total_btn_w);
+        if (!on_buttons) {
+            pm.toggle(hovered_card);
         }
     }
 
-    // --- Tooltip on hover (drawn on foreground draw list so it sits above cards) ---
+    // --- Tooltip on hover ---
     if (hovered_card >= 0) {
         int i = hovered_card;
-        float t = (n > 1) ? ((float)i / (float)(n - 1) - 0.5f) * 2.0f : 0.0f;
-        float cx = fan_center_x + t * fan_width * 0.5f;
+        float cx = card_cx(i);
 
         RoundMod mod = mag.get(i);
 
-        // Build tooltip lines
         struct TipLine { const char* text; ImU32 color; };
         char line_round[32];
         char line_tip[64], line_tip_desc[96];
         char line_ench[64], line_ench_desc[96];
-        char line_status[32];
-        char line_apply[32];
 
         TipLine lines[8];
         int lc = 0;
@@ -282,10 +352,11 @@ void magazine_view_draw(GameState& gs) {
         else if (i == current_round)
             lines[lc++] = {">> NEXT <<", IM_COL32(255, 230, 75, 255)};
 
-        if (applying)
-            lines[lc++] = {"Click to apply mod", IM_COL32(75, 255, 75, 255)};
+        if (applying && pm.selected[i])
+            lines[lc++] = {"[Selected]", IM_COL32(80, 255, 80, 255)};
+        else if (applying)
+            lines[lc++] = {"Click to select", IM_COL32(75, 255, 75, 255)};
 
-        // Measure tooltip size
         float pad = 8.0f;
         float line_h = ImGui::GetTextLineHeightWithSpacing();
         float tip_w = 0.0f;
@@ -296,21 +367,17 @@ void magazine_view_draw(GameState& gs) {
         tip_w += pad * 2;
         float tip_h = line_h * lc + pad * 2;
 
-        // Position to the right of the hovered card
         float tx = cx + card_w * 0.6f;
         float ty = fan_center_y - tip_h * 0.5f;
-        // Clamp to screen
         if (tx + tip_w > screen_w - 4) tx = cx - card_w * 0.6f - tip_w;
         if (ty < 4) ty = 4;
         if (ty + tip_h > screen_h - 4) ty = screen_h - 4 - tip_h;
 
-        // Background + border
         draw->AddRectFilled(ImVec2(tx, ty), ImVec2(tx + tip_w, ty + tip_h),
                             IM_COL32(30, 28, 35, 216), 4.0f);
         draw->AddRect(ImVec2(tx, ty), ImVec2(tx + tip_w, ty + tip_h),
                       IM_COL32(90, 85, 100, 255), 4.0f);
 
-        // Draw lines
         float ly = ty + pad;
         for (int l = 0; l < lc; l++) {
             draw->AddText(ImVec2(tx + pad, ly), lines[l].color, lines[l].text);
@@ -318,9 +385,89 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
+    // --- Apply / Cancel buttons (when applying) ---
+    if (applying) {
+        float btn_w = 100.0f;
+        float btn_h = 30.0f;
+        float btn_gap = 20.0f;
+        float btn_y = screen_h * 0.70f;
+        float total_btn_w = btn_w * 2 + btn_gap;
+        float btn_x = screen_w * 0.5f - total_btn_w * 0.5f;
+
+        // Apply button
+        {
+            bool can_apply = (pm.selected_count > 0);
+            ImVec2 atl(btn_x, btn_y);
+            ImVec2 abr(btn_x + btn_w, btn_y + btn_h);
+            ImU32 abg = can_apply ? IM_COL32(40, 120, 40, 230) : IM_COL32(50, 50, 50, 180);
+            ImU32 aborder = can_apply ? IM_COL32(80, 220, 80, 255) : IM_COL32(80, 80, 80, 200);
+
+            bool apply_hovered = (mouse.x >= atl.x && mouse.x <= abr.x &&
+                                  mouse.y >= atl.y && mouse.y <= abr.y);
+            if (apply_hovered && can_apply)
+                abg = IM_COL32(55, 160, 55, 240);
+
+            draw->AddRectFilled(atl, abr, abg, 4.0f);
+            draw->AddRect(atl, abr, aborder, 4.0f);
+            const char* apply_text = "Apply";
+            ImVec2 atsz = ImGui::CalcTextSize(apply_text);
+            ImU32 atcol = can_apply ? IM_COL32(220, 255, 220, 255) : IM_COL32(120, 120, 120, 200);
+            draw->AddText(ImVec2(atl.x + (btn_w - atsz.x) * 0.5f, atl.y + (btn_h - atsz.y) * 0.5f),
+                          atcol, apply_text);
+
+            if (mouse_clicked && apply_hovered && can_apply) {
+                for (int j = 0; j < mag.capacity; j++) {
+                    if (pm.selected[j]) {
+                        if (pm.is_tipping) {
+                            mag.set_tipping(j, pm.tipping);
+                            printf("Applied %s to round %d\n", tipping_name(pm.tipping), j + 1);
+                        } else {
+                            mag.set_enchantment(j, pm.enchantment);
+                            printf("Applied %s to round %d\n", enchantment_name(pm.enchantment), j + 1);
+                        }
+                    }
+                }
+                if (gs.pending_stand_idx >= 0 &&
+                    gs.pending_stand_idx < (int)gs.shop_data.stands.size()) {
+                    gs.shop_data.stands[gs.pending_stand_idx].purchased = true;
+                }
+                pm = {};
+                gs.pending_stand_idx = -1;
+            }
+        }
+
+        // Cancel button
+        {
+            float cx2 = btn_x + btn_w + btn_gap;
+            ImVec2 ctl(cx2, btn_y);
+            ImVec2 cbr(cx2 + btn_w, btn_y + btn_h);
+            ImU32 cbg = IM_COL32(120, 40, 40, 230);
+            ImU32 cborder = IM_COL32(220, 80, 80, 255);
+
+            bool cancel_hovered = (mouse.x >= ctl.x && mouse.x <= cbr.x &&
+                                   mouse.y >= ctl.y && mouse.y <= cbr.y);
+            if (cancel_hovered)
+                cbg = IM_COL32(160, 55, 55, 240);
+
+            draw->AddRectFilled(ctl, cbr, cbg, 4.0f);
+            draw->AddRect(ctl, cbr, cborder, 4.0f);
+            const char* cancel_text = "Cancel";
+            ImVec2 ctsz = ImGui::CalcTextSize(cancel_text);
+            draw->AddText(ImVec2(ctl.x + (btn_w - ctsz.x) * 0.5f, ctl.y + (btn_h - ctsz.y) * 0.5f),
+                          IM_COL32(255, 200, 200, 255), cancel_text);
+
+            if (mouse_clicked && cancel_hovered) {
+                gs.currency += pm.cost;
+                printf("Cancelled mod application -- refunded %d gold\n", pm.cost);
+                pm = {};
+                gs.pending_stand_idx = -1;
+            }
+        }
+    }
+
     // --- Legend ---
     {
-        float ly = screen_h * 0.75f;
+        float ly = screen_h * 0.78f;
         float lx = screen_w * 0.5f;
         draw->AddText(ImVec2(lx - 200, ly),
                       IM_COL32(200, 160, 80, 255), "Tipping (top)");
@@ -339,11 +486,11 @@ void magazine_view_draw(GameState& gs) {
         const char* key = input_code_name(gs.kb.get(Action::MagazineView, 0));
         char hint[64];
         if (applying)
-            snprintf(hint, sizeof(hint), "Select rounds (%d remaining)", pm.applications_left);
+            snprintf(hint, sizeof(hint), "Select rounds, then Apply or Cancel");
         else
             snprintf(hint, sizeof(hint), "Press [%s] to close", key);
         ImVec2 hint_size = ImGui::CalcTextSize(hint);
-        draw->AddText(ImVec2(screen_w * 0.5f - hint_size.x * 0.5f, screen_h * 0.88f),
+        draw->AddText(ImVec2(screen_w * 0.5f - hint_size.x * 0.5f, screen_h * 0.90f),
                       IM_COL32(150, 145, 160, 180), hint);
     }
 }
