@@ -374,6 +374,10 @@ int main(int argc, char* argv[]) {
     float death_cam_pitch_vel = 0.0f;  // camera slump velocity
     bool  show_death_screen = false;   // true once death_timer > delay
 
+    // Run-wide cumulative stats (persist across rooms, reset on restart)
+    int   run_gold_earned = 0;
+    float run_dmg_dealt   = 0.0f;
+
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
             case EntityType::Drone:    return 1;
@@ -569,7 +573,7 @@ int main(int argc, char* argv[]) {
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (show_settings || show_magazine_view || show_room_summary)
+            if (show_settings || show_magazine_view || show_room_summary || show_death_screen)
                 ImGui_ImplSDL3_ProcessEvent(&event);
 
             switch (event.type) {
@@ -1155,6 +1159,9 @@ int main(int argc, char* argv[]) {
                 pending_stand_idx = -1;
                 printf("Player died in room %d\n", rooms_cleared + 1);
             }
+                // Accumulate current room partial stats into run totals
+                run_dmg_dealt   += room_stats.dmg_total;
+                run_gold_earned += room_stats.gold_total;
 
             // Track dying drones to spawn explosions when they hit ground
             struct DyingEnemy { int idx; HMM_Vec3 pos; bool was_alive; };
@@ -1540,6 +1547,8 @@ int main(int argc, char* argv[]) {
             // Show stats screen first; shop_enter happens on dismiss
             int gilded_gold = weapons[active_weapon].bonuses.bonus_gold;
             room_stats.finalize(gilded_gold);
+            run_gold_earned += room_stats.gold_total;
+            run_dmg_dealt   += room_stats.dmg_total;
             if (room_stats.gold_no_damage > 0)
                 currency += room_stats.gold_no_damage;
             if (room_stats.gold_gilded > 0)
@@ -1725,7 +1734,7 @@ int main(int argc, char* argv[]) {
             float fade = (death_timer - 1.8f) / 1.0f; // 1s fade-in after delay
             if (fade > 1.0f) fade = 1.0f;
             if (fade > 0.0f) {
-                ImGui::GetForegroundDrawList()->AddRectFilled(
+                ImGui::GetBackgroundDrawList()->AddRectFilled(
                     ImVec2(0, 0), ds,
                     ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, fade * 0.7f)));
             }
@@ -1771,11 +1780,11 @@ int main(int argc, char* argv[]) {
 
                 ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Gold Earned:");
                 ImGui::SameLine(220);
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, fade), "%d", room_stats.gold_total);
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, fade), "%d", run_gold_earned);
 
                 ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Total Damage Dealt:");
                 ImGui::SameLine(220);
-                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, fade), "%.0f", room_stats.dmg_total);
+                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, fade), "%.0f", run_dmg_dealt);
 
                 ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, fade), "Weapon:");
                 ImGui::SameLine(220);
@@ -1866,6 +1875,8 @@ int main(int argc, char* argv[]) {
                     current_level_name = "Procedural";
 
                     SDL_SetWindowRelativeMouseMode(window, true);
+                    run_gold_earned = 0;
+                    run_dmg_dealt = 0.0f;
                     printf("=== RUN RESTARTED ===\n");
                 }
                 ImGui::PopStyleColor(3);
