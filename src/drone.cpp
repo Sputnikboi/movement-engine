@@ -440,7 +440,6 @@ void projectiles_update(Entity entities[], int max_entities,
 
                     p.position = HMM_AddV3(p.position, HMM_MulV3F(travel_dir, hit.t - p.radius * 0.5f));
                     p.velocity = {};
-                    p.yaw += 3.14159265f; // flip to point into wall
                     p.ai_state = 1; // stuck
                     p.lifetime = 3.0f; // linger time
                 } else {
