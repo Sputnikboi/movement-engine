@@ -202,7 +202,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
         char info[128];
         snprintf(info, sizeof(info), "Applying: %s", mod_name);
         ImVec2 info_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, info);
-        draw->AddText(ImVec2(screen_w * 0.5f - info_size.x * 0.5f, screen_h * 0.20f),
+        draw->AddText(font, fs, ImVec2(screen_w * 0.5f - info_size.x * 0.5f, screen_h * 0.20f),
                       mod_col, info);
 
         ImVec2 desc_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, mod_desc);
@@ -497,7 +497,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
             const char* apply_text = "Apply";
             ImVec2 atsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, apply_text);
             ImU32 atcol = can_apply ? IM_COL32(220, 255, 220, 255) : IM_COL32(120, 120, 120, 200);
-            draw->AddText(ImVec2(atl.x + (btn_w - atsz.x) * 0.5f, atl.y + (btn_h - atsz.y) * 0.5f),
+            draw->AddText(font, fs, ImVec2(atl.x + (btn_w - atsz.x) * 0.5f, atl.y + (btn_h - atsz.y) * 0.5f),
                           atcol, apply_text);
 
             if (mouse_clicked && apply_hovered && can_apply) {
@@ -519,6 +519,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
                 pm = {};
                 gs.pending_stand_idx = -1;
                 w.recompute_bonuses();
+                gs.show_magazine_view = false;
             }
         }
 
@@ -539,7 +540,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
             draw->AddRect(ctl, cbr, cborder, 4.0f);
             const char* cancel_text = "Cancel";
             ImVec2 ctsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, cancel_text);
-            draw->AddText(ImVec2(ctl.x + (btn_w - ctsz.x) * 0.5f, ctl.y + (btn_h - ctsz.y) * 0.5f),
+            draw->AddText(font, fs, ImVec2(ctl.x + (btn_w - ctsz.x) * 0.5f, ctl.y + (btn_h - ctsz.y) * 0.5f),
                           IM_COL32(255, 200, 200, 255), cancel_text);
 
             if (mouse_clicked && cancel_hovered) {
@@ -547,6 +548,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
                 printf("Cancelled mod application -- refunded %d gold\n", pm.cost);
                 pm = {};
                 gs.pending_stand_idx = -1;
+                gs.show_magazine_view = false;
             }
         }
     }
