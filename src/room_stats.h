@@ -96,4 +96,5 @@ struct RoomStats {
 };
 
 // Draw the end-of-room summary popup. Returns true when the player dismisses it.
-bool draw_room_summary(const RoomStats& stats, int room_number);
+struct ImFont;
+bool draw_room_summary(const RoomStats& stats, int room_number, ImFont* font = nullptr);

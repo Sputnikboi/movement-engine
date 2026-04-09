@@ -1749,7 +1749,7 @@ int main(int argc, char* argv[]) {
 
         // --- Room summary screen ---
         if (show_room_summary) {
-            if (draw_room_summary(room_stats, rooms_cleared + 1)) {
+            if (draw_room_summary(room_stats, rooms_cleared + 1, game_font)) {
                 show_room_summary = false;
                 SDL_SetWindowRelativeMouseMode(window, true);
                 // Shop every 2nd room, otherwise straight to next combat room

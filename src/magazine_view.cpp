@@ -68,31 +68,35 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
     float border_thick = is_selected ? 2.5f : 1.5f;
     draw->AddQuad(tl, tr, br, bl, border, border_thick);
 
+    float m = 5.0f; // margin for inner zones
+
     // Tipping indicator (top half)
     {
-        ImVec2 tip_tl = rot(-hw + 3, -hh + 3);
-        ImVec2 tip_tr = rot( hw - 3, -hh + 3);
-        ImVec2 tip_br = rot( hw - 3, -2);
-        ImVec2 tip_bl = rot(-hw + 3, -2);
+        ImVec2 tip_tl = rot(-hw + m, -hh + m);
+        ImVec2 tip_tr = rot( hw - m, -hh + m);
+        ImVec2 tip_br = rot( hw - m, -4);
+        ImVec2 tip_bl = rot(-hw + m, -4);
         draw->AddQuadFilled(tip_tl, tip_tr, tip_br, tip_bl, tipping_color(mod.tipping));
         if (mod.tipping != Tipping::None) {
             const char* name = tipping_name(mod.tipping);
             char label[4] = {name[0], name[1], 0};
-            draw->AddText(rot(-hw + 6, -hh + 5), IM_COL32(0, 0, 0, 220), label);
+            ImVec2 lsz = ImGui::CalcTextSize(label);
+            draw->AddText(rot(-lsz.x * 0.5f, -hh * 0.5f - lsz.y * 0.5f), IM_COL32(0, 0, 0, 220), label);
         }
     }
 
     // Enchantment indicator (bottom half)
     {
-        ImVec2 enc_tl = rot(-hw + 3, 2);
-        ImVec2 enc_tr = rot( hw - 3, 2);
-        ImVec2 enc_br = rot( hw - 3, hh - 3);
-        ImVec2 enc_bl = rot(-hw + 3, hh - 3);
+        ImVec2 enc_tl = rot(-hw + m, 4);
+        ImVec2 enc_tr = rot( hw - m, 4);
+        ImVec2 enc_br = rot( hw - m, hh - m);
+        ImVec2 enc_bl = rot(-hw + m, hh - m);
         draw->AddQuadFilled(enc_tl, enc_tr, enc_br, enc_bl, enchantment_color(mod.enchantment));
         if (mod.enchantment != Enchantment::None) {
             const char* name = enchantment_name(mod.enchantment);
             char label[4] = {name[0], name[1], 0};
-            draw->AddText(rot(-hw + 6, 4), IM_COL32(0, 0, 0, 220), label);
+            ImVec2 lsz = ImGui::CalcTextSize(label);
+            draw->AddText(rot(-lsz.x * 0.5f, hh * 0.5f - lsz.y * 0.5f), IM_COL32(0, 0, 0, 220), label);
         }
     }
 
@@ -101,7 +105,7 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
         char num_buf[16];
         snprintf(num_buf, sizeof(num_buf), "%d", round_num + 1);
         ImVec2 num_size = ImGui::CalcTextSize(num_buf);
-        draw->AddText(rot(-num_size.x * 0.5f, hh - 16), IM_COL32(180, 175, 190, 200), num_buf);
+        draw->AddText(rot(-num_size.x * 0.5f, hh - num_size.y - 6), IM_COL32(180, 175, 190, 200), num_buf);
     }
 
     // Dim spent rounds
@@ -111,7 +115,7 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
 
     // Selection checkmark
     if (is_selected) {
-        draw->AddText(rot(hw - 16, -hh + 3), IM_COL32(80, 255, 80, 255), "OK");
+        draw->AddText(rot(hw - 20, -hh + 5), IM_COL32(80, 255, 80, 255), "OK");
     }
 }
 
@@ -191,11 +195,11 @@ void magazine_view_draw(GameState& gs) {
 
     // --- Fan layout ---
     int n = mag.capacity;
-    float card_w = 44.0f;
-    float card_h = 68.0f;
+    float card_w = 80.0f;
+    float card_h = 120.0f;
 
     float max_total = screen_w * 0.75f;
-    float spacing_v = (n > 1) ? fminf(card_w + 8.0f, max_total / (float)n) : 0.0f;
+    float spacing_v = (n > 1) ? fminf(card_w + 12.0f, max_total / (float)n) : 0.0f;
     float fan_width = spacing_v * (n - 1);
     float fan_center_x = screen_w * 0.5f;
     float fan_center_y = screen_h * 0.45f;
@@ -502,32 +506,7 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
-    // --- Legend ---
-    {
-        float ly = screen_h * 0.78f;
-        float lx = screen_w * 0.5f;
-        draw->AddText(ImVec2(lx - 200, ly),
-                      IM_COL32(200, 160, 80, 255), "Tipping (top)");
-        draw->AddText(ImVec2(lx - 200, ly + 18),
-                      IM_COL32(160, 155, 170, 200),
-                      "Sh=Sharpened  Pi=Piercing  Cr=Crystal  Ae=Aerodynamic  Po=Poison  Bl=Blank  Sp=Split  Se=Serrated");
-        draw->AddText(ImVec2(lx - 200, ly + 42),
-                      IM_COL32(120, 90, 200, 255), "Enchantment (bottom)");
-        draw->AddText(ImVec2(lx - 200, ly + 60),
-                      IM_COL32(160, 155, 170, 200),
-                      "Wr=Wrath  Gi=Gilded  Et=Etheral  St=Storming  Fo=Fortified  Va=Vampiric  Le=Levitating  Ca=Catalytic");
-    }
 
-    // --- Dismiss hint ---
-    {
-        const char* key = input_code_name(gs.kb.get(Action::MagazineView, 0));
-        char hint[64];
-        if (applying)
-            snprintf(hint, sizeof(hint), "Select rounds, then Apply or Cancel");
-        else
-            snprintf(hint, sizeof(hint), "Press [%s] to close", key);
-        ImVec2 hint_size = ImGui::CalcTextSize(hint);
-        draw->AddText(ImVec2(screen_w * 0.5f - hint_size.x * 0.5f, screen_h * 0.90f),
-                      IM_COL32(150, 145, 160, 180), hint);
-    }
+
+
 }
