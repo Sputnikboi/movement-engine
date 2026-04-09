@@ -131,7 +131,7 @@ void magazine_view_draw(GameState& gs) {
     PendingModApplication& pm = gs.pending_mod;
     bool applying = pm.active;
     bool in_shop = gs.in_shop_room;
-    bool can_reorder = in_shop && !applying;
+    bool can_reorder = in_shop;
 
     // --- Dark overlay ---
     draw->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h),
@@ -175,8 +175,8 @@ void magazine_view_draw(GameState& gs) {
                       IM_COL32(160, 160, 170, 255), slots);
     }
 
-    // --- Reorder hint ---
-    if (can_reorder) {
+    // --- Reorder hint (only when not applying, since applying has its own info panel) ---
+    if (can_reorder && !applying) {
         const char* reorder_hint = "Drag cards to reorder";
         ImVec2 rh_size = ImGui::CalcTextSize(reorder_hint);
         draw->AddText(ImVec2(screen_w * 0.5f - rh_size.x * 0.5f, screen_h * 0.20f),
@@ -246,8 +246,10 @@ void magazine_view_draw(GameState& gs) {
         dragging = false;
     }
 
-    // --- Draw cards ---
+    // --- Draw cards (skip drag source — drawn at cursor below) ---
     for (int i = 0; i < n; i++) {
+        if (dragging && i == drag_source) continue;
+
         float t = (n > 1) ? ((float)i / (float)(n - 1) - 0.5f) * 2.0f : 0.0f;
         float cx = card_cx(i);
         float angle = t * max_arc_angle * 0.5f;
@@ -260,7 +262,6 @@ void magazine_view_draw(GameState& gs) {
 
         if (hovered) cy -= 18.0f;
         if (is_selected) cy -= 6.0f;
-        if (dragging && i == drag_source) cy -= 12.0f;
 
         RoundMod mod = mag.get(i);
         draw_card(draw, ImVec2(cx, cy), card_w, card_h, angle, mod, i,
@@ -295,8 +296,22 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
+    // --- Draw dragged card floating at mouse cursor ---
+    if (dragging && drag_source >= 0 && drag_source < n) {
+        int i = drag_source;
+        bool is_spent = (i < current_round);
+        bool is_current = (i == current_round);
+        bool is_selected = applying && pm.selected[i];
+        RoundMod mod = mag.get(i);
+        draw_card(draw, ImVec2(mouse.x, mouse.y), card_w, card_h, 0.0f, mod, i,
+                  is_current, true, is_spent, is_selected);
+    }
+
     // --- Handle click to toggle selection (applying mode) ---
-    if (applying && mouse_clicked && hovered_card >= 0) {
+    // Use mouse_released so drag-and-drop doesn't accidentally toggle
+    static bool was_drag = false;
+    if (dragging) was_drag = true;
+    if (applying && mouse_released && hovered_card >= 0 && !was_drag) {
         // Don't toggle if click was on Apply/Cancel buttons
         float btn_w = 100.0f;
         float btn_h = 30.0f;
@@ -310,6 +325,7 @@ void magazine_view_draw(GameState& gs) {
             pm.toggle(hovered_card);
         }
     }
+    if (mouse_released) was_drag = false;
 
     // --- Tooltip on hover ---
     if (hovered_card >= 0) {

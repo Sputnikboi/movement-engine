@@ -588,7 +588,14 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
-                    if (show_magazine_view && !pending_mod.active) {
+                    if (show_magazine_view && pending_mod.active) {
+                        // Cancel mod application — refund
+                        currency += pending_mod.cost;
+                        printf("Cancelled mod application — refunded %d gold\n", pending_mod.cost);
+                        pending_mod = {};
+                        pending_stand_idx = -1;
+                        // Keep mag view open
+                    } else if (show_magazine_view) {
                         show_magazine_view = false;
                         SDL_SetWindowRelativeMouseMode(window, true);
                     } else {
