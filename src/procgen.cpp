@@ -718,24 +718,26 @@ LevelData generate_level(const ProcGenConfig& config,
         int r = config.room_number - 1;
         int tier = r / 10;
         int per_room = config.enemy_budget_per_room + tier;  // +1 extra per room per tier
-        int budget = config.enemy_budget_base + r * per_room;
+        int budget = config.enemy_budget_base + (int)(r * per_room * 0.7f); // 30% slower scaling
         if (budget > config.enemy_budget_max) budget = config.enemy_budget_max;
 
         // Weighted random selection
         // Weights shift with difficulty: tougher types become more common
+        // Tank + Shielder locked behind room 10, Bomber behind room 5
         float diff = config.difficulty;
+        int room = config.room_number;
         float w[6] = {
             config.weight_drone,                              // always common
             config.weight_rusher,                             // always common
             config.weight_turret  * (0.5f + diff * 0.5f),    // ramps up
-            config.weight_tank    * (0.2f + diff * 0.8f),    // rare early, common late
-            config.weight_bomber  * (0.3f + diff * 0.7f),    // ramps up
-            config.weight_shielder* (0.1f + diff * 0.9f),    // very rare early
+            (room >= 10) ? config.weight_tank    * (0.2f + diff * 0.8f) : 0.0f,  // locked until room 10
+            (room >= 5)  ? config.weight_bomber  * (0.3f + diff * 0.7f) : 0.0f,  // locked until room 5
+            (room >= 10) ? config.weight_shielder* (0.1f + diff * 0.9f) : 0.0f,  // locked until room 10
         };
         float total_w = w[0] + w[1] + w[2] + w[3] + w[4] + w[5];
 
-        // Guarantee at least 1 shielder after room 3
-        bool shielder_guaranteed = (config.room_number >= 3);
+        // Guarantee at least 1 shielder after room 10
+        bool shielder_guaranteed = (room >= 10);
         bool shielder_placed = false;
 
         EntityType types[6] = {
