@@ -1072,9 +1072,9 @@ int main(int argc, char* argv[]) {
 
                     // Tipping effects
                     if (rm.tipping == Tipping::Sharpened)
-                        base_dmg += 10.0f;
+                        base_dmg += 20.0f;
                     if (rm.tipping == Tipping::Crystal_Tipped)
-                        base_dmg *= 2.0f;
+                        base_dmg *= 3.0f;
 
                     // Apply shield barrier absorption (Piercing bypasses)
                     float actual_dmg = piercing ? base_dmg : shielder_absorb_damage(hit_ent, base_dmg);
@@ -1082,7 +1082,7 @@ int main(int argc, char* argv[]) {
                     float actual_dmg_display = actual_dmg;
 
                     // Record stats
-                    float bleed_mult = 1.0f + 0.1f * hit_ent.bleed_stacks;
+                    float bleed_mult = 1.0f + 0.2f * hit_ent.bleed_stacks;
                     room_stats.record_dealt(weapon.config.damage, actual_dmg, rm.tipping, bleed_mult, false);
 
                     // Set hit flash per type
@@ -1433,11 +1433,11 @@ int main(int argc, char* argv[]) {
                         base_dmg *= (1.0f + bleed_pct * e.bleed_stacks);
 
                         if (rm.tipping == Tipping::Sharpened)
-                            base_dmg += 10.0f;
+                            base_dmg += 20.0f;
                         if (rm.tipping == Tipping::Crystal_Tipped)
-                            base_dmg *= 2.0f;
+                            base_dmg *= 3.0f;
                         if (rm.tipping == Tipping::Aerodynamic)
-                            base_dmg *= 1.2f;
+                            base_dmg *= 1.3f;
 
                         // Apply shield absorption (Piercing bypasses)
                         bool piercing = (rm.tipping == Tipping::Piercing);
@@ -1446,7 +1446,7 @@ int main(int argc, char* argv[]) {
 
                         // Record stats
                         {
-                            float bleed_mult = 1.0f + 0.1f * e.bleed_stacks;
+                            float bleed_mult = 1.0f + 0.2f * e.bleed_stacks;
                             room_stats.record_dealt(proj.damage, actual_dmg, rm.tipping, bleed_mult, true);
                         }
 

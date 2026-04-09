@@ -125,7 +125,7 @@ inline int tipping_max_applications(Tipping t) {
         case Tipping::Aerodynamic:    return 1;
         case Tipping::Poison_Tipped:  return 2;
         case Tipping::Blank:          return 2;
-        case Tipping::Split:          return 2;
+        case Tipping::Split:          return 4;
         case Tipping::Serrated:       return 2;
         default:                      return 1;
     }
@@ -201,8 +201,8 @@ struct WeaponBonuses {
     float bonus_damage     = 0.0f;  // Wrath: +5 per round
     int   bonus_gold       = 0;     // Gilded: +5 per round (end of room)
     int   bonus_mag        = 0;     // Etheral: +1 per round
-    float fire_rate_mult   = 1.0f;  // Storming: +5% per round
-    float bonus_max_hp     = 0.0f;  // Fortified: +10 per round
+    float fire_rate_mult   = 1.0f;  // Storming: +8% per round
+    float bonus_max_hp     = 0.0f;  // Fortified: +15 per round
     int   vampiric_heal    = 0;     // Vampiric: +1 HP per kill per round
     float reload_speed_mult= 1.0f;  // Levitating: +15% per round (faster = lower time)
     float catalytic_mult   = 1.0f;  // Catalytic: debuffs +20% per round
@@ -221,11 +221,11 @@ struct WeaponBonuses {
         bonus_damage      = 5.0f * wrath_n;
         bonus_gold        = 5 * gilded_n;
         bonus_mag         = etheral_n;
-        fire_rate_mult    = 1.0f + 0.05f * storming_n;
-        bonus_max_hp      = 10.0f * fortified_n;
+        fire_rate_mult    = 1.0f + 0.08f * storming_n;
+        bonus_max_hp      = 15.0f * fortified_n;
         vampiric_heal     = vampiric_n;
-        reload_speed_mult = 1.0f + 0.15f * levitating_n; // multiply into reload to make it faster
-        catalytic_mult    = 1.0f + 0.20f * catalytic_n;
+        reload_speed_mult = 1.0f + 0.20f * levitating_n; // multiply into reload to make it faster
+        catalytic_mult    = 1.0f + 0.25f * catalytic_n;
     }
 };
 

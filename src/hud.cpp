@@ -236,7 +236,7 @@ void hud_draw_debug(GameState& gs, const HudContext& ctx) {
             : (w.magazine.capacity - w.ammo);
         if (next_round >= 0 && next_round < w.magazine.capacity) {
             RoundMod next_mod = w.magazine.get(next_round);
-            if (next_mod.tipping == Tipping::Aerodynamic) rate *= 1.2f;
+            if (next_mod.tipping == Tipping::Aerodynamic) rate *= 1.3f;
         }
         ImGui::TextColored(ImVec4(0.7f, 0.8f, 0.9f, 1.0f), "%.1f rds/s", rate);
 

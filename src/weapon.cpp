@@ -381,7 +381,7 @@ bool Weapon::try_fire() {
 
     // Fire rate: Storming enchantment + Aerodynamic tipping
     float rate = config.fire_rate * bonuses.fire_rate_mult;
-    if (last_fired_mod.tipping == Tipping::Aerodynamic) rate *= 1.2f;
+    if (last_fired_mod.tipping == Tipping::Aerodynamic) rate *= 1.3f;
     fire_timer = 1.0f / rate;
     state = WeaponState::FIRING;
 
