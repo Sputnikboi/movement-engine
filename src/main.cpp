@@ -1616,7 +1616,12 @@ int main(int argc, char* argv[]) {
             if (draw_room_summary(room_stats, rooms_cleared + 1)) {
                 show_room_summary = false;
                 SDL_SetWindowRelativeMouseMode(window, true);
-                shop_enter(gs);
+                // Shop every 3rd room, otherwise straight to next combat room
+                if ((rooms_cleared + 1) % 3 == 0) {
+                    shop_enter(gs);
+                } else {
+                    start_next_room(gs);
+                }
             }
         }
 

@@ -7,6 +7,7 @@ struct GameState;
 // Called when player interacts with exit door in a combat room.
 // Generates the shop room, teleports the player in.
 void shop_enter(GameState& gs);
+void start_next_room(GameState& gs); // skip shop, go straight to next combat room
 
 // Called every frame while in_shop_room == true.
 // Handles stand proximity, buying, and exiting to next combat room.

@@ -21,6 +21,9 @@ void shop_enter(GameState& gs) {
     gs.in_shop_room = true;
     gs.show_shop = true;  // gates entity updates / weapon switching
 
+    // Full heal on entering shop
+    gs.player.health = gs.player.max_health;
+
     // Pick weapon to offer this shop visit (can be active weapon for upgrade)
     if (gs.shop_weapon < 0) {
         gs.shop_weapon = rand() % 3;
@@ -252,49 +255,7 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
         gs.in_shop_room = false;
         gs.show_shop = false;
         gs.shop_weapon = -1;
-
-        gs.rooms_cleared++;
-        gs.room_stats.reset();
-        gs.player.health = gs.player.max_health;
-        gs.player.damage_accum = 0.0f;
-        for (int w = 0; w < GameState::MAX_WEAPONS; w++) {
-            gs.weapons[w].ammo = gs.weapons[w].config.mag_size;
-            gs.weapons[w].state = WeaponState::IDLE;
-            gs.weapons[w].reload_phase = ReloadPhase::NONE;
-        }
-        printf("Entering room %d...\n", gs.rooms_cleared + 1);
-        gs.procgen_cfg.seed = 0;
-        gs.procgen_cfg.room_number = gs.rooms_cleared + 1;
-        // Difficulty scales faster every 10 rooms
-        {
-            int r = gs.rooms_cleared;
-            int tier = r / 10;             // 0 for rooms 1-10, 1 for 11-20, etc.
-            float base_rate = 0.15f;       // per-room scaling
-            float accel = 0.10f;           // extra per-room scaling per tier
-            float rate = base_rate + tier * accel;
-            gs.procgen_cfg.difficulty = 1.0f + r * rate;
-        }
-
-        LevelData pld = generate_level(gs.procgen_cfg, gs.door_mesh_ptr, &gs.active_doors);
-
-        for (int i = 0; i < gs.max_entities; i++) gs.entities[i].alive = false;
-        gs.effects.init();
-
-        gs.collision.triangles.clear();
-        gs.collision.ladder_volumes.clear();
-        gs.collision.build_from_mesh(pld.mesh);
-        gs.renderer.reload_mesh(pld.mesh);
-
-        gs.player.position = pld.spawn_pos;
-        gs.player.velocity = HMM_V3(0, 0, 0);
-        gs.camera.yaw = HMM_PI32 / 2.0f;
-        gs.camera.pitch = 0;
-        gs.noclip = false;
-
-        spawn_enemies_from_level(gs, pld);
-
-        gs.current_level_name = "Procedural";
-        printf("Room transition complete.\n");
+        start_next_room(gs);
         return true;
     }
 
@@ -491,4 +452,51 @@ void shop_draw_hud(GameState& gs) {
             ImGui::End();
         }
     }
+}
+
+// ============================================================
+//  Start next combat room (used both from shop exit and direct skip)
+// ============================================================
+void start_next_room(GameState& gs) {
+    gs.rooms_cleared++;
+    gs.room_stats.reset();
+    gs.player.damage_accum = 0.0f;
+    for (int w = 0; w < GameState::MAX_WEAPONS; w++) {
+        gs.weapons[w].ammo = gs.weapons[w].config.mag_size;
+        gs.weapons[w].state = WeaponState::IDLE;
+        gs.weapons[w].reload_phase = ReloadPhase::NONE;
+    }
+    printf("Entering room %d...\n", gs.rooms_cleared + 1);
+    gs.procgen_cfg.seed = 0;
+    gs.procgen_cfg.room_number = gs.rooms_cleared + 1;
+    // Difficulty scales faster every 10 rooms
+    {
+        int r = gs.rooms_cleared;
+        int tier = r / 10;
+        float base_rate = 0.15f;
+        float accel = 0.10f;
+        float rate = base_rate + tier * accel;
+        gs.procgen_cfg.difficulty = 1.0f + r * rate;
+    }
+
+    LevelData pld = generate_level(gs.procgen_cfg, gs.door_mesh_ptr, &gs.active_doors);
+
+    for (int i = 0; i < gs.max_entities; i++) gs.entities[i].alive = false;
+    gs.effects.init();
+
+    gs.collision.triangles.clear();
+    gs.collision.ladder_volumes.clear();
+    gs.collision.build_from_mesh(pld.mesh);
+    gs.renderer.reload_mesh(pld.mesh);
+
+    gs.player.position = pld.spawn_pos;
+    gs.player.velocity = HMM_V3(0, 0, 0);
+    gs.camera.yaw = HMM_PI32 / 2.0f;
+    gs.camera.pitch = 0;
+    gs.noclip = false;
+
+    spawn_enemies_from_level(gs, pld);
+
+    gs.current_level_name = "Procedural";
+    printf("Room transition complete.\n");
 }
