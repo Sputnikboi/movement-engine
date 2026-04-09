@@ -38,7 +38,8 @@ bool draw_room_summary(const RoomStats& stats, int room_number) {
 
     ImGui::Begin("##room_summary", nullptr,
         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoNav);
 
     // Title
     {

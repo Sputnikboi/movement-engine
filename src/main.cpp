@@ -587,7 +587,7 @@ int main(int argc, char* argv[]) {
                     printf("Collision logging: %s\n", g_collision_log ? "ON" : "OFF");
                 }
 
-                if (event.key.key == SDLK_ESCAPE && !event.key.repeat) {
+                if (event.key.key == SDLK_ESCAPE && !event.key.repeat && !show_room_summary) {
                     if (show_magazine_view && pending_mod.active) {
                         // Cancel mod application — refund
                         currency += pending_mod.cost;
@@ -618,7 +618,7 @@ int main(int argc, char* argv[]) {
                     }
                     if (kb.matches_scancode(Action::ToggleHUD, event.key.scancode) && !event.key.repeat)
                         show_hud = !show_hud;
-                    if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat && !pending_mod.active) {
+                    if (kb.matches_scancode(Action::MagazineView, event.key.scancode) && !event.key.repeat && !pending_mod.active && !show_room_summary) {
                         show_magazine_view = !show_magazine_view;
                         SDL_SetWindowRelativeMouseMode(window, !show_magazine_view && !show_settings);
                     }
@@ -1456,6 +1456,7 @@ int main(int argc, char* argv[]) {
             if (room_stats.gold_no_damage > 0)
                 currency += room_stats.gold_no_damage;
             show_room_summary = true;
+            SDL_SetWindowRelativeMouseMode(window, false);
             interact_pressed = false;
         }
         // --- Shop: stand interaction + exit to next room ---
