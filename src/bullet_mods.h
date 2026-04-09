@@ -184,14 +184,14 @@ inline const char* tipping_desc(Tipping t) {
 
 inline const char* enchantment_desc(Enchantment e) {
     switch (e) {
-        case Enchantment::Wrath:      return "+5 weapon damage per card";
-        case Enchantment::Gilded:     return "+5 gold per card (end of room)";
-        case Enchantment::Etheral:    return "+1 mag capacity per card (max 1)";
-        case Enchantment::Storming:   return "+5% fire rate per card";
-        case Enchantment::Fortified:  return "+10 max HP per card";
-        case Enchantment::Vampiric:   return "+1 HP per kill, per card";
-        case Enchantment::Levitating: return "+15% reload speed per card";
-        case Enchantment::Catalytic:  return "Debuffs +20% stronger per card";
+        case Enchantment::Wrath:      return "+5 weapon damage per enchanted round";
+        case Enchantment::Gilded:     return "+5 gold per enchanted round (end of room)";
+        case Enchantment::Etheral:    return "+1 mag capacity per enchanted round (max 1)";
+        case Enchantment::Storming:   return "+5% fire rate per enchanted round";
+        case Enchantment::Fortified:  return "+10 max HP per enchanted round";
+        case Enchantment::Vampiric:   return "+1 HP per kill per enchanted round";
+        case Enchantment::Levitating: return "+15% reload speed per enchanted round";
+        case Enchantment::Catalytic:  return "Debuffs +20% stronger per enchanted round";
         default:                      return "";
     }
 }
