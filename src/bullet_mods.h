@@ -170,14 +170,14 @@ inline int enchantment_max_applications(Enchantment e) {
 // Short color-coded descriptions for HUD/shop
 inline const char* tipping_desc(Tipping t) {
     switch (t) {
-        case Tipping::Sharpened:      return "+10 bullet damage";
+        case Tipping::Sharpened:      return "+20 bullet damage";
         case Tipping::Piercing:       return "Bullet pierces enemies & shields";
-        case Tipping::Crystal_Tipped: return "2x dmg, 10% chance to shatter on hit";
-        case Tipping::Aerodynamic:    return "+20% bullet fire rate, +20% dmg & 2x proj speed to projectiles";
+        case Tipping::Crystal_Tipped: return "3x dmg, 10% chance to shatter on hit";
+        case Tipping::Aerodynamic:    return "+30% fire rate, +30% dmg & 2x proj speed to projectiles";
         case Tipping::Poison_Tipped:  return "Applies Poison 6 dmg/s per stack, 5s duration";
         case Tipping::Blank:          return "Bullet is skipped when firing";
         case Tipping::Split:          return "Fires this bullet twice";
-        case Tipping::Serrated:       return "Applies Bleed: Enemy takes +10% damage per stack";
+        case Tipping::Serrated:       return "Applies Bleed: Enemy takes +20% damage per stack";
         default:                      return "";
     }
 }
@@ -187,11 +187,11 @@ inline const char* enchantment_desc(Enchantment e) {
         case Enchantment::Wrath:      return "+5 weapon damage";
         case Enchantment::Gilded:     return "+5 gold at the end of the room";
         case Enchantment::Etheral:    return "+1 bullet capacity";
-        case Enchantment::Storming:   return "+5% weapon fire rate";
-        case Enchantment::Fortified:  return "+10 max HP";
+        case Enchantment::Storming:   return "+8% attack speed";
+        case Enchantment::Fortified:  return "+15 max HP";
         case Enchantment::Vampiric:   return "Heal +1 HP on kill";
-        case Enchantment::Levitating: return "+15% reload speed";
-        case Enchantment::Catalytic:  return "Debuffs are +20% stronger";
+        case Enchantment::Levitating: return "+20% reload speed";
+        case Enchantment::Catalytic:  return "Debuffs are +25% stronger";
         default:                      return "";
     }
 }
@@ -204,8 +204,8 @@ struct WeaponBonuses {
     float fire_rate_mult   = 1.0f;  // Storming: +8% per round
     float bonus_max_hp     = 0.0f;  // Fortified: +15 per round
     int   vampiric_heal    = 0;     // Vampiric: +1 HP per kill per round
-    float reload_speed_mult= 1.0f;  // Levitating: +15% per round (faster = lower time)
-    float catalytic_mult   = 1.0f;  // Catalytic: debuffs +20% per round
+    float reload_speed_mult= 1.0f;  // Levitating: +20% per round (faster = lower time)
+    float catalytic_mult   = 1.0f;  // Catalytic: debuffs +25% per round
 
     void compute(const Magazine& mag) {
         *this = WeaponBonuses{};
