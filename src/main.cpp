@@ -1034,7 +1034,7 @@ int main(int argc, char* argv[]) {
                     float base_dmg = weapon.config.damage + weapon.bonuses.bonus_damage;
 
                     // Bleed multiplier (Serrated stacks, boosted by Catalytic)
-                    float bleed_pct = 0.1f * weapon.bonuses.catalytic_mult;
+                    float bleed_pct = 0.1f * 1.5f * weapon.bonuses.catalytic_mult;
                     base_dmg *= (1.0f + bleed_pct * hit_ent.bleed_stacks);
 
                     // Tipping effects
@@ -1262,7 +1262,7 @@ int main(int argc, char* argv[]) {
 
                 // Poison DoT tick
                 if (e.poison_stacks > 0 && e.type != EntityType::Projectile) {
-                    float poison_dps = 4.0f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks;
+                    float poison_dps = 4.0f * 1.5f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks;
                     float poison_dmg = poison_dps * dt;
                     e.health -= poison_dmg;
                     room_stats.record_poison(poison_dmg);
@@ -1386,7 +1386,7 @@ int main(int argc, char* argv[]) {
                         float base_dmg = proj.damage;
 
                         // Bleed multiplier (Serrated stacks, boosted by Catalytic)
-                        float bleed_pct = 0.1f * weapons[active_weapon].bonuses.catalytic_mult;
+                        float bleed_pct = 0.1f * 1.5f * weapons[active_weapon].bonuses.catalytic_mult;
                         base_dmg *= (1.0f + bleed_pct * e.bleed_stacks);
 
                         if (rm.tipping == Tipping::Sharpened)
@@ -1719,8 +1719,8 @@ int main(int argc, char* argv[]) {
             if (draw_room_summary(room_stats, rooms_cleared + 1)) {
                 show_room_summary = false;
                 SDL_SetWindowRelativeMouseMode(window, true);
-                // Shop every 3rd room, otherwise straight to next combat room
-                if ((rooms_cleared + 1) % 3 == 0) {
+                // Shop every 2nd room, otherwise straight to next combat room
+                if ((rooms_cleared + 1) % 2 == 0) {
                     shop_enter(gs);
                 } else {
                     start_next_room(gs);

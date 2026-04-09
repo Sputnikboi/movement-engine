@@ -121,7 +121,7 @@ inline int tipping_max_applications(Tipping t) {
     switch (t) {
         case Tipping::Sharpened:      return 3;
         case Tipping::Piercing:       return 2;
-        case Tipping::Crystal_Tipped: return 1;
+        case Tipping::Crystal_Tipped: return 2;
         case Tipping::Aerodynamic:    return 1;
         case Tipping::Poison_Tipped:  return 2;
         case Tipping::Blank:          return 2;
