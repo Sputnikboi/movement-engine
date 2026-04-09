@@ -38,19 +38,17 @@ struct RoomStats {
     void reset() { *this = RoomStats{}; }
 
     // Record dealt damage with tipping context
-    void record_dealt(float base, float actual, Tipping tip, float bleed_mult) {
+    // is_projectile: true for projectile hits (Aerodynamic +20% only applies there)
+    void record_dealt(float base, float actual, Tipping tip, float bleed_mult, bool is_projectile = false) {
         float bleed_extra = base * (bleed_mult - 1.0f);
         dmg_bleed_bonus += bleed_extra;
 
-        if (tip == Tipping::Sharpened)        dmg_sharpened   += 10.0f;
-        else if (tip == Tipping::Crystal_Tipped) dmg_crystal  += base; // the 2x portion = base
-        else if (tip == Tipping::Aerodynamic) dmg_aerodynamic += base * 0.2f;
+        float tipping_extra = 0.0f;
+        if (tip == Tipping::Sharpened)           { tipping_extra = 10.0f;       dmg_sharpened += 10.0f; }
+        else if (tip == Tipping::Crystal_Tipped) { tipping_extra = base;        dmg_crystal   += base; }
+        else if (tip == Tipping::Aerodynamic && is_projectile) { tipping_extra = base * 0.2f; dmg_aerodynamic += base * 0.2f; }
 
-        dmg_base += actual - bleed_extra;
-        if (tip == Tipping::Sharpened)        dmg_base -= 10.0f;
-        else if (tip == Tipping::Crystal_Tipped) dmg_base -= base;
-        else if (tip == Tipping::Aerodynamic) dmg_base -= base * 0.2f;
-
+        dmg_base += actual - bleed_extra - tipping_extra;
         dmg_total += actual;
     }
 

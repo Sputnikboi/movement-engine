@@ -1007,7 +1007,7 @@ int main(int argc, char* argv[]) {
 
                     // Record stats
                     float bleed_mult = 1.0f + 0.1f * hit_ent.bleed_stacks;
-                    room_stats.record_dealt(weapon.config.damage, actual_dmg, rm.tipping, bleed_mult);
+                    room_stats.record_dealt(weapon.config.damage, actual_dmg, rm.tipping, bleed_mult, false);
 
                     // Set hit flash per type
                     if (hit_ent.type == EntityType::Turret)
@@ -1308,7 +1308,7 @@ int main(int argc, char* argv[]) {
                         // Record stats
                         {
                             float bleed_mult = 1.0f + 0.1f * e.bleed_stacks;
-                            room_stats.record_dealt(proj.damage, actual_dmg, rm.tipping, bleed_mult);
+                            room_stats.record_dealt(proj.damage, actual_dmg, rm.tipping, bleed_mult, true);
                         }
 
                         // Poison tipping
