@@ -397,7 +397,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
             lines[lc++] = {"Click to select", IM_COL32(75, 255, 75, 255)};
 
         float pad = 8.0f;
-        float line_h = ImGui::GetTextLineHeightWithSpacing();
+        float line_h = fs + 4.0f;
         float tip_w = 0.0f;
         for (int l = 0; l < lc; l++) {
             ImVec2 sz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, lines[l].text);
@@ -413,13 +413,13 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
         if (ty + tip_h > screen_h - 4) ty = screen_h - 4 - tip_h;
 
         draw->AddRectFilled(ImVec2(tx, ty), ImVec2(tx + tip_w, ty + tip_h),
-                            IM_COL32(30, 28, 35, 216), 4.0f);
+                            IM_COL32(30, 28, 35, 255), 4.0f);
         draw->AddRect(ImVec2(tx, ty), ImVec2(tx + tip_w, ty + tip_h),
                       IM_COL32(90, 85, 100, 255), 4.0f);
 
         float ly = ty + pad;
         for (int l = 0; l < lc; l++) {
-            draw->AddText(ImVec2(tx + pad, ly), lines[l].color, lines[l].text);
+            draw->AddText(font, fs, ImVec2(tx + pad, ly), lines[l].color, lines[l].text);
             ly += line_h;
         }
     }

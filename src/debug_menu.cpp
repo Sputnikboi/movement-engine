@@ -447,6 +447,7 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
     // ---- Video ----
     if (ImGui::CollapsingHeader("Video")) {
         ImGui::SliderFloat("FOV", &gs.camera.fov, 60.0f, 130.0f, "%.0f");
+        ImGui::Checkbox("Damage Numbers", &gs.show_damage_numbers);
     }
 
     // ---- Keybinds ----

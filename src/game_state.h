@@ -87,6 +87,7 @@ struct GameState {
     // UI flags
     bool&             show_settings;
     bool&             show_hud;
+    bool&             show_damage_numbers;
     bool&             show_ladder_debug;
     bool&             show_magazine_view;
     bool&             noclip;

@@ -322,6 +322,7 @@ int main(int argc, char* argv[]) {
     }
     bool show_settings = false;
     bool show_hud = false;
+    bool show_damage_numbers = true;
     bool show_ladder_debug = false;
     bool show_magazine_view = false;
     bool ai_enabled = true;
@@ -564,6 +565,7 @@ int main(int argc, char* argv[]) {
         /* show_death_screen */ show_death_screen,
         /* show_settings */     show_settings,
         /* show_hud */          show_hud,
+        /* show_damage_numbers */ show_damage_numbers,
         /* show_ladder_debug */ show_ladder_debug,
         /* show_magazine_view */ show_magazine_view,
         /* noclip */            noclip,
@@ -1928,7 +1930,7 @@ int main(int argc, char* argv[]) {
             float sw = io.DisplaySize.x, sh = io.DisplaySize.y;
             float aspect_dmg = (sh > 0) ? sw / sh : 1.0f;
             HMM_Mat4 vp = HMM_MulM4(camera.projection_matrix(aspect_dmg), camera.view_matrix());
-            dmg_numbers.draw_ui(vp, sw, sh, game_font);
+            if (show_damage_numbers) dmg_numbers.draw_ui(vp, sw, sh, game_font);
         }
 
         // --- Settings / debug menu ---
