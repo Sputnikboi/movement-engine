@@ -214,8 +214,14 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     s.reroll_cost += 5;
                     s.cost = s.reroll_cost;
                     gs.shop_interact_cooldown = 0.3f;
-                    /* Reroll all item stands */
+                    /* Reroll weapon pedestal + all item stands */
+                    const char* wnames_rr[] = {"Glock", "Wingman", "Throwing Knife"};
                     for (auto& rs : gs.shop_data.stands) {
+                        if (rs.type == ShopStandType::Weapon && !rs.purchased) {
+                            gs.shop_weapon = rand() % 3;
+                            rs.weapon_index = gs.shop_weapon;
+                            rs.label = wnames_rr[gs.shop_weapon];
+                        }
                         if (rs.type == ShopStandType::ModTipping || rs.type == ShopStandType::ModEnchantment) {
                             rs.purchased = false;
                             if (rand() % 2 == 0) {
@@ -233,7 +239,7 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                             }
                         }
                     }
-                    printf("Rerolled shop items (next cost: %d)\n", s.reroll_cost);
+                    printf("Rerolled shop (weapon: %s, next cost: %d)\n", wnames_rr[gs.shop_weapon], s.reroll_cost);
                 }
             } else if (s.type == ShopStandType::ModTipping) {
                 if (gs.currency >= s.cost) {
