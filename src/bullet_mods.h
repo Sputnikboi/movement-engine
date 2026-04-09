@@ -170,28 +170,28 @@ inline int enchantment_max_applications(Enchantment e) {
 // Short color-coded descriptions for HUD/shop
 inline const char* tipping_desc(Tipping t) {
     switch (t) {
-        case Tipping::Sharpened:      return "+10 flat damage";
-        case Tipping::Piercing:       return "Pierces enemies & shields";
-        case Tipping::Crystal_Tipped: return "2x dmg, 10% chance to shatter";
-        case Tipping::Aerodynamic:    return "+20% fire rate (all), +20% dmg & 2x proj speed (projectiles)";
-        case Tipping::Poison_Tipped:  return "Poison: 6 dmg/s per stack, 5s duration";
-        case Tipping::Blank:          return "Round is skipped when firing";
-        case Tipping::Split:          return "Fires this round twice";
-        case Tipping::Serrated:       return "+10% damage taken per stack (permanent)";
+        case Tipping::Sharpened:      return "+10 bullet damage";
+        case Tipping::Piercing:       return "Bullet pierces enemies & shields";
+        case Tipping::Crystal_Tipped: return "2x dmg, 10% chance to shatter on hit";
+        case Tipping::Aerodynamic:    return "+20% bullet fire rate, +20% dmg & 2x proj speed to projectiles";
+        case Tipping::Poison_Tipped:  return "Applies Poison 6 dmg/s per stack, 5s duration";
+        case Tipping::Blank:          return "Bullet is skipped when firing";
+        case Tipping::Split:          return "Fires this bullet twice";
+        case Tipping::Serrated:       return "Applies Bleed: Enemy takes +10% damage per stack";
         default:                      return "";
     }
 }
 
 inline const char* enchantment_desc(Enchantment e) {
     switch (e) {
-        case Enchantment::Wrath:      return "+5 weapon damage per enchanted round";
-        case Enchantment::Gilded:     return "+5 gold per enchanted round (end of room)";
-        case Enchantment::Etheral:    return "+1 mag capacity per enchanted round (max 1)";
-        case Enchantment::Storming:   return "+5% fire rate per enchanted round";
-        case Enchantment::Fortified:  return "+10 max HP per enchanted round";
-        case Enchantment::Vampiric:   return "+1 HP per kill per enchanted round";
-        case Enchantment::Levitating: return "+15% reload speed per enchanted round";
-        case Enchantment::Catalytic:  return "Debuffs +20% stronger per enchanted round";
+        case Enchantment::Wrath:      return "+5 weapon damage";
+        case Enchantment::Gilded:     return "+5 gold at the end of the room";
+        case Enchantment::Etheral:    return "+1 bullet capacity";
+        case Enchantment::Storming:   return "+5% weapon fire rate";
+        case Enchantment::Fortified:  return "+10 max HP";
+        case Enchantment::Vampiric:   return "Heal +1 HP on kill";
+        case Enchantment::Levitating: return "+15% reload speed";
+        case Enchantment::Catalytic:  return "Debuffs are +20% stronger";
         default:                      return "";
     }
 }
