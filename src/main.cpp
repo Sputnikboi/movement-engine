@@ -278,10 +278,23 @@ int main(int argc, char* argv[]) {
     ImFont* game_font_large = nullptr;
     {
         ImGuiIO& io = ImGui::GetIO();
-        game_font       = io.Fonts->AddFontFromFileTTF("assets/fonts/Daydream.ttf", 21.0f);
-        game_font_large = io.Fonts->AddFontFromFileTTF("assets/fonts/Daydream.ttf", 42.0f);
-        if (!game_font)       printf("WARNING: Failed to load Daydream.ttf at 21px\n");
-        if (!game_font_large) printf("WARNING: Failed to load Daydream.ttf at 42px\n");
+        const char* font_paths[] = {
+            "assets/fonts/Daydream.ttf",
+            "../assets/fonts/Daydream.ttf",
+            "../../assets/fonts/Daydream.ttf",
+        };
+        const char* font_path = nullptr;
+        for (auto p : font_paths) {
+            FILE* f = fopen(p, "rb");
+            if (f) { fclose(f); font_path = p; break; }
+        }
+        if (font_path) {
+            game_font       = io.Fonts->AddFontFromFileTTF(font_path, 21.0f);
+            game_font_large = io.Fonts->AddFontFromFileTTF(font_path, 42.0f);
+            printf("Loaded font: %s\n", font_path);
+        } else {
+            printf("WARNING: Could not find Daydream.ttf, using default font\n");
+        }
     }
 
     // --- Player + camera + config ---
