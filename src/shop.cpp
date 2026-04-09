@@ -108,12 +108,23 @@ void spawn_enemies_from_level(GameState& gs, const LevelData& pld) {
     float dm_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.dmg_scale_per_room / 0.15f);
     float sp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.spd_scale_per_room / 0.15f);
 
-    auto dr = gs.drone_cfg;   dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
-    auto ru = gs.rusher_cfg;   ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
-    auto tu = gs.turret_cfg;   tu.health *= hp_s; tu.beam_dps *= dm_s; tu.track_speed *= sp_s;
-    auto tk = gs.tank_cfg;     tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
-    auto bo = gs.bomber_cfg;   bo.health *= hp_s; bo.explosion_damage *= dm_s; bo.approach_speed *= sp_s; bo.dive_speed *= sp_s;
-    auto sh = gs.shielder_cfg; sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
+    printf("Enemy scaling: HP=%.1fx DMG=%.1fx SPD=%.1fx (diff=%.2f)\n", hp_s, dm_s, sp_s, diff);
+
+    // Scale from defaults each time (don't accumulate)
+    DroneConfig    dr;  dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
+    RusherConfig   ru;  ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
+    TurretConfig   tu;  tu.health *= hp_s; tu.beam_dps *= dm_s; tu.track_speed *= sp_s;
+    TankConfig     tk;  tk.health *= hp_s; tk.stomp_damage *= dm_s; tk.chase_speed *= sp_s;
+    BomberConfig   bo;  bo.health *= hp_s; bo.explosion_damage *= dm_s; bo.approach_speed *= sp_s; bo.dive_speed *= sp_s;
+    ShielderConfig sh;  sh.health *= hp_s; sh.chase_speed *= sp_s; sh.flee_speed *= sp_s;
+
+    // Write scaled configs back so update/damage functions use them
+    gs.drone_cfg = dr;
+    gs.rusher_cfg = ru;
+    gs.turret_cfg = tu;
+    gs.tank_cfg = tk;
+    gs.bomber_cfg = bo;
+    gs.shielder_cfg = sh;
 
     for (const auto& es : pld.enemy_spawns) {
         if (es.type == EntityType::Drone)
