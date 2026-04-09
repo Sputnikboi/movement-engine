@@ -1615,6 +1615,7 @@ int main(int argc, char* argv[]) {
         if (show_room_summary) {
             if (draw_room_summary(room_stats, rooms_cleared + 1)) {
                 show_room_summary = false;
+                SDL_SetWindowRelativeMouseMode(window, true);
                 shop_enter(gs);
             }
         }
