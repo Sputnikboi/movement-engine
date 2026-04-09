@@ -46,6 +46,21 @@ struct Entity {
     RoundMod round_mod = {};  // tipping + enchantment carried by this projectile
     int      fired_round_idx = 0; // magazine slot this projectile came from
 
+    // Piercing: track already-hit entities to avoid multi-frame damage
+    static constexpr int MAX_PIERCE_HITS = 16;
+    int      pierce_hit[MAX_PIERCE_HITS] = {};
+    int      pierce_hit_count = 0;
+
+    bool has_pierced(int entity_idx) const {
+        for (int i = 0; i < pierce_hit_count; i++)
+            if (pierce_hit[i] == entity_idx) return true;
+        return false;
+    }
+    void add_pierced(int entity_idx) {
+        if (pierce_hit_count < MAX_PIERCE_HITS)
+            pierce_hit[pierce_hit_count++] = entity_idx;
+    }
+
     // Spawn / wander
     HMM_Vec3 spawn_pos    = {};     // original spawn position (wander home)
     HMM_Vec3 wander_target = {};    // current wander destination

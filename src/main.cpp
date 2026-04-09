@@ -1282,6 +1282,7 @@ int main(int argc, char* argv[]) {
                     Entity& e = entities[j];
                     if (j == i) continue;
                     if (!is_live_enemy(e)) continue;
+                    if (proj.has_pierced(j)) continue; // already damaged this enemy
 
                     float dist = HMM_LenV3(HMM_SubV3(proj.position, e.position));
                     if (dist < proj.radius + e.radius) {
@@ -1385,6 +1386,8 @@ int main(int argc, char* argv[]) {
                         if (!piercing) {
                             hit_something = true;
                             break; // one hit per projectile (unless piercing)
+                        } else {
+                            proj.add_pierced(j); // don't hit this enemy again
                         }
                     }
                 }
