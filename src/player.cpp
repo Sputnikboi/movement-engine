@@ -115,10 +115,23 @@ void Player::check_ground(const CollisionWorld& world) {
 void Player::apply_soft_speed_cap(float dt) {
     if (soft_speed_cap <= 0.0f) return;
     float hspeed = sqrtf(velocity.X * velocity.X + velocity.Z * velocity.Z);
+
+    // Soft cap: drag ramps from min at soft_speed_cap to max at soft_cap_drag_full
     if (hspeed > soft_speed_cap) {
-        float excess = hspeed - soft_speed_cap;
-        float drag = fminf(soft_cap_drag * dt, excess);
+        float range = soft_cap_drag_full - soft_speed_cap;
+        float t = (range > 0.0f) ? (hspeed - soft_speed_cap) / range : 1.0f;
+        if (t > 1.0f) t = 1.0f;
+        float drag_rate = soft_cap_drag_min + t * (soft_cap_drag_max - soft_cap_drag_min);
+        float drag = fminf(drag_rate * dt, hspeed - soft_speed_cap);
         float scale = (hspeed - drag) / hspeed;
+        velocity.X *= scale;
+        velocity.Z *= scale;
+        hspeed -= drag;
+    }
+
+    // Hard cap: clamp to absolute maximum
+    if (hspeed > hard_speed_cap) {
+        float scale = hard_speed_cap / hspeed;
         velocity.X *= scale;
         velocity.Z *= scale;
     }

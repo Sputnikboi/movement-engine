@@ -527,7 +527,10 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
         ImGui::Separator();
         ImGui::Text("Speed Cap");
         ImGui::SliderFloat("Soft Speed Cap",     &gs.player.soft_speed_cap,     0.0f, 30.0f);
-        ImGui::SliderFloat("Soft Cap Drag",      &gs.player.soft_cap_drag,      0.0f, 10.0f);
+        ImGui::SliderFloat("Drag Min",           &gs.player.soft_cap_drag_min,  0.0f, 5.0f);
+        ImGui::SliderFloat("Drag Max",           &gs.player.soft_cap_drag_max,  0.0f, 10.0f);
+        ImGui::SliderFloat("Drag Full Speed",    &gs.player.soft_cap_drag_full, 0.0f, 30.0f);
+        ImGui::SliderFloat("Hard Speed Cap",     &gs.player.hard_speed_cap,     10.0f, 100.0f);
         ImGui::SliderFloat("Slope Land Convert",  &gs.player.slope_landing_conversion, 0.0f, 1.0f, "%.2f");
         ImGui::SliderFloat("Crouch Speed",        &gs.player.crouch_speed,           1.0f, 10.0f);
 

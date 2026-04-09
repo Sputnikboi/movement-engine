@@ -56,9 +56,12 @@ struct Player {
     float slide_min_time_for_jump = 0.24f; // must slide this long for jump boost
     float slide_min_speed_for_jump = 5.0f; // must be this fast for slide-jump boost
 
-    // Soft speed cap
-    float soft_speed_cap    = 15.0f;  // above this, apply gentle drag
-    float soft_cap_drag     = 2.0f;   // drag rate (units/s²) above cap
+    // Soft speed cap (drag scales with excess speed)
+    float soft_speed_cap      = 12.0f;  // above this, apply gentle drag
+    float soft_cap_drag_min   = 0.5f;   // drag at soft cap (u/s²)
+    float soft_cap_drag_max   = 2.0f;   // drag at hard ramp speed (u/s²)
+    float soft_cap_drag_full  = 18.0f;  // speed at which drag reaches max
+    float hard_speed_cap      = 50.0f;  // absolute max horizontal speed
 
     // --- Slope landing ---
     float slope_landing_conversion = 0.3f; // fraction of fall speed converted to downhill speed
