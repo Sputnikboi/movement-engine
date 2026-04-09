@@ -69,7 +69,7 @@ static float measure_summary(ImFont* font, float fs, float box_w, float pad,
     y += 4.0f + fs + 10.0f; // total
     y += 8.0f; // separator
     y += fs + 12.0f; // kills
-    y += fs + pad; // continue prompt
+    y += fs + 16.0f + 12.0f + pad; // continue button
     return y;
 }
 
@@ -198,15 +198,33 @@ bool draw_room_summary(const RoomStats& stats, int room_number, ImFont* font) {
         y += fs + 12.0f;
     }
 
-    // Continue prompt
+    // Continue button
+    bool dismissed = false;
     {
-        const char* prompt = "PRESS SPACE TO CONTINUE";
-        ImVec2 psz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, prompt);
-        rs_text(dl, font, fs, ImVec2((sw - psz.x) * 0.5f, y), IM_COL32(255, 255, 100, 240), prompt);
+        const char* label = "CONTINUE";
+        ImVec2 lsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label);
+        float btn_w = lsz.x + 40.0f;
+        float btn_h = fs + 16.0f;
+        float btn_x = (sw - btn_w) * 0.5f;
+        float btn_y = y + 4.0f;
+
+        ImVec2 mpos = ImGui::GetIO().MousePos;
+        bool hovered = (mpos.x >= btn_x && mpos.x <= btn_x + btn_w &&
+                        mpos.y >= btn_y && mpos.y <= btn_y + btn_h);
+
+        ImU32 bg = hovered ? IM_COL32(80, 75, 60, 255) : IM_COL32(55, 52, 48, 255);
+        ImU32 border = hovered ? IM_COL32(255, 230, 100, 255) : IM_COL32(180, 170, 130, 180);
+        ImU32 text_col = hovered ? IM_COL32(255, 255, 120, 255) : IM_COL32(255, 255, 100, 220);
+
+        dl->AddRectFilled(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h), bg, 6.0f);
+        dl->AddRect(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h), border, 6.0f, 0, 1.5f);
+        rs_text(dl, font, fs, ImVec2(btn_x + (btn_w - lsz.x) * 0.5f, btn_y + (btn_h - fs) * 0.5f), text_col, label);
+
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            dismissed = true;
+
+        y = btn_y + btn_h + 8.0f;
     }
 
-    // Dismiss
-    return (ImGui::IsKeyPressed(ImGuiKey_Space) ||
-            ImGui::IsKeyPressed(ImGuiKey_Enter) ||
-            ImGui::IsKeyPressed(ImGuiKey_E));
+    return dismissed;
 }
