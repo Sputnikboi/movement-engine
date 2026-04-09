@@ -34,7 +34,7 @@ bool draw_room_summary(const RoomStats& stats, int room_number) {
     float win_h = 500.0f;
     ImGui::SetNextWindowPos(ImVec2(center.x - win_w * 0.5f, center.y - win_h * 0.5f), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(win_w, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.92f);
+    ImGui::SetNextWindowBgAlpha(1.0f);
 
     ImGui::Begin("##room_summary", nullptr,
         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |

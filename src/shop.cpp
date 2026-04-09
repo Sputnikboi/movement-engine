@@ -373,7 +373,7 @@ void shop_draw_hud(GameState& gs) {
         ImVec2 text_sz = ImGui::CalcTextSize(gold_buf);
         float cx = gs.renderer.swapchain_width() * 0.5f - text_sz.x * 0.5f;
         ImGui::SetNextWindowPos(ImVec2(cx, 40));
-        ImGui::SetNextWindowBgAlpha(0.5f);
+        ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::Begin("##shop_gold", nullptr,
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
@@ -387,7 +387,7 @@ void shop_draw_hud(GameState& gs) {
         ImVec2 prompt_pos(gs.renderer.swapchain_width() * 0.5f,
                           gs.renderer.swapchain_height() * 0.7f);
         ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowBgAlpha(0.6f);
+        ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::Begin("##shop_prompt", nullptr,
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
@@ -473,7 +473,7 @@ void shop_draw_hud(GameState& gs) {
             ImVec2 prompt_pos(gs.renderer.swapchain_width() * 0.5f,
                               gs.renderer.swapchain_height() * 0.7f);
             ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowBgAlpha(0.6f);
+            ImGui::SetNextWindowBgAlpha(1.0f);
             ImGui::Begin("##shop_exit_prompt", nullptr,
                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);

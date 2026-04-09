@@ -256,6 +256,7 @@ int main(int argc, char* argv[]) {
     style.WindowBorderSize = 1.0f;
     style.FramePadding     = ImVec2(8, 4);
     style.ItemSpacing      = ImVec2(8, 6);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.22f, 0.22f, 0.22f, 1.0f); // solid gray
 
     ImGui_ImplSDL3_InitForVulkan(window);
 
@@ -278,6 +279,9 @@ int main(int argc, char* argv[]) {
     ImFont* game_font_large = nullptr;
     {
         ImGuiIO& io = ImGui::GetIO();
+        // Add default font FIRST so it stays as ImGui's default for all windows
+        io.Fonts->AddFontDefault();
+
         const char* font_paths[] = {
             "assets/fonts/Daydream.ttf",
             "../assets/fonts/Daydream.ttf",
@@ -1775,7 +1779,7 @@ int main(int argc, char* argv[]) {
             ImVec2 win_size(400, 320);
             ImGui::SetNextWindowPos(ImVec2(ds.x * 0.5f, ds.y * 0.45f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(win_size);
-            ImGui::SetNextWindowBgAlpha(0.85f * fade);
+            ImGui::SetNextWindowBgAlpha(1.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.15f, 0.15f, fade));
