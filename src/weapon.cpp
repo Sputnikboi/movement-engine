@@ -340,9 +340,11 @@ bool Weapon::try_fire() {
 
     // Record the mod on the round about to be fired
     int round_index;
+    bool is_split_refire = false;
     if (split_pending > 0) {
         // Split: refire the same round without advancing
         split_pending--;
+        is_split_refire = true;
         if (config.infinite_ammo) {
             round_index = (current_round + config.mag_size - 1) % config.mag_size;
         } else {
@@ -369,8 +371,8 @@ bool Weapon::try_fire() {
         return false;
     }
 
-    // Split: queue an extra shot of the same round
-    if (last_fired_mod.tipping == Tipping::Split && split_pending == 0)
+    // Split: queue an extra shot (only on the original fire, not the refire)
+    if (last_fired_mod.tipping == Tipping::Split && !is_split_refire)
         split_pending = 1;
 
     // Aerodynamic: 20% faster fire rate
