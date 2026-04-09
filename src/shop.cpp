@@ -501,9 +501,9 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
             int lvl = gs.weapon_level[w];
             const char* wnames[] = {"GLOCK", "WINGMAN", "THROWING KNIFE"};
             const char* upgrade_desc[] = {
-                "+1 DMG  +5% FIRE RATE",
+                "+2 DMG  +15% RELOAD SPEED",
                 "1.1X DAMAGE",
-                "+5 DMG  +0.1X CRIT MULT"
+                "+10% ATTACK SPEED"
             };
 
             // Title

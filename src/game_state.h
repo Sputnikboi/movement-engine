@@ -108,17 +108,16 @@ struct GameState {
         int ups = weapon_level[w] - 1;
         if (ups <= 0) return;
         switch (w) {
-            case 0: // Glock
-                weapons[w].config.damage    += ups * 1.0f;
-                weapons[w].config.fire_rate *= (1.0f + ups * 0.05f);
+            case 0: // Glock: +2 dmg, +15% reload speed per level
+                weapons[w].config.damage      += ups * 2.0f;
+                weapons[w].config.reload_time *= 1.0f / (1.0f + ups * 0.15f);
                 break;
-            case 1: // Wingman
+            case 1: // Wingman: 1.1x damage per level
                 for (int i = 0; i < ups; i++)
                     weapons[w].config.damage *= 1.1f;
                 break;
-            case 2: // Knife
-                weapons[w].config.damage          += ups * 5.0f;
-                weapons[w].config.crit_multiplier += ups * 0.1f;
+            case 2: // Knife: +10% attack speed per level
+                weapons[w].config.fire_rate *= (1.0f + ups * 0.10f);
                 break;
         }
         weapons[w].ammo = weapons[w].config.mag_size;
