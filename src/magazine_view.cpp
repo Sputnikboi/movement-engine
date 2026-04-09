@@ -26,11 +26,14 @@ static ImU32 tipping_color(Tipping t) {
 
 static ImU32 enchantment_color(Enchantment e) {
     switch (e) {
-        case Enchantment::Incendiary: return IM_COL32(240, 120, 40, 255);
-        case Enchantment::Frost:      return IM_COL32(100, 180, 240, 255);
-        case Enchantment::Shock:      return IM_COL32(240, 240, 80, 255);
+        case Enchantment::Wrath:      return IM_COL32(220, 60, 40, 255);
+        case Enchantment::Gilded:     return IM_COL32(240, 200, 60, 255);
+        case Enchantment::Etheral:    return IM_COL32(160, 140, 240, 255);
+        case Enchantment::Storming:   return IM_COL32(80, 180, 240, 255);
+        case Enchantment::Fortified:  return IM_COL32(120, 200, 120, 255);
         case Enchantment::Vampiric:   return IM_COL32(180, 50, 60, 255);
-        case Enchantment::Explosive:  return IM_COL32(240, 80, 40, 255);
+        case Enchantment::Levitating: return IM_COL32(200, 200, 240, 255);
+        case Enchantment::Catalytic:  return IM_COL32(200, 100, 220, 255);
         default:                      return IM_COL32(80, 80, 90, 255);
     }
 }
@@ -466,6 +469,7 @@ void magazine_view_draw(GameState& gs) {
                 }
                 pm = {};
                 gs.pending_stand_idx = -1;
+                w.recompute_bonuses();
             }
         }
 
@@ -511,7 +515,7 @@ void magazine_view_draw(GameState& gs) {
                       IM_COL32(120, 90, 200, 255), "Enchantment (bottom)");
         draw->AddText(ImVec2(lx - 200, ly + 60),
                       IM_COL32(160, 155, 170, 200),
-                      "In=Incendiary  Fr=Frost  Sh=Shock  Va=Vampiric  Ex=Explosive");
+                      "Wr=Wrath  Gi=Gilded  Et=Etheral  St=Storming  Fo=Fortified  Va=Vampiric  Le=Levitating  Ca=Catalytic");
     }
 
     // --- Dismiss hint ---

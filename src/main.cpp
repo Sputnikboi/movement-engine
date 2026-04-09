@@ -780,6 +780,9 @@ int main(int argc, char* argv[]) {
             input.yaw         = camera.yaw;
             input.pitch       = camera.pitch;
 
+            // Fortified enchantment: adjust max HP based on active weapon bonuses
+            player.max_health = 100.0f + weapons[active_weapon].bonuses.bonus_max_hp;
+
             accumulator += dt;
             while (accumulator >= TICK_RATE) {
                 player.update(TICK_RATE, input, collision);
@@ -893,7 +896,7 @@ int main(int argc, char* argv[]) {
                         if (weapon.last_fired_mod.tipping == Tipping::Aerodynamic) pspeed *= 2.0f;
                         p.velocity = HMM_MulV3F(fwd, pspeed);
                         p.radius   = weapon.config.proj_radius;
-                        p.damage   = weapon.config.damage;
+                        p.damage   = weapon.config.damage + weapon.bonuses.bonus_damage;
                         p.round_mod = weapon.last_fired_mod;
                         p.fired_round_idx = weapon.last_fired_round;
                         p.owner    = -3; // player knife projectile
@@ -989,10 +992,11 @@ int main(int argc, char* argv[]) {
                     float hit_t = hits[h].t;
                     Entity& hit_ent = entities[eidx];
 
-                    float base_dmg = weapon.config.damage;
+                    float base_dmg = weapon.config.damage + weapon.bonuses.bonus_damage;
 
-                    // Bleed multiplier (Serrated stacks — applied before tipping)
-                    base_dmg *= (1.0f + 0.1f * hit_ent.bleed_stacks);
+                    // Bleed multiplier (Serrated stacks, boosted by Catalytic)
+                    float bleed_pct = 0.1f * weapon.bonuses.catalytic_mult;
+                    base_dmg *= (1.0f + bleed_pct * hit_ent.bleed_stacks);
 
                     // Tipping effects
                     if (rm.tipping == Tipping::Sharpened)
@@ -1037,13 +1041,6 @@ int main(int argc, char* argv[]) {
                             weapon.magazine.set_tipping(weapon.last_fired_round, Tipping::None);
                     }
 
-                    // Enchantment effects
-                    if (rm.enchantment == Enchantment::Vampiric) {
-                        player.health += actual_dmg_display * 0.1f;
-                        if (player.health > player.max_health)
-                            player.health = player.max_health;
-                    }
-
                     // Floating damage number at hit point
                     {
                         HMM_Vec3 hit_pos = HMM_AddV3(ray_origin, HMM_MulV3F(ray_dir, hit_t));
@@ -1081,6 +1078,11 @@ int main(int argc, char* argv[]) {
                         hit_ent.ai_state = dying_state;
                         hit_ent.death_timer = 0.0f;
                         { int kr = kill_reward(hit_ent.type); currency += kr; room_stats.record_kill(hit_ent.type, kr); }
+                        // Vampiric enchantment: heal on kill
+                        if (weapon.bonuses.vampiric_heal > 0) {
+                            player.health += (float)weapon.bonuses.vampiric_heal;
+                            if (player.health > player.max_health) player.health = player.max_health;
+                        }
                         hit_ent.velocity.Y += 3.0f;
                         HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
                         hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
@@ -1203,7 +1205,7 @@ int main(int argc, char* argv[]) {
 
                 // Poison DoT tick
                 if (e.poison_stacks > 0 && e.type != EntityType::Projectile) {
-                    float poison_dmg = 4.0f * e.poison_stacks * dt;
+                    float poison_dmg = 4.0f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks * dt;
                     e.health -= poison_dmg;
                     room_stats.record_poison(poison_dmg);
                     e.poison_timer -= dt;
@@ -1290,8 +1292,9 @@ int main(int argc, char* argv[]) {
                         RoundMod rm = proj.round_mod;
                         float base_dmg = proj.damage;
 
-                        // Bleed multiplier (Serrated stacks — applied before tipping)
-                        base_dmg *= (1.0f + 0.1f * e.bleed_stacks);
+                        // Bleed multiplier (Serrated stacks, boosted by Catalytic)
+                        float bleed_pct = 0.1f * weapons[active_weapon].bonuses.catalytic_mult;
+                        base_dmg *= (1.0f + bleed_pct * e.bleed_stacks);
 
                         if (rm.tipping == Tipping::Sharpened)
                             base_dmg += 10.0f;
@@ -1331,12 +1334,6 @@ int main(int argc, char* argv[]) {
                         }
 
                         // Enchantment effects
-                        if (rm.enchantment == Enchantment::Vampiric) {
-                            player.health += actual_dmg * 0.1f;
-                            if (player.health > player.max_health)
-                                player.health = player.max_health;
-                        }
-
                         // Floating damage number at hit point
                         {
                             HMM_Vec3 hit_pos = e.position;
@@ -1375,6 +1372,11 @@ int main(int argc, char* argv[]) {
                             e.ai_state = dying_state;
                             e.death_timer = 0.0f;
                             { int kr = kill_reward(e.type); currency += kr; room_stats.record_kill(e.type, kr); }
+                            // Vampiric enchantment: heal on kill
+                            if (weapons[active_weapon].bonuses.vampiric_heal > 0) {
+                                player.health += (float)weapons[active_weapon].bonuses.vampiric_heal;
+                                if (player.health > player.max_health) player.health = player.max_health;
+                            }
                             e.velocity.Y += 3.0f;
                             HMM_Vec3 kb = HMM_NormV3(proj.velocity);
                             e.velocity = HMM_AddV3(e.velocity, HMM_MulV3F(kb, 5.0f));
@@ -1452,9 +1454,12 @@ int main(int argc, char* argv[]) {
         // --- Door interact → stats screen → shop ---
         if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room && !show_room_summary) {
             // Show stats screen first; shop_enter happens on dismiss
-            room_stats.finalize_no_damage_bonus();
+            int gilded_gold = weapons[active_weapon].bonuses.bonus_gold;
+            room_stats.finalize(gilded_gold);
             if (room_stats.gold_no_damage > 0)
                 currency += room_stats.gold_no_damage;
+            if (room_stats.gold_gilded > 0)
+                currency += room_stats.gold_gilded;
             show_room_summary = true;
             SDL_SetWindowRelativeMouseMode(window, false);
             interact_pressed = false;

@@ -31,6 +31,7 @@ struct RoomStats {
     int gold_bomber       = 0;
     int gold_shielder     = 0;
     int gold_no_damage    = 0;     // bonus for taking zero damage
+    int gold_gilded       = 0;     // bonus from Gilded enchantment
 
     // --- Kill counts ---
     int kills_total       = 0;
@@ -82,10 +83,14 @@ struct RoomStats {
         }
     }
 
-    void finalize_no_damage_bonus() {
+    void finalize(int gilded_gold = 0) {
         if (taken_total <= 0.0f) {
             gold_no_damage = 5;
             gold_total += gold_no_damage;
+        }
+        if (gilded_gold > 0) {
+            gold_gilded = gilded_gold;
+            gold_total += gold_gilded;
         }
     }
 };

@@ -49,6 +49,7 @@ void Weapon::init_wingman() {
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
     reload_progress = 0.0f;
+    recompute_bonuses();
 }
 
 // ============================================================
@@ -97,6 +98,7 @@ void Weapon::init_glock() {
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
     reload_progress = 0.0f;
+    recompute_bonuses();
 }
 
 // ============================================================
@@ -154,6 +156,7 @@ void Weapon::init_knife() {
     reload_buffered = false;
     reload_phase = ReloadPhase::NONE;
     reload_progress = 0.0f;
+    recompute_bonuses();
 }
 
 // ============================================================
@@ -240,7 +243,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
         reload_progress = 0.0f;
         if ((reload_pressed || reload_buffered) && ammo < config.mag_size) {
             state = WeaponState::RELOADING;
-            reload_timer = config.reload_time;
+            reload_timer = config.reload_time / bonuses.reload_speed_mult;
             reload_buffered = false;
             reload_phase = ReloadPhase::MAG_OUT;
         }
@@ -257,7 +260,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
             time_since_shot >= config.reload_buffer_delay)
         {
             state = WeaponState::RELOADING;
-            reload_timer = config.reload_time;
+            reload_timer = config.reload_time / bonuses.reload_speed_mult;
             reload_buffered = false;
             fire_timer = 0.0f;
             reload_phase = ReloadPhase::MAG_OUT;
@@ -269,7 +272,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
             // Consume buffered reload on natural cooldown end too
             if (reload_buffered && ammo < config.mag_size) {
                 state = WeaponState::RELOADING;
-                reload_timer = config.reload_time;
+                reload_timer = config.reload_time / bonuses.reload_speed_mult;
                 reload_buffered = false;
                 reload_phase = ReloadPhase::MAG_OUT;
             }
@@ -303,7 +306,7 @@ void Weapon::update(float dt, bool fire_pressed, bool reload_pressed, bool ads_i
 
     case WeaponState::RELOADING:
         reload_timer -= dt;
-        reload_progress = 1.0f - (reload_timer / config.reload_time);
+        reload_progress = 1.0f - (reload_timer / (config.reload_time / bonuses.reload_speed_mult));
         reload_progress = fminf(fmaxf(reload_progress, 0.0f), 1.0f);
 
         // Determine current phase
@@ -366,7 +369,7 @@ bool Weapon::try_fire() {
         // Auto-reload on empty
         if (ammo <= 0 && !config.infinite_ammo) {
             state = WeaponState::RELOADING;
-            reload_timer = config.reload_time;
+            reload_timer = config.reload_time / bonuses.reload_speed_mult;
             reload_phase = ReloadPhase::MAG_OUT;
         }
         return false;
@@ -376,8 +379,8 @@ bool Weapon::try_fire() {
     if (last_fired_mod.tipping == Tipping::Split && !is_split_refire)
         split_pending = 1;
 
-    // Aerodynamic: 20% faster fire rate
-    float rate = config.fire_rate;
+    // Fire rate: Storming enchantment + Aerodynamic tipping
+    float rate = config.fire_rate * bonuses.fire_rate_mult;
     if (last_fired_mod.tipping == Tipping::Aerodynamic) rate *= 1.2f;
     fire_timer = 1.0f / rate;
     state = WeaponState::FIRING;
@@ -392,7 +395,7 @@ bool Weapon::try_fire() {
     // Auto-reload on empty
     if (ammo <= 0) {
         state = WeaponState::RELOADING;
-        reload_timer = config.reload_time;
+        reload_timer = config.reload_time / bonuses.reload_speed_mult;
         reload_phase = ReloadPhase::MAG_OUT;
     }
 

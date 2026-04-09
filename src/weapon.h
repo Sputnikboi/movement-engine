@@ -101,6 +101,7 @@ struct Weapon {
     int          ammo       = 6;
     float        fire_timer = 0.0f;   // counts down to 0
     Magazine     magazine;             // per-round mod slots
+    WeaponBonuses bonuses;            // computed from magazine enchantments
     RoundMod     last_fired_mod;       // mod on the most recently fired round
     int          last_fired_round = 0; // magazine index of the most recently fired round
     int          current_round = 0;    // cycling index for infinite_ammo weapons
@@ -142,6 +143,16 @@ struct Weapon {
     void init_wingman();
     void init_glock();
     void init_knife();
+    void recompute_bonuses() {
+        bonuses.compute(magazine);
+        // Etheral: adjust effective mag size (don't shrink below base)
+        int effective_mag = config.mag_size + bonuses.bonus_mag;
+        if (effective_mag > MAX_MAGAZINE_CAPACITY) effective_mag = MAX_MAGAZINE_CAPACITY;
+        if (magazine.capacity != effective_mag) {
+            magazine.resize(effective_mag);
+            if (ammo > effective_mag) ammo = effective_mag;
+        }
+    }
     void update(float dt, bool fire_pressed, bool reload_pressed, bool ads_held);
     bool try_fire();
     void begin_swap();      // start lowering weapon for swap

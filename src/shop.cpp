@@ -43,14 +43,20 @@ void shop_enter(GameState& gs) {
         } else if (s.type == ShopStandType::Healthpack) {
             s.cost = 5;
         } else if (s.type == ShopStandType::ShopItem) {
-            // Roll from the item pool (currently only tippings)
-            s.item_category = ShopItemCategory::Tipping;
-            // Treat as tipping internally
-            s.type = ShopStandType::ModTipping;
-            int t = 1 + rand() % ((int)Tipping::COUNT - 1);
-            s.offered_tipping = static_cast<Tipping>(t);
-            s.label = tipping_name(s.offered_tipping);
-            s.cost = 8;
+            // Roll from item pool: 50/50 tipping or enchantment
+            if (rand() % 2 == 0) {
+                s.type = ShopStandType::ModTipping;
+                int t = 1 + rand() % ((int)Tipping::COUNT - 1);
+                s.offered_tipping = static_cast<Tipping>(t);
+                s.label = tipping_name(s.offered_tipping);
+                s.cost = 8;
+            } else {
+                s.type = ShopStandType::ModEnchantment;
+                int e = 1 + rand() % ((int)Enchantment::COUNT - 1);
+                s.offered_enchantment = static_cast<Enchantment>(e);
+                s.label = enchantment_name(s.offered_enchantment);
+                s.cost = 8;
+            }
         } else if (s.type == ShopStandType::ModTipping) {
             int t = 1 + rand() % ((int)Tipping::COUNT - 1);
             s.offered_tipping = static_cast<Tipping>(t);
@@ -235,7 +241,7 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     gs.pending_mod.active = true;
                     gs.pending_mod.is_tipping = false;
                     gs.pending_mod.enchantment = s.offered_enchantment;
-                    gs.pending_mod.max_applications = 2;
+                    gs.pending_mod.max_applications = enchantment_max_applications(s.offered_enchantment);
                     gs.pending_mod.cost = s.cost;
                     gs.pending_mod.clear_selection();
                     gs.pending_stand_idx = gs.shop_nearby_stand;
@@ -423,8 +429,10 @@ void shop_draw_hud(GameState& gs) {
                                    enchantment_name(s.offered_enchantment));
                 ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
                                    enchantment_desc(s.offered_enchantment));
-                ImGui::Text("Applies to %d rounds",
-                            gs.pending_mod.max_applications);
+                {
+                    int eapp = enchantment_max_applications(s.offered_enchantment);
+                    ImGui::Text("Applies to %d round%s", eapp, eapp == 1 ? "" : "s");
+                }
                 if (gs.currency >= s.cost)
                     ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
                                        interact_key, s.cost);

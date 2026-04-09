@@ -77,7 +77,7 @@ void hud_draw(GameState& gs, const HudContext& ctx) {
 
         // Effective fire rate (accounts for next round's Aerodynamic tipping)
         {
-            float rate = w.config.fire_rate;
+            float rate = w.config.fire_rate * w.bonuses.fire_rate_mult;
             int next_round = w.config.infinite_ammo
                 ? w.current_round
                 : (w.magazine.capacity - w.ammo);

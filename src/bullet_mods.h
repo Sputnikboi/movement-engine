@@ -28,14 +28,17 @@ enum class Tipping : uint8_t {
     COUNT
 };
 
-// --- Enchantment types (elemental/magical mods) ---
+// --- Enchantment types (passive weapon-wide buffs, scale by count in magazine) ---
 enum class Enchantment : uint8_t {
     None = 0,
-    Incendiary,   // sets enemy on fire (DoT)
-    Frost,        // slows enemy movement
-    Shock,        // chains to nearby enemies (future)
-    Vampiric,     // heals player on hit
-    Explosive,    // small AoE on impact
+    Wrath,       // +5 damage per enchanted round
+    Gilded,      // +5 gold at end of round per enchanted round
+    Etheral,     // +1 mag capacity per enchanted round (limited)
+    Storming,    // +5% fire rate per enchanted round
+    Fortified,   // +10 max HP per enchanted round
+    Vampiric,    // +1 HP per kill per enchanted round
+    Levitating,  // +15% reload speed per enchanted round
+    Catalytic,   // debuffs +20% more effective per enchanted round
     COUNT
 };
 
@@ -73,6 +76,15 @@ struct Magazine {
     }
     void set_enchantment(int slot, Enchantment e) {
         if (slot >= 0 && slot < capacity) rounds[slot].enchantment = e;
+    }
+
+    // Resize magazine (preserves existing round mods, new slots are empty)
+    void resize(int new_cap) {
+        if (new_cap < 0) new_cap = 0;
+        if (new_cap > MAX_MAGAZINE_CAPACITY) new_cap = MAX_MAGAZINE_CAPACITY;
+        // Clear any slots beyond new capacity
+        for (int i = new_cap; i < capacity; i++) rounds[i] = {};
+        capacity = new_cap;
     }
 
     // Swap two round slots (for reordering in shop)
@@ -138,13 +150,21 @@ inline const char* tipping_name(Tipping t) {
 inline const char* enchantment_name(Enchantment e) {
     switch (e) {
         case Enchantment::None:       return "None";
-        case Enchantment::Incendiary: return "Incendiary";
-        case Enchantment::Frost:      return "Frost";
-        case Enchantment::Shock:      return "Shock";
+        case Enchantment::Wrath:      return "Wrath";
+        case Enchantment::Gilded:     return "Gilded";
+        case Enchantment::Etheral:    return "Etheral";
+        case Enchantment::Storming:   return "Storming";
+        case Enchantment::Fortified:  return "Fortified";
         case Enchantment::Vampiric:   return "Vampiric";
-        case Enchantment::Explosive:  return "Explosive";
+        case Enchantment::Levitating: return "Levitating";
+        case Enchantment::Catalytic:  return "Catalytic";
         default:                      return "???";
     }
+}
+
+inline int enchantment_max_applications(Enchantment e) {
+    if (e == Enchantment::Etheral) return 1; // very limited
+    return 2; // default for all others
 }
 
 // Short color-coded descriptions for HUD/shop
@@ -164,14 +184,50 @@ inline const char* tipping_desc(Tipping t) {
 
 inline const char* enchantment_desc(Enchantment e) {
     switch (e) {
-        case Enchantment::Incendiary: return "Burns for 3s";
-        case Enchantment::Frost:      return "Slows 40% for 2s";
-        case Enchantment::Shock:      return "Chains to nearby";
-        case Enchantment::Vampiric:   return "Heals 10% of dmg";
-        case Enchantment::Explosive:  return "Small AoE blast";
+        case Enchantment::Wrath:      return "+5 weapon damage per round";
+        case Enchantment::Gilded:     return "+5 gold at end of round";
+        case Enchantment::Etheral:    return "+1 mag capacity per round";
+        case Enchantment::Storming:   return "+5% fire rate per round";
+        case Enchantment::Fortified:  return "+10 max HP per round";
+        case Enchantment::Vampiric:   return "+1 HP per kill per round";
+        case Enchantment::Levitating: return "+15% reload speed per round";
+        case Enchantment::Catalytic:  return "Debuffs +20% stronger per round";
         default:                      return "";
     }
 }
+
+// Computed weapon bonuses from magazine enchantments (recalculate when mag changes)
+struct WeaponBonuses {
+    float bonus_damage     = 0.0f;  // Wrath: +5 per round
+    int   bonus_gold       = 0;     // Gilded: +5 per round (end of room)
+    int   bonus_mag        = 0;     // Etheral: +1 per round
+    float fire_rate_mult   = 1.0f;  // Storming: +5% per round
+    float bonus_max_hp     = 0.0f;  // Fortified: +10 per round
+    int   vampiric_heal    = 0;     // Vampiric: +1 HP per kill per round
+    float reload_speed_mult= 1.0f;  // Levitating: +15% per round (faster = lower time)
+    float catalytic_mult   = 1.0f;  // Catalytic: debuffs +20% per round
+
+    void compute(const Magazine& mag) {
+        *this = WeaponBonuses{};
+        int wrath_n      = mag.count_enchantment(Enchantment::Wrath);
+        int gilded_n     = mag.count_enchantment(Enchantment::Gilded);
+        int etheral_n    = mag.count_enchantment(Enchantment::Etheral);
+        int storming_n   = mag.count_enchantment(Enchantment::Storming);
+        int fortified_n  = mag.count_enchantment(Enchantment::Fortified);
+        int vampiric_n   = mag.count_enchantment(Enchantment::Vampiric);
+        int levitating_n = mag.count_enchantment(Enchantment::Levitating);
+        int catalytic_n  = mag.count_enchantment(Enchantment::Catalytic);
+
+        bonus_damage      = 5.0f * wrath_n;
+        bonus_gold        = 5 * gilded_n;
+        bonus_mag         = etheral_n;
+        fire_rate_mult    = 1.0f + 0.05f * storming_n;
+        bonus_max_hp      = 10.0f * fortified_n;
+        vampiric_heal     = vampiric_n;
+        reload_speed_mult = 1.0f + 0.15f * levitating_n; // multiply into reload to make it faster
+        catalytic_mult    = 1.0f + 0.20f * catalytic_n;
+    }
+};
 
 // Magazine mod application state (after buying from shop)
 struct PendingModApplication {

@@ -125,6 +125,8 @@ bool draw_room_summary(const RoomStats& stats, int room_number) {
         gold_row("Shielders",stats.gold_shielder);
         if (stats.gold_no_damage > 0)
             gold_row("No damage bonus", stats.gold_no_damage, IM_COL32(100, 255, 140, 255));
+        if (stats.gold_gilded > 0)
+            gold_row("Gilded bonus", stats.gold_gilded, IM_COL32(255, 215, 80, 255));
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
