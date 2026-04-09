@@ -41,7 +41,8 @@ static ImU32 enchantment_color(Enchantment e) {
 static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_h,
                       float angle, const RoundMod& mod, int round_num,
                       bool is_current_round, bool hovered, bool is_spent,
-                      bool is_selected, ImFont* font, float fs) {
+                      bool is_selected, ImFont* font, float fs,
+                      const RoundMod* preview_mod = nullptr) {
     float hw = card_w * 0.5f, hh = card_h * 0.5f;
     float cos_a = cosf(angle), sin_a = sinf(angle);
 
@@ -113,9 +114,39 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
         draw->AddQuadFilled(tl, tr, br, bl, IM_COL32(0, 0, 0, 140));
     }
 
-    // Selection checkmark
-    if (is_selected) {
-        draw->AddText(font, fs, rot(hw - 20, -hh + 5), IM_COL32(80, 255, 80, 255), "OK");
+    // Preview overlay: show what the card will look like after mod application
+    if (is_selected && preview_mod) {
+        // Draw faded preview of the new tipping zone
+        if (preview_mod->tipping != Tipping::None) {
+            ImVec2 ptl = rot(-hw + m, -hh + m);
+            ImVec2 ptr = rot( hw - m, -hh + m);
+            ImVec2 pbr = rot( hw - m, -4);
+            ImVec2 pbl = rot(-hw + m, -4);
+            ImU32 pcol = tipping_color(preview_mod->tipping);
+            // Make it semi-transparent and blend on top
+            int r = (pcol >> 0) & 0xFF, g = (pcol >> 8) & 0xFF, b = (pcol >> 16) & 0xFF;
+            draw->AddQuadFilled(ptl, ptr, pbr, pbl, IM_COL32(r, g, b, 140));
+            const char* name = tipping_name(preview_mod->tipping);
+            char label[4] = {name[0], name[1], 0};
+            ImVec2 lsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label);
+            draw->AddText(font, fs, rot(-lsz.x * 0.5f, -hh * 0.5f - lsz.y * 0.5f),
+                          IM_COL32(255, 255, 255, 180), label);
+        }
+        // Draw faded preview of the new enchantment zone
+        if (preview_mod->enchantment != Enchantment::None) {
+            ImVec2 ptl = rot(-hw + m, 4);
+            ImVec2 ptr = rot( hw - m, 4);
+            ImVec2 pbr = rot( hw - m, hh - m);
+            ImVec2 pbl = rot(-hw + m, hh - m);
+            ImU32 pcol = enchantment_color(preview_mod->enchantment);
+            int r = (pcol >> 0) & 0xFF, g = (pcol >> 8) & 0xFF, b = (pcol >> 16) & 0xFF;
+            draw->AddQuadFilled(ptl, ptr, pbr, pbl, IM_COL32(r, g, b, 140));
+            const char* name = enchantment_name(preview_mod->enchantment);
+            char label[4] = {name[0], name[1], 0};
+            ImVec2 lsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label);
+            draw->AddText(font, fs, rot(-lsz.x * 0.5f, hh * 0.5f - lsz.y * 0.5f),
+                          IM_COL32(255, 255, 255, 180), label);
+        }
     }
 }
 
@@ -252,6 +283,12 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
         if ((dragging || drag_pending) && mouse_released) {
             if (dragging && drag_source >= 0 && hovered_card >= 0 && drag_source != hovered_card) {
                 mag.swap(drag_source, hovered_card);
+                // Selection follows the swapped cards
+                if (applying) {
+                    bool tmp = pm.selected[drag_source];
+                    pm.selected[drag_source] = pm.selected[hovered_card];
+                    pm.selected[hovered_card] = tmp;
+                }
                 printf("Swapped round %d <-> %d\n", drag_source + 1, hovered_card + 1);
             }
             drag_source = -1;
@@ -287,8 +324,13 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
         if (is_selected) cy -= 6.0f;
 
         RoundMod mod = mag.get(i);
+        // Build preview mod showing what the card will look like after application
+        RoundMod preview = mod;
+        if (pm.is_tipping) preview.tipping = pm.tipping;
+        else preview.enchantment = pm.enchantment;
+        const RoundMod* preview_ptr = is_selected ? &preview : nullptr;
         draw_card(draw, ImVec2(cx, cy), card_w, card_h, angle, mod, i,
-                  is_current, hovered, is_spent, is_selected, font, fs);
+                  is_current, hovered, is_spent, is_selected, font, fs, preview_ptr);
 
         // Hover glow when applying
         if (applying && hovered) {
@@ -326,8 +368,12 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
         bool is_current = (i == current_round);
         bool is_selected = applying && pm.selected[i];
         RoundMod mod = mag.get(i);
+        RoundMod preview = mod;
+        if (pm.is_tipping) preview.tipping = pm.tipping;
+        else preview.enchantment = pm.enchantment;
+        const RoundMod* preview_ptr = is_selected ? &preview : nullptr;
         draw_card(draw, ImVec2(mouse.x, mouse.y), card_w, card_h, 0.0f, mod, i,
-                  is_current, true, is_spent, is_selected, font, fs);
+                  is_current, true, is_spent, is_selected, font, fs, preview_ptr);
     }
 
     // --- Handle click to toggle selection (applying mode) ---
