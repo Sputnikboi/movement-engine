@@ -39,5 +39,5 @@ struct DamageNumberSystem {
 
     // Draw damage numbers as screen-space UI text.
     // Call during ImGui frame (after NewFrame, before Render).
-    void draw_ui(HMM_Mat4 view_proj, float screen_w, float screen_h) const;
+    void draw_ui(HMM_Mat4 view_proj, float screen_w, float screen_h, struct ImFont* font = nullptr) const;
 };

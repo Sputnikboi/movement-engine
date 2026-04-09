@@ -1928,7 +1928,7 @@ int main(int argc, char* argv[]) {
             float sw = io.DisplaySize.x, sh = io.DisplaySize.y;
             float aspect_dmg = (sh > 0) ? sw / sh : 1.0f;
             HMM_Mat4 vp = HMM_MulM4(camera.projection_matrix(aspect_dmg), camera.view_matrix());
-            dmg_numbers.draw_ui(vp, sw, sh);
+            dmg_numbers.draw_ui(vp, sw, sh, game_font);
         }
 
         // --- Settings / debug menu ---

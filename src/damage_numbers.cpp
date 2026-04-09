@@ -145,7 +145,7 @@ static bool world_to_screen(HMM_Vec3 world_pos, HMM_Mat4 view_proj,
     return true;
 }
 
-void DamageNumberSystem::draw_ui(HMM_Mat4 view_proj, float screen_w, float screen_h) const {
+void DamageNumberSystem::draw_ui(HMM_Mat4 view_proj, float screen_w, float screen_h, ImFont* custom_font) const {
     ImDrawList* draw = ImGui::GetForegroundDrawList();
 
     for (int i = 0; i < MAX_NUMBERS; i++) {
@@ -196,7 +196,7 @@ void DamageNumberSystem::draw_ui(HMM_Mat4 view_proj, float screen_w, float scree
         // Slight upward drift on screen (in addition to world drift)
         float screen_offset_y = dn.is_poison ? 0.0f : -(1.0f - dn.lifetime / dn.max_lifetime) * 15.0f;
 
-        ImFont* font = ImGui::GetFont();
+        ImFont* font = custom_font ? custom_font : ImGui::GetFont();
         ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, buf);
         float tx = sx - text_size.x * 0.5f;
         float ty = sy - text_size.y * 0.5f + screen_offset_y;
