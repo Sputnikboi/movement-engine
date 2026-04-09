@@ -112,7 +112,12 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
         ImGui::Text("Procedural Generation");
         if (ImGui::Button("Generate New Level")) {
             gs.procgen_cfg.room_number = gs.rooms_cleared + 1;
-            gs.procgen_cfg.difficulty = 1.0f + gs.rooms_cleared * 0.15f;
+            {
+                int r = gs.rooms_cleared;
+                int tier = r / 10;
+                float rate = 0.15f + tier * 0.10f;
+                gs.procgen_cfg.difficulty = 1.0f + r * rate;
+            }
             LevelData pld = generate_level(gs.procgen_cfg, gs.door_mesh_ptr, &gs.active_doors);
 
             for (int i = 0; i < gs.max_entities; i++) gs.entities[i].alive = false;

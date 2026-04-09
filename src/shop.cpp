@@ -258,7 +258,15 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
         printf("Entering room %d...\n", gs.rooms_cleared + 1);
         gs.procgen_cfg.seed = 0;
         gs.procgen_cfg.room_number = gs.rooms_cleared + 1;
-        gs.procgen_cfg.difficulty = 1.0f + gs.rooms_cleared * 0.15f;
+        // Difficulty scales faster every 10 rooms
+        {
+            int r = gs.rooms_cleared;
+            int tier = r / 10;             // 0 for rooms 1-10, 1 for 11-20, etc.
+            float base_rate = 0.15f;       // per-room scaling
+            float accel = 0.10f;           // extra per-room scaling per tier
+            float rate = base_rate + tier * accel;
+            gs.procgen_cfg.difficulty = 1.0f + r * rate;
+        }
 
         LevelData pld = generate_level(gs.procgen_cfg, gs.door_mesh_ptr, &gs.active_doors);
 

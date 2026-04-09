@@ -714,8 +714,11 @@ LevelData generate_level(const ProcGenConfig& config,
             spawn_enemy(EntityType::Shielder, 3.0f);
     } else {
         // Budget system: total count scales with room number
-        int budget = config.enemy_budget_base +
-                     (config.room_number - 1) * config.enemy_budget_per_room;
+        // Budget scales faster every 10 rooms
+        int r = config.room_number - 1;
+        int tier = r / 10;
+        int per_room = config.enemy_budget_per_room + tier;  // +1 extra per room per tier
+        int budget = config.enemy_budget_base + r * per_room;
         if (budget > config.enemy_budget_max) budget = config.enemy_budget_max;
 
         // Weighted random selection
