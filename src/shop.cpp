@@ -363,123 +363,241 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
 //  Shop room HUD
 // ============================================================
 
-void shop_draw_hud(GameState& gs) {
-    if (!gs.in_shop_room || !gs.show_hud || gs.show_settings) return;
+// Helper: draw text with shadow (same as hud.cpp)
+static void shop_text_shadowed(ImDrawList* dl, ImFont* font, float size,
+                                ImVec2 pos, ImU32 color, const char* text) {
+    ImU32 shadow = IM_COL32(0, 0, 0, 180);
+    dl->AddText(font, size, ImVec2(pos.x - 1, pos.y - 1), shadow, text);
+    dl->AddText(font, size, ImVec2(pos.x + 1, pos.y - 1), shadow, text);
+    dl->AddText(font, size, ImVec2(pos.x - 1, pos.y + 1), shadow, text);
+    dl->AddText(font, size, ImVec2(pos.x + 1, pos.y + 1), shadow, text);
+    dl->AddText(font, size, pos, color, text);
+}
 
-    // Gold display at top center
-    {
-        char gold_buf[64];
-        snprintf(gold_buf, sizeof(gold_buf), "Gold: %d", gs.currency);
-        ImVec2 text_sz = ImGui::CalcTextSize(gold_buf);
-        float cx = gs.renderer.swapchain_width() * 0.5f - text_sz.x * 0.5f;
-        ImGui::SetNextWindowPos(ImVec2(cx, 40));
-        ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin("##shop_gold", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "%s", gold_buf);
-        ImGui::End();
+// Helper: draw centered text line, returns y advance
+static float shop_text_centered(ImDrawList* dl, ImFont* font, float size,
+                                 float cx, float y, ImU32 color, const char* text) {
+    ImVec2 sz = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+    shop_text_shadowed(dl, font, size, ImVec2(cx - sz.x * 0.5f, y), color, text);
+    return sz.y + 4.0f;
+}
+
+// Helper: world to screen projection
+static bool shop_w2s(HMM_Vec3 wp, HMM_Mat4 vp, float sw, float sh, float& ox, float& oy) {
+    HMM_Vec4 clip = HMM_MulM4V4(vp, HMM_V4(wp.X, wp.Y, wp.Z, 1.0f));
+    if (clip.W <= 0.001f) return false;
+    float inv = 1.0f / clip.W;
+    ox = (clip.X * inv * 0.5f + 0.5f) * sw;
+    oy = (clip.Y * inv * 0.5f + 0.5f) * sh;
+    return true;
+}
+
+void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
+    if (!gs.in_shop_room || gs.show_settings) return;
+
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    float sw = io.DisplaySize.x;
+    float sh = io.DisplaySize.y;
+
+    // Use default ImGui font as fallback
+    if (!font) font = ImGui::GetFont();
+    if (!font_large) font_large = font;
+
+    float fs = 21.0f;  // small font size
+    float fl = 42.0f;  // large font size
+
+    // View-projection for world-to-screen
+    float aspect = (sh > 0) ? sw / sh : 1.0f;
+    HMM_Mat4 vp = HMM_MulM4(gs.camera.projection_matrix(aspect), gs.camera.view_matrix());
+
+    // ---- Floating item markers above pedestals (world-projected) ----
+    for (int si = 0; si < (int)gs.shop_data.stands.size(); si++) {
+        const ShopStand& s = gs.shop_data.stands[si];
+        if (s.type != ShopStandType::ModTipping && s.type != ShopStandType::ModEnchantment) continue;
+        if (s.purchased) continue;
+
+        // Project stand position to screen
+        HMM_Vec3 marker_pos = s.position;
+        marker_pos.Y += 0.6f;  // above the pedestal
+        float sx_m, sy_m;
+        if (!shop_w2s(marker_pos, vp, sw, sh, sx_m, sy_m)) continue;
+
+        // Colored diamond marker
+        float diamond_r = 12.0f;
+        ImU32 marker_col;
+        if (s.type == ShopStandType::ModTipping) {
+            marker_col = IM_COL32(230, 130, 50, 220);  // orange
+        } else {
+            marker_col = IM_COL32(130, 70, 230, 220);   // purple
+        }
+
+        ImVec2 pts[4] = {
+            ImVec2(sx_m, sy_m - diamond_r),
+            ImVec2(sx_m + diamond_r, sy_m),
+            ImVec2(sx_m, sy_m + diamond_r),
+            ImVec2(sx_m - diamond_r, sy_m),
+        };
+        dl->AddConvexPolyFilled(pts, 4, marker_col);
+        dl->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 120), ImDrawFlags_Closed, 1.5f);
+
+        // Item name above diamond
+        const char* name = (s.type == ShopStandType::ModTipping)
+            ? tipping_name(s.offered_tipping)
+            : enchantment_name(s.offered_enchantment);
+        ImVec2 nsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, name);
+        shop_text_shadowed(dl, font, fs,
+            ImVec2(sx_m - nsz.x * 0.5f, sy_m - diamond_r - nsz.y - 4),
+            marker_col, name);
     }
 
-    // Stand interaction prompt (bottom center)
+    // ---- Stand interaction popup (center screen) ----
     if (gs.shop_nearby_stand >= 0) {
         const ShopStand& s = gs.shop_data.stands[gs.shop_nearby_stand];
-        ImVec2 prompt_pos(gs.renderer.swapchain_width() * 0.5f,
-                          gs.renderer.swapchain_height() * 0.7f);
-        ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin("##shop_prompt", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+        float cx = sw * 0.5f;
+        float base_y = sh * 0.6f;
+        float y = base_y;
+
+        // Background box (drawn after measuring content, so pre-calculate)
+        float box_w = 400.0f;
+        float box_pad = 12.0f;
+
+        const char* interact_key = input_code_name(gs.kb.get(Action::Interact, 0));
 
         if (s.type == ShopStandType::Empty) {
-            ImGui::TextDisabled("Coming Soon");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(120, 120, 120, 200), "COMING SOON");
         } else if (s.purchased) {
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "SOLD");
-        } else {
-            const char* interact_key = input_code_name(gs.kb.get(Action::Interact, 0));
-            if (s.type == ShopStandType::Weapon) {
-                int w = s.weapon_index;
-                int lvl = gs.weapon_level[w];
-                const char* wnames[] = {"Glock", "Wingman", "Throwing Knife"};
-                const char* upgrade_desc[] = {
-                    "+1 dmg, +5%% fire rate",
-                    "1.1x damage",
-                    "+5 dmg, +0.1x crit mult"
-                };
-                if (w == gs.active_weapon) {
-                    // Current weapon — offer upgrade
-                    ImGui::Text("%s  Lv %d -> %d", wnames[w], lvl, lvl + 1);
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", upgrade_desc[w]);
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(120, 120, 120, 200), "SOLD");
+        } else if (s.type == ShopStandType::Weapon) {
+            int w = s.weapon_index;
+            int lvl = gs.weapon_level[w];
+            const char* wnames[] = {"GLOCK", "WINGMAN", "THROWING KNIFE"};
+            const char* upgrade_desc[] = {
+                "+1 DMG  +5% FIRE RATE",
+                "1.1X DAMAGE",
+                "+5 DMG  +0.1X CRIT MULT"
+            };
+
+            // Title
+            ImU32 title_col = IM_COL32(255, 220, 100, 255);
+            if (w == gs.active_weapon) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%s  LV %d > %d", wnames[w], lvl, lvl + 1);
+                y += shop_text_centered(dl, font, fs, cx, y, title_col, buf);
+            } else {
+                if (lvl > 0) {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "%s  LV %d", wnames[w], lvl);
+                    y += shop_text_centered(dl, font, fs, cx, y, title_col, buf);
                 } else {
-                    // Different weapon — swap (show existing level if previously owned)
-                    if (lvl > 0)
-                        ImGui::Text("%s  Lv %d", wnames[w], lvl);
-                    else
-                        ImGui::Text("%s", wnames[w]);
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                                       "Replaces %s", gs.weapons[gs.active_weapon].config.name);
+                    y += shop_text_centered(dl, font, fs, cx, y, title_col, wnames[w]);
                 }
-                const char* action = (w == gs.active_weapon) ? "Upgrade" : (lvl > 0 ? "Swap" : "Buy");
-                if (gs.currency >= s.cost)
-                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] %s  (%d gold)",
-                                       interact_key, action, s.cost);
-                else
-                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
-            } else if (s.type == ShopStandType::Reroll) {
-                ImGui::Text("Reroll Shop Items");
-                ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "Randomize all item pedestals");
-                if (gs.currency >= s.reroll_cost)
-                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Reroll  (%d gold)",
-                                       interact_key, s.reroll_cost);
-                else
-                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.reroll_cost);
-            } else if (s.type == ShopStandType::ModTipping) {
-                ImGui::TextColored(ImVec4(0.9f,0.5f,0.2f,1), "Tipping: %s",
-                                   tipping_name(s.offered_tipping));
-                ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
-                                   tipping_desc(s.offered_tipping));
-                int app = tipping_max_applications(s.offered_tipping);
-                ImGui::Text("Applies to %d round%s", app, app == 1 ? "" : "s");
-                if (gs.currency >= s.cost)
-                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
-                                       interact_key, s.cost);
-                else
-                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
-            } else if (s.type == ShopStandType::ModEnchantment) {
-                ImGui::TextColored(ImVec4(0.5f,0.3f,0.9f,1), "Enchantment: %s",
-                                   enchantment_name(s.offered_enchantment));
-                ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "%s",
-                                   enchantment_desc(s.offered_enchantment));
-                {
-                    int eapp = enchantment_max_applications(s.offered_enchantment);
-                    ImGui::Text("Applies to %d round%s", eapp, eapp == 1 ? "" : "s");
-                }
-                if (gs.currency >= s.cost)
-                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
-                                       interact_key, s.cost);
-                else
-                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
+            }
+
+            // Desc
+            if (w == gs.active_weapon) {
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), upgrade_desc[w]);
+            } else {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "REPLACES %s", gs.weapons[gs.active_weapon].config.name);
+                // Uppercase the weapon name
+                for (char* p = buf; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), buf);
+            }
+
+            y += 4.0f;
+            const char* action = (w == gs.active_weapon) ? "UPGRADE" : (lvl > 0 ? "SWAP" : "BUY");
+            if (gs.currency >= s.cost) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%s %s  %dG", interact_key, action, s.cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+            } else {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+            }
+        } else if (s.type == ShopStandType::Reroll) {
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(200, 200, 210, 255), "REROLL SHOP");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(150, 150, 160, 200), "RANDOMIZE ALL ITEMS");
+            y += 4.0f;
+            if (gs.currency >= s.reroll_cost) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%s REROLL  %dG", interact_key, s.reroll_cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+            } else {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.reroll_cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+            }
+        } else if (s.type == ShopStandType::ModTipping) {
+            ImU32 tip_col = IM_COL32(230, 130, 50, 255);
+            char title[64];
+            snprintf(title, sizeof(title), "TIPPING: %s", tipping_name(s.offered_tipping));
+            for (char* p = title; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
+            y += shop_text_centered(dl, font, fs, cx, y, tip_col, title);
+            // Description — uppercase it
+            char desc[128];
+            snprintf(desc, sizeof(desc), "%s", tipping_desc(s.offered_tipping));
+            for (char* p = desc; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), desc);
+            int app = tipping_max_applications(s.offered_tipping);
+            char abuf[32];
+            snprintf(abuf, sizeof(abuf), "APPLIES TO %d ROUND%s", app, app == 1 ? "" : "S");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(160, 160, 170, 200), abuf);
+            y += 4.0f;
+            if (gs.currency >= s.cost) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%s BUY  %dG", interact_key, s.cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+            } else {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
+            }
+        } else if (s.type == ShopStandType::ModEnchantment) {
+            ImU32 ench_col = IM_COL32(130, 70, 230, 255);
+            char title[64];
+            snprintf(title, sizeof(title), "ENCHANTMENT: %s", enchantment_name(s.offered_enchantment));
+            for (char* p = title; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
+            y += shop_text_centered(dl, font, fs, cx, y, ench_col, title);
+            char desc[128];
+            snprintf(desc, sizeof(desc), "%s", enchantment_desc(s.offered_enchantment));
+            for (char* p = desc; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(180, 180, 180, 220), desc);
+            int eapp = enchantment_max_applications(s.offered_enchantment);
+            char abuf[32];
+            snprintf(abuf, sizeof(abuf), "APPLIES TO %d ROUND%s", eapp, eapp == 1 ? "" : "S");
+            y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(160, 160, 170, 200), abuf);
+            y += 4.0f;
+            if (gs.currency >= s.cost) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%s BUY  %dG", interact_key, s.cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 255, 80, 255), buf);
+            } else {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "NOT ENOUGH GOLD  %dG", s.cost);
+                y += shop_text_centered(dl, font, fs, cx, y, IM_COL32(255, 80, 80, 220), buf);
             }
         }
-        ImGui::End();
+
+        // Draw background box behind everything we just drew
+        float box_h = y - base_y + box_pad * 2;
+        dl->AddRectFilled(
+            ImVec2(cx - box_w * 0.5f, base_y - box_pad),
+            ImVec2(cx + box_w * 0.5f, base_y + box_h - box_pad),
+            IM_COL32(30, 30, 35, 220), 8.0f);
     }
 
-    // Exit door prompt
+    // ---- Exit door prompt ----
     {
         HMM_Vec3 diff = HMM_SubV3(gs.player.position, gs.shop_data.exit_door_pos);
         diff.Y = 0;
         if (HMM_DotV3(diff, diff) < 3.0f * 3.0f && gs.shop_nearby_stand < 0) {
-            ImVec2 prompt_pos(gs.renderer.swapchain_width() * 0.5f,
-                              gs.renderer.swapchain_height() * 0.7f);
-            ImGui::SetNextWindowPos(prompt_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowBgAlpha(1.0f);
-            ImGui::Begin("##shop_exit_prompt", nullptr,
-                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-            ImGui::TextColored(ImVec4(0.3f,1,0.3f,1), "Press [%s] to continue to next room",
-                               input_code_name(gs.kb.get(Action::Interact, 0)));
-            ImGui::End();
+            char buf[64];
+            snprintf(buf, sizeof(buf), "PRESS %s TO CONTINUE",
+                     input_code_name(gs.kb.get(Action::Interact, 0)));
+            shop_text_centered(dl, font, fs, sw * 0.5f, sh * 0.7f,
+                               IM_COL32(100, 255, 100, 240), buf);
         }
     }
 }

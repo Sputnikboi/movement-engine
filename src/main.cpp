@@ -1742,7 +1742,7 @@ int main(int argc, char* argv[]) {
         }
 
         // --- Shop room HUD ---
-        if (!player_dead) shop_draw_hud(gs);
+        if (!player_dead) shop_draw_hud(gs, game_font, game_font_large);
 
         // --- Magazine card view ---
         magazine_view_draw(gs);

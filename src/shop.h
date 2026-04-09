@@ -24,4 +24,5 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time);
 
 // Draw shop room HUD (gold counter, stand prompts, exit prompt).
 // Call during ImGui frame, after NewFrame().
-void shop_draw_hud(GameState& gs);
+struct ImFont;
+void shop_draw_hud(GameState& gs, ImFont* font = nullptr, ImFont* font_large = nullptr);

@@ -1048,15 +1048,7 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
         add_box(m, HMM_V3(3.5f - 0.35f, pedestal_height + 0.05f, 1.5f), 0.12f, 0.12f, 0.12f, rr_col, 0);
     }
 
-    // Item stand markers: small bronze diamonds (dynamic content set at runtime)
-    {
-        HMM_Vec3 item_col = {0.7f, 0.45f, 0.2f};
-        float iy = pedestal_height + 0.35f;
-        add_box(m, HMM_V3(-3.5f, iy, 5.0f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
-        add_box(m, HMM_V3(-1.2f, iy, 6.5f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
-        add_box(m, HMM_V3( 1.2f, iy, 6.5f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
-        add_box(m, HMM_V3( 3.5f, iy, 5.0f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
-    }
+    // Item stand markers now drawn dynamically in shop_draw_hud()
 
     // --- Spawn point (just inside entry door) ---
     ld.spawn_pos = HMM_V3(entry_x, 1.0f, -hd + 2.0f);
