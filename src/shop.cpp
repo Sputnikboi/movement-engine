@@ -517,7 +517,7 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
             const char* upgrade_desc[] = {
                 "+2 DMG  +15% RELOAD SPEED",
                 "1.1X DAMAGE",
-                "+10% ATTACK SPEED"
+                "+5 DMG  +10% ATTACK SPEED"
             };
 
             // Title

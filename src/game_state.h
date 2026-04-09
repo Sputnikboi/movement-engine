@@ -116,7 +116,8 @@ struct GameState {
                 for (int i = 0; i < ups; i++)
                     weapons[w].config.damage *= 1.1f;
                 break;
-            case 2: // Knife: +10% attack speed per level
+            case 2: // Knife: +5 dmg, +10% attack speed per level
+                weapons[w].config.damage    += ups * 5.0f;
                 weapons[w].config.fire_rate *= (1.0f + ups * 0.10f);
                 break;
         }
