@@ -34,7 +34,7 @@ struct RusherConfig {
 
     // Combat
     float health            = 30.0f;
-    float melee_damage      = 5.0f;
+    float melee_damage      = 6.5f;
     float radius            = 0.5f;
 
     // Lunge attack

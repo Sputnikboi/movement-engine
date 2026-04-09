@@ -49,7 +49,7 @@ struct ProcGenConfig {
     // Enemies — budget system
     int   enemy_budget_base = 4;     // starting enemy count (room 1)
     int   enemy_budget_per_room = 1; // extra enemies per room cleared
-    int   enemy_budget_max  = 20;    // hard cap
+    int   enemy_budget_max  = 60;    // hard cap
     int   room_number       = 1;     // current room (set before generate)
 
     // Spawn weights (relative probability per type, shifted by difficulty)
