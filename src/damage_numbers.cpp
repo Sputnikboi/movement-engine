@@ -121,6 +121,21 @@ void DamageNumberSystem::update(float dt) {
     }
 }
 
+void DamageNumberSystem::cleanup_dead_entities(const bool* alive, int max_entities) {
+    for (int i = 0; i < MAX_NUMBERS; i++) {
+        DamageNumber& dn = numbers[i];
+        if (!dn.active || !dn.is_poison) continue;
+        if (dn.entity_id < 0 || dn.entity_id >= max_entities) continue;
+        if (!alive[dn.entity_id]) {
+            // Entity despawned — start fade-out
+            if (dn.max_lifetime > 10.0f) {
+                dn.max_lifetime = 0.6f;
+                dn.lifetime = 0.6f;
+            }
+        }
+    }
+}
+
 // ============================================================
 //  Screen-space UI rendering
 // ============================================================

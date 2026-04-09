@@ -1607,6 +1607,12 @@ int main(int argc, char* argv[]) {
 
         // Update floating damage numbers
         dmg_numbers.update(dt);
+        // Cleanup stuck poison numbers for despawned entities
+        {
+            bool alive_flags[MAX_ENTITIES];
+            for (int i = 0; i < MAX_ENTITIES; i++) alive_flags[i] = entities[i].alive;
+            dmg_numbers.cleanup_dead_entities(alive_flags, MAX_ENTITIES);
+        }
 
         // Build entity mesh + opaque death effects (frustum-culled)
         Mesh entity_mesh = build_entity_mesh(entities, MAX_ENTITIES, frustum);

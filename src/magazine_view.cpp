@@ -106,7 +106,7 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
         char num_buf[16];
         snprintf(num_buf, sizeof(num_buf), "%d", round_num + 1);
         ImVec2 num_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, num_buf);
-        draw->AddText(font, fs, rot(-num_size.x * 0.5f, hh - num_size.y - 6), IM_COL32(180, 175, 190, 200), num_buf);
+        draw->AddText(font, fs, rot(-num_size.x * 0.5f, hh + 6), IM_COL32(180, 175, 190, 200), num_buf);
     }
 
     // Dim spent rounds

@@ -34,6 +34,9 @@ struct DamageNumberSystem {
     // Dismiss poison numbers for an entity (call when poison expires or enemy dies).
     void dismiss_poison(int entity_id);
 
+    // Cleanup: dismiss poison numbers for entities that are no longer alive.
+    void cleanup_dead_entities(const bool* alive, int max_entities);
+
     // Update positions + lifetimes. Call once per frame.
     void update(float dt);
 
