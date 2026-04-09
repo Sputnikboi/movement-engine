@@ -173,8 +173,8 @@ inline const char* tipping_desc(Tipping t) {
         case Tipping::Sharpened:      return "+10 flat damage";
         case Tipping::Piercing:       return "Pierces enemies & shields";
         case Tipping::Crystal_Tipped: return "2x dmg, 10% chance to shatter";
-        case Tipping::Aerodynamic:    return "+20% fire rate & dmg, 2x proj speed";
-        case Tipping::Poison_Tipped:  return "Poison: 4 dmg/s per stack, 5s";
+        case Tipping::Aerodynamic:    return "+20% fire rate (all), +20% dmg & 2x proj speed (projectiles)";
+        case Tipping::Poison_Tipped:  return "Poison: 6 dmg/s per stack, 5s duration";
         case Tipping::Blank:          return "Round is skipped when firing";
         case Tipping::Split:          return "Fires this round twice";
         case Tipping::Serrated:       return "+10% damage taken per stack (permanent)";
@@ -184,14 +184,14 @@ inline const char* tipping_desc(Tipping t) {
 
 inline const char* enchantment_desc(Enchantment e) {
     switch (e) {
-        case Enchantment::Wrath:      return "+5 weapon damage per round";
-        case Enchantment::Gilded:     return "+5 gold at end of round";
-        case Enchantment::Etheral:    return "+1 mag capacity per round";
-        case Enchantment::Storming:   return "+5% fire rate per round";
-        case Enchantment::Fortified:  return "+10 max HP per round";
-        case Enchantment::Vampiric:   return "+1 HP per kill per round";
-        case Enchantment::Levitating: return "+15% reload speed per round";
-        case Enchantment::Catalytic:  return "Debuffs +20% stronger per round";
+        case Enchantment::Wrath:      return "+5 weapon damage per card";
+        case Enchantment::Gilded:     return "+5 gold per card (end of room)";
+        case Enchantment::Etheral:    return "+1 mag capacity per card (max 1)";
+        case Enchantment::Storming:   return "+5% fire rate per card";
+        case Enchantment::Fortified:  return "+10 max HP per card";
+        case Enchantment::Vampiric:   return "+1 HP per kill, per card";
+        case Enchantment::Levitating: return "+15% reload speed per card";
+        case Enchantment::Catalytic:  return "Debuffs +20% stronger per card";
         default:                      return "";
     }
 }
