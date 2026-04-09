@@ -225,12 +225,17 @@ LevelData generate_level(const ProcGenConfig& config,
     LevelData ld;
     Mesh& m = ld.mesh;
 
-    float rw = randf(config.room_width_min, config.room_width_max);
-    float rd = randf(config.room_depth_min, config.room_depth_max);
+    // Room size scales with difficulty: 60x60 at diff 1.0, 100x100 at diff ~5.0+
+    float diff_t = (config.difficulty - 1.0f) / 4.0f; // 0..1 over difficulty 1..5
+    if (diff_t < 0.0f) diff_t = 0.0f;
+    if (diff_t > 1.0f) diff_t = 1.0f;
+    float room_size = config.room_width_min + diff_t * (config.room_width_max - config.room_width_min);
+    float rw = room_size;
+    float rd = room_size;
     float rh = config.room_height;
     float hw = rw * 0.5f, hd = rd * 0.5f;
 
-    printf("ProcGen: room %.0f x %.0f x %.0f\n", rw, rd, rh);
+    printf("ProcGen: room %.0f x %.0f x %.0f (diff %.2f)\n", rw, rd, rh, config.difficulty);
 
     // --- Terrain heightmap ---
     HeightMap hm;
