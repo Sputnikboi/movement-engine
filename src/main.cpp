@@ -1213,13 +1213,47 @@ int main(int argc, char* argv[]) {
 
                 // Poison DoT tick
                 if (e.poison_stacks > 0 && e.type != EntityType::Projectile) {
-                    float poison_dmg = 4.0f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks * dt;
+                    float poison_dps = 4.0f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks;
+                    float poison_dmg = poison_dps * dt;
                     e.health -= poison_dmg;
                     room_stats.record_poison(poison_dmg);
+
+                    // Poison damage number (green, accumulates per entity)
+                    {
+                        HMM_Vec3 hit_pos = e.position;
+                        hit_pos.Y += e.radius * 0.8f;
+                        dmg_numbers.spawn(hit_pos, (int)(poison_dmg + 0.5f), i, false, true);
+                    }
+
                     e.poison_timer -= dt;
                     if (e.poison_timer <= 0.0f) {
                         e.poison_stacks = 0;
                         e.poison_timer = 0.0f;
+                    }
+
+                    // Poison can kill
+                    if (e.health <= 0) {
+                        uint8_t dying_state = DRONE_DYING;
+                        float tumble = drone_cfg.death_tumble_speed;
+                        if (e.type == EntityType::Rusher)  { dying_state = RUSHER_DYING;  tumble = rusher_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Turret)  { dying_state = TURRET_DYING;  tumble = turret_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Tank)    { dying_state = TANK_DYING;    tumble = tank_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Bomber)  { dying_state = BOMBER_DYING;  tumble = bomber_cfg.death_tumble_speed; }
+                        if (e.type == EntityType::Shielder){ dying_state = SHIELDER_DYING; tumble = shielder_cfg.death_tumble_speed; }
+
+                        if (e.ai_state != dying_state) {
+                            e.ai_state = dying_state;
+                            e.death_timer = 0.0f;
+                            { int kr = kill_reward(e.type); currency += kr; room_stats.record_kill(e.type, kr); }
+                            if (weapons[active_weapon].bonuses.vampiric_heal > 0) {
+                                player.health += (float)weapons[active_weapon].bonuses.vampiric_heal;
+                                if (player.health > player.max_health) player.health = player.max_health;
+                            }
+                            e.velocity.Y += 2.0f;
+                            e.angular_vel = HMM_V3(
+                                randf(-1.0f, 1.0f) * tumble * 57.3f, 0,
+                                randf(-1.0f, 1.0f) * tumble * 57.3f);
+                        }
                     }
                 }
             }

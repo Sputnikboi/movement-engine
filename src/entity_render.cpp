@@ -894,8 +894,9 @@ void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
         if (e.type == EntityType::Projectile || e.type == EntityType::None) continue;
         if (is_dying(e)) continue;
 
-        // Only show bar if enemy has taken damage
-        if (e.max_health <= 0 || e.health >= e.max_health) continue;
+        // Only show bar if enemy has taken damage or has debuffs
+        bool has_debuffs = (e.poison_stacks > 0 || e.bleed_stacks > 0);
+        if (e.max_health <= 0 || (e.health >= e.max_health && !has_debuffs)) continue;
 
         // Frustum cull
         if (!frustum.sphere_visible(e.position, e.radius + 1.0f)) continue;
@@ -955,6 +956,44 @@ void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
 
             add_bar_quad(out, sfill, cam_right, cam_up, shield_fill_w * 0.5f, bar_h * 0.7f,
                          HMM_V3(0.3f, 0.5f, 0.9f));
+        }
+
+        // Debuff icons below health bar
+        {
+            float icon_size = 0.08f;
+            float icon_gap = icon_size * 5.5f;
+            HMM_Vec3 icon_base = HMM_SubV3(bar_center, HMM_MulV3F(cam_up, bar_h * 3.5f));
+            icon_base = HMM_SubV3(icon_base, HMM_MulV3F(cam_right, bar_w * 0.5f));
+            icon_base = HMM_AddV3(icon_base, HMM_MulV3F(cam_fwd, 0.01f));
+            int icon_count = 0;
+
+            // Poison icon (green) with stack ticks
+            if (e.poison_stacks > 0) {
+                HMM_Vec3 pos = HMM_AddV3(icon_base, HMM_MulV3F(cam_right, icon_count * icon_gap));
+                HMM_Vec3 pcol = HMM_V3(0.2f, 0.8f, 0.2f);
+                add_bar_quad(out, pos, cam_right, cam_up, icon_size, icon_size, pcol);
+                int vis = e.poison_stacks > 5 ? 5 : e.poison_stacks;
+                for (int s = 0; s < vis; s++) {
+                    HMM_Vec3 sp = HMM_AddV3(pos, HMM_MulV3F(cam_right, icon_size * 1.3f + s * icon_size * 0.6f));
+                    sp = HMM_AddV3(sp, HMM_MulV3F(cam_fwd, 0.002f));
+                    add_bar_quad(out, sp, cam_right, cam_up, icon_size * 0.2f, icon_size * 0.7f, pcol);
+                }
+                icon_count++;
+            }
+
+            // Bleed icon (red) with stack ticks
+            if (e.bleed_stacks > 0) {
+                HMM_Vec3 pos = HMM_AddV3(icon_base, HMM_MulV3F(cam_right, icon_count * icon_gap));
+                HMM_Vec3 bcol = HMM_V3(0.8f, 0.15f, 0.1f);
+                add_bar_quad(out, pos, cam_right, cam_up, icon_size, icon_size, bcol);
+                int vis = e.bleed_stacks > 5 ? 5 : e.bleed_stacks;
+                for (int s = 0; s < vis; s++) {
+                    HMM_Vec3 sp = HMM_AddV3(pos, HMM_MulV3F(cam_right, icon_size * 1.3f + s * icon_size * 0.6f));
+                    sp = HMM_AddV3(sp, HMM_MulV3F(cam_fwd, 0.002f));
+                    add_bar_quad(out, sp, cam_right, cam_up, icon_size * 0.2f, icon_size * 0.7f, bcol);
+                }
+                icon_count++;
+            }
         }
     }
 }

@@ -7,13 +7,14 @@
 //  Spawn / Update
 // ============================================================
 
-void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, int entity_id, bool is_kill) {
-    // Try to stack onto an existing number for the same entity
+void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, int entity_id, bool is_kill, bool is_poison) {
+    // Try to stack onto an existing number for the same entity and type
     if (entity_id >= 0) {
         for (int i = 0; i < MAX_NUMBERS; i++) {
             DamageNumber& dn = numbers[i];
             if (!dn.active) continue;
             if (dn.entity_id != entity_id) continue;
+            if (dn.is_poison != is_poison) continue;
             if ((dn.max_lifetime - dn.lifetime) > STACK_WINDOW) continue;
 
             // Stack: add damage, refresh lifetime and position
@@ -46,6 +47,7 @@ void DamageNumberSystem::spawn(HMM_Vec3 pos, int damage, int entity_id, bool is_
     dn.value = damage;
     dn.entity_id = entity_id;
     dn.is_kill = is_kill;
+    dn.is_poison = is_poison;
     dn.active = true;
 }
 
@@ -110,6 +112,9 @@ void DamageNumberSystem::draw_ui(HMM_Mat4 view_proj, float screen_w, float scree
         if (dn.is_kill) {
             color = ImGui::ColorConvertFloat4ToU32(
                 ImVec4(1.0f, 0.25f, 0.1f, alpha));
+        } else if (dn.is_poison) {
+            color = ImGui::ColorConvertFloat4ToU32(
+                ImVec4(0.3f, 0.9f, 0.3f, alpha));
         } else {
             color = ImGui::ColorConvertFloat4ToU32(
                 ImVec4(1.0f, 1.0f, 0.85f, alpha));
