@@ -98,6 +98,7 @@ add_executable(${PROJECT_NAME}
     src/debug_menu.cpp
     src/damage_numbers.cpp
     src/magazine_view.cpp
+    src/room_stats.cpp
     ${IMGUI_SOURCES}
 )
 

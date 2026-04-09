@@ -11,6 +11,7 @@
 #include "procgen.h"
 #include "keybinds.h"
 #include "config.h"
+#include "room_stats.h"
 #include "drone.h"
 #include "rusher.h"
 #include "turret.h"
@@ -72,6 +73,10 @@ struct GameState {
     int&              shop_nearby_stand;
     float&            shop_interact_cooldown;
     PendingModApplication& pending_mod;
+
+    // Room stats
+    RoomStats&        room_stats;
+    bool&             show_room_summary;
 
     // UI flags
     bool&             show_settings;

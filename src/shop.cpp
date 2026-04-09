@@ -245,6 +245,7 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
         gs.shop_weapon = -1;
 
         gs.rooms_cleared++;
+        gs.room_stats.reset();
         gs.player.health = gs.player.max_health;
         gs.player.damage_accum = 0.0f;
         for (int w = 0; w < GameState::MAX_WEAPONS; w++) {

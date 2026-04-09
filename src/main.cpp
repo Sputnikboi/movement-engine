@@ -363,6 +363,10 @@ int main(int argc, char* argv[]) {
     float  shop_interact_cooldown = 0.0f; // prevent double-buy
     PendingModApplication pending_mod;
 
+    // Room stats
+    RoomStats room_stats;
+    bool show_room_summary = false;
+
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
             case EntityType::Drone:    return 1;
@@ -513,6 +517,8 @@ int main(int argc, char* argv[]) {
         /* shop_nearby_stand */ shop_nearby_stand,
         /* shop_interact_cooldown */ shop_interact_cooldown,
         /* pending_mod */       pending_mod,
+        /* room_stats */        room_stats,
+        /* show_room_summary */ show_room_summary,
         /* show_settings */     show_settings,
         /* show_hud */          show_hud,
         /* show_ladder_debug */ show_ladder_debug,
@@ -552,7 +558,7 @@ int main(int argc, char* argv[]) {
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (show_settings || show_magazine_view)
+            if (show_settings || show_magazine_view || show_room_summary)
                 ImGui_ImplSDL3_ProcessEvent(&event);
 
             switch (event.type) {
@@ -710,7 +716,7 @@ int main(int argc, char* argv[]) {
             fps_timer = 0.0f;
         }
 
-        if (!show_settings && !show_magazine_view) {
+        if (!show_settings && !show_magazine_view && !show_room_summary) {
             float sens_scale = 1.0f - weapons[active_weapon].ads_blend * (1.0f - weapons[active_weapon].config.ads_sens_mult);
             camera.mouse_look(mouse_dx * sens_scale, mouse_dy * sens_scale);
         }
@@ -989,6 +995,10 @@ int main(int argc, char* argv[]) {
                     hit_ent.health -= actual_dmg;
                     float actual_dmg_display = actual_dmg;
 
+                    // Record stats
+                    float bleed_mult = 1.0f + 0.1f * hit_ent.bleed_stacks;
+                    room_stats.record_dealt(weapon.config.damage, actual_dmg, rm.tipping, bleed_mult);
+
                     // Set hit flash per type
                     if (hit_ent.type == EntityType::Turret)
                         hit_ent.hit_flash = turret_cfg.hit_flash_time;
@@ -1054,7 +1064,7 @@ int main(int argc, char* argv[]) {
                     if (hit_ent.health <= 0 && hit_ent.ai_state != dying_state) {
                         hit_ent.ai_state = dying_state;
                         hit_ent.death_timer = 0.0f;
-                        currency += kill_reward(hit_ent.type);
+                        { int kr = kill_reward(hit_ent.type); currency += kr; room_stats.record_kill(hit_ent.type, kr); }
                         hit_ent.velocity.Y += 3.0f;
                         HMM_Vec3 knockback = HMM_MulV3F(camera.forward(), 5.0f);
                         hit_ent.velocity = HMM_AddV3(hit_ent.velocity, knockback);
@@ -1109,6 +1119,7 @@ int main(int argc, char* argv[]) {
                         if (rusher_check_player_hit(e, player.capsule_bottom(), player.capsule_top(), player.radius, rusher_cfg)) {
                             player.health -= rusher_cfg.melee_damage;
                             player.damage_accum += rusher_cfg.melee_damage;
+                            room_stats.record_taken(rusher_cfg.melee_damage, EntityType::Rusher);
                         }
                     }
                 }
@@ -1124,6 +1135,7 @@ int main(int argc, char* argv[]) {
                             float dmg = tdmg * dt;  // beam_dps * dt
                             player.health -= dmg;
                             player.damage_accum += dmg;
+                            room_stats.record_taken(dmg, EntityType::Turret);
                         }
                     }
                 }
@@ -1141,6 +1153,7 @@ int main(int argc, char* argv[]) {
                             player.velocity = HMM_AddV3(player.velocity, kb);
                             player.health -= tdmg;
                             player.damage_accum += tdmg;
+                            room_stats.record_taken(tdmg, EntityType::Tank);
                         }
                     }
                 }
@@ -1160,6 +1173,7 @@ int main(int argc, char* argv[]) {
                             player.velocity = HMM_AddV3(player.velocity, bkb);
                             player.health -= bdmg;
                             player.damage_accum += bdmg;
+                            room_stats.record_taken(bdmg, EntityType::Bomber);
                         }
                     }
                 }
@@ -1173,7 +1187,9 @@ int main(int argc, char* argv[]) {
 
                 // Poison DoT tick
                 if (e.poison_stacks > 0 && e.type != EntityType::Projectile) {
-                    e.health -= 4.0f * e.poison_stacks * dt;
+                    float poison_dmg = 4.0f * e.poison_stacks * dt;
+                    e.health -= poison_dmg;
+                    room_stats.record_poison(poison_dmg);
                     e.poison_timer -= dt;
                     if (e.poison_timer <= 0.0f) {
                         e.poison_stacks = 0;
@@ -1272,6 +1288,12 @@ int main(int argc, char* argv[]) {
                         float actual_dmg = piercing ? base_dmg : shielder_absorb_damage(e, base_dmg);
                         e.health -= actual_dmg;
 
+                        // Record stats
+                        {
+                            float bleed_mult = 1.0f + 0.1f * e.bleed_stacks;
+                            room_stats.record_dealt(proj.damage, actual_dmg, rm.tipping, bleed_mult);
+                        }
+
                         // Poison tipping
                         if (rm.tipping == Tipping::Poison_Tipped) {
                             e.poison_stacks++;
@@ -1332,7 +1354,7 @@ int main(int argc, char* argv[]) {
                         if (e.health <= 0 && e.ai_state != dying_state) {
                             e.ai_state = dying_state;
                             e.death_timer = 0.0f;
-                            currency += kill_reward(e.type);
+                            { int kr = kill_reward(e.type); currency += kr; room_stats.record_kill(e.type, kr); }
                             e.velocity.Y += 3.0f;
                             HMM_Vec3 kb = HMM_NormV3(proj.velocity);
                             e.velocity = HMM_AddV3(e.velocity, HMM_MulV3F(kb, 5.0f));
@@ -1361,6 +1383,7 @@ int main(int argc, char* argv[]) {
                                            player.radius)) {
                     player.health -= e.damage;
                     player.damage_accum += e.damage;
+                    room_stats.record_taken(e.damage, EntityType::Projectile);
                     e.alive = false;
                 }
             }
@@ -1390,6 +1413,11 @@ int main(int argc, char* argv[]) {
             for (auto& d : active_doors) {
                 if (d.is_exit && d.locked && !any_alive) {
                     d.locked = false;
+                    // Room cleared — finalize stats and show summary
+                    room_stats.finalize_no_damage_bonus();
+                    if (room_stats.gold_no_damage > 0)
+                        currency += room_stats.gold_no_damage;
+                    show_room_summary = true;
                     printf("EXIT UNLOCKED!\n");
                 }
                 // Check proximity to exit door
@@ -1405,7 +1433,7 @@ int main(int argc, char* argv[]) {
         }
 
         // --- Shop: enter from combat room exit door ---
-        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room) {
+        if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room && !show_room_summary) {
             shop_enter(gs);
             interact_pressed = false;
         }
@@ -1512,6 +1540,13 @@ int main(int argc, char* argv[]) {
 
         // --- Magazine card view ---
         magazine_view_draw(gs);
+
+        // --- Room summary screen ---
+        if (show_room_summary) {
+            if (draw_room_summary(room_stats, rooms_cleared + 1)) {
+                show_room_summary = false;
+            }
+        }
 
         // --- Floating damage numbers (screen-space) ---
         {
