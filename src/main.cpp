@@ -1290,10 +1290,17 @@ int main(int argc, char* argv[]) {
                                         player.position, collision, shielder_cfg, dt, total_time);
                 }
 
-                // Poison DoT tick (skip dying enemies)
-                bool is_dying = (e.ai_state == DRONE_DYING || e.ai_state == RUSHER_DYING ||
-                                 e.ai_state == TURRET_DYING || e.ai_state == TANK_DYING ||
-                                 e.ai_state == BOMBER_DYING || e.ai_state == SHIELDER_DYING);
+                // Poison DoT tick (skip dying enemies — check correct type to avoid enum overlap)
+                bool is_dying = false;
+                switch (e.type) {
+                    case EntityType::Drone:    is_dying = (e.ai_state == DRONE_DYING);    break;
+                    case EntityType::Rusher:   is_dying = (e.ai_state == RUSHER_DYING);   break;
+                    case EntityType::Turret:   is_dying = (e.ai_state == TURRET_DYING);   break;
+                    case EntityType::Tank:     is_dying = (e.ai_state == TANK_DYING);     break;
+                    case EntityType::Bomber:   is_dying = (e.ai_state == BOMBER_DYING);   break;
+                    case EntityType::Shielder: is_dying = (e.ai_state == SHIELDER_DYING); break;
+                    default: break;
+                }
                 if (e.poison_stacks > 0 && e.type != EntityType::Projectile && !is_dying) {
                     float poison_dps = 4.0f * 1.5f * weapons[active_weapon].bonuses.catalytic_mult * e.poison_stacks;
                     float poison_dmg = poison_dps * dt;
