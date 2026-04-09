@@ -317,6 +317,54 @@ static void append_mesh_transformed(Mesh& out, const Mesh& src,
         out.indices.push_back(base + idx);
 }
 
+
+// Build an octahedron (diamond) mesh at position with given half-size and color
+static void append_diamond(Mesh& out, HMM_Vec3 pos, float rx, float ry, HMM_Vec3 color) {
+    uint32_t base = (uint32_t)out.vertices.size();
+
+    // 6 vertices: +Y, -Y, +X, -X, +Z, -Z
+    HMM_Vec3 verts[6] = {
+        {pos.X,      pos.Y + ry, pos.Z},       // 0 top
+        {pos.X,      pos.Y - ry, pos.Z},       // 1 bottom
+        {pos.X + rx, pos.Y,      pos.Z},       // 2 +X
+        {pos.X - rx, pos.Y,      pos.Z},       // 3 -X
+        {pos.X,      pos.Y,      pos.Z + rx},  // 4 +Z
+        {pos.X,      pos.Y,      pos.Z - rx},  // 5 -Z
+    };
+
+    // 8 triangles (top 4, bottom 4)
+    int tris[8][3] = {
+        {0,2,4}, {0,4,3}, {0,3,5}, {0,5,2},  // top
+        {1,4,2}, {1,3,4}, {1,5,3}, {1,2,5},  // bottom
+    };
+
+    for (int t = 0; t < 8; t++) {
+        HMM_Vec3 a = verts[tris[t][0]];
+        HMM_Vec3 b = verts[tris[t][1]];
+        HMM_Vec3 c2 = verts[tris[t][2]];
+        HMM_Vec3 edge1 = HMM_SubV3(b, a);
+        HMM_Vec3 edge2 = HMM_SubV3(c2, a);
+        HMM_Vec3 n = HMM_NormV3(HMM_Cross(edge1, edge2));
+
+        for (int v = 0; v < 3; v++) {
+            Vertex3D vtx{};
+            vtx.pos[0] = verts[tris[t][v]].X;
+            vtx.pos[1] = verts[tris[t][v]].Y;
+            vtx.pos[2] = verts[tris[t][v]].Z;
+            vtx.normal[0] = n.X;
+            vtx.normal[1] = n.Y;
+            vtx.normal[2] = n.Z;
+            vtx.color[0] = color.X;
+            vtx.color[1] = color.Y;
+            vtx.color[2] = color.Z;
+            out.vertices.push_back(vtx);
+        }
+        out.indices.push_back(base + t * 3 + 0);
+        out.indices.push_back(base + t * 3 + 1);
+        out.indices.push_back(base + t * 3 + 2);
+    }
+}
+
 void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
     if (!gs.in_shop_room) return;
 
@@ -356,6 +404,18 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
             }
         }
         // Reroll arrows stay as static geometry (built into room mesh)
+
+        // Mod stand diamonds (tipping = orange, enchantment = purple)
+        if (s.type == ShopStandType::ModTipping || s.type == ShopStandType::ModEnchantment) {
+            HMM_Vec3 diamond_pos = s.position;
+            diamond_pos.Y += 0.55f;  // float above pedestal
+            HMM_Vec3 diamond_color;
+            if (s.type == ShopStandType::ModTipping)
+                diamond_color = HMM_V3(0.9f, 0.5f, 0.2f);   // orange
+            else
+                diamond_color = HMM_V3(0.5f, 0.27f, 0.9f);  // purple
+            append_diamond(out, diamond_pos, 0.12f, 0.18f, diamond_color);
+        }
     }
 }
 
@@ -413,45 +473,7 @@ void shop_draw_hud(GameState& gs, ImFont* font, ImFont* font_large) {
     float aspect = (sh > 0) ? sw / sh : 1.0f;
     HMM_Mat4 vp = HMM_MulM4(gs.camera.projection_matrix(aspect), gs.camera.view_matrix());
 
-    // ---- Floating item markers above pedestals (world-projected) ----
-    for (int si = 0; si < (int)gs.shop_data.stands.size(); si++) {
-        const ShopStand& s = gs.shop_data.stands[si];
-        if (s.type != ShopStandType::ModTipping && s.type != ShopStandType::ModEnchantment) continue;
-        if (s.purchased) continue;
 
-        // Project stand position to screen
-        HMM_Vec3 marker_pos = s.position;
-        marker_pos.Y += 0.6f;  // above the pedestal
-        float sx_m, sy_m;
-        if (!shop_w2s(marker_pos, vp, sw, sh, sx_m, sy_m)) continue;
-
-        // Colored diamond marker
-        float diamond_r = 12.0f;
-        ImU32 marker_col;
-        if (s.type == ShopStandType::ModTipping) {
-            marker_col = IM_COL32(230, 130, 50, 220);  // orange
-        } else {
-            marker_col = IM_COL32(130, 70, 230, 220);   // purple
-        }
-
-        ImVec2 pts[4] = {
-            ImVec2(sx_m, sy_m - diamond_r),
-            ImVec2(sx_m + diamond_r, sy_m),
-            ImVec2(sx_m, sy_m + diamond_r),
-            ImVec2(sx_m - diamond_r, sy_m),
-        };
-        dl->AddConvexPolyFilled(pts, 4, marker_col);
-        dl->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 120), ImDrawFlags_Closed, 1.5f);
-
-        // Item name above diamond
-        const char* name = (s.type == ShopStandType::ModTipping)
-            ? tipping_name(s.offered_tipping)
-            : enchantment_name(s.offered_enchantment);
-        ImVec2 nsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, name);
-        shop_text_shadowed(dl, font, fs,
-            ImVec2(sx_m - nsz.x * 0.5f, sy_m - diamond_r - nsz.y - 4),
-            marker_col, name);
-    }
 
     // ---- Stand interaction popup (center screen) ----
     if (gs.shop_nearby_stand >= 0) {
