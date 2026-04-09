@@ -681,8 +681,8 @@ void start_next_room(GameState& gs) {
     {
         int r = gs.rooms_cleared;
         int tier = r / 10;
-        float base_rate = 0.15f;
-        float accel = 0.10f;
+        float base_rate = 0.10f;
+        float accel = 0.067f;
         float rate = base_rate + tier * accel;
         gs.procgen_cfg.difficulty = 1.0f + r * rate;
     }
