@@ -18,7 +18,11 @@ Checklist before releasing the playtest demo build.
 
 ## Balance / Polish
 - [ ] Spawn logic tuning (slight tweaks)
+- [ ] Figure out what to do with crit damage
 - [ ] Bug fix pass (there will be many)
 
-## In Progress
-- Death logic ← **working on this now**
+## Completed
+- [x] Death logic (death → camera slump → death screen → restart run)
+- [x] Weapon rerolls on shop pedestal
+- [x] Shop every 2 rooms, Crystal Tipped 2 rounds, debuffs 50% stronger base
+- [x] Poison damage numbers (float accumulation, persist until expiry/death)
