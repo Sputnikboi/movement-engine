@@ -33,7 +33,7 @@ struct RusherConfig {
     float hover_force       = 10.0f;
 
     // Combat
-    float health            = 15.0f;
+    float health            = 30.0f;
     float melee_damage      = 5.0f;
     float radius            = 0.5f;
 

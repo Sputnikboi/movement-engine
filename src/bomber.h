@@ -35,7 +35,7 @@ struct BomberConfig {
     float hover_force       = 8.0f;
 
     // Stats
-    float health            = 15.0f;
+    float health            = 30.0f;
     float radius            = 0.8f;
 
     // Explosion (on ground impact)

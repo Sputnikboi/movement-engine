@@ -34,7 +34,7 @@ struct TankConfig {
     float hover_force       = 15.0f;
 
     // Stats
-    float health            = 80.0f;
+    float health            = 160.0f;
     float radius            = 1.2f;   // big boy
 
     // Ground stomp

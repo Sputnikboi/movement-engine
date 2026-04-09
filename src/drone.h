@@ -32,7 +32,7 @@ struct DroneConfig {
     float circle_dur_max     = 4.0f;
     float projectile_speed   = 20.0f;
     float projectile_damage  = 5.0f;
-    float drone_health       = 20.0f;
+    float drone_health       = 40.0f;
     float drone_radius       = 0.6f;
 
     // Wander (idle state)

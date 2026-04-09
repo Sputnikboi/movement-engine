@@ -29,7 +29,7 @@ struct TurretConfig {
     float lose_range        = 50.0f;  // deaggro distance
 
     // Stats
-    float health            = 10.0f;
+    float health            = 20.0f;
     float radius            = 0.7f;
     float hover_height      = 1.5f;   // sits low to ground
     float hover_force       = 10.0f;

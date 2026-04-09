@@ -36,12 +36,12 @@ struct ShielderConfig {
     float hover_force       = 8.0f;
 
     // Stats
-    float health            = 30.0f;
+    float health            = 60.0f;
     float radius            = 0.6f;
 
     // Shield aura
     float shield_radius     = 10.0f;  // allies within this get protection
-    float shield_hp         = 20.0f;  // barrier HP granted to each ally
+    float shield_hp         = 40.0f;  // barrier HP granted to each ally
     float shield_recharge   = 5.0f;   // HP/s recharge rate while in aura
     float shield_apply_cd   = 3.0f;   // seconds before shield can be reapplied after breaking
     float flee_range        = 6.0f;   // backs off if player gets this close
