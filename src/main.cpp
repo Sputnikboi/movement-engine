@@ -1431,11 +1431,6 @@ int main(int argc, char* argv[]) {
             for (auto& d : active_doors) {
                 if (d.is_exit && d.locked && !any_alive) {
                     d.locked = false;
-                    // Room cleared — finalize stats and show summary
-                    room_stats.finalize_no_damage_bonus();
-                    if (room_stats.gold_no_damage > 0)
-                        currency += room_stats.gold_no_damage;
-                    show_room_summary = true;
                     printf("EXIT UNLOCKED!\n");
                 }
                 // Check proximity to exit door
@@ -1450,9 +1445,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // --- Shop: enter from combat room exit door ---
+        // --- Door interact → stats screen → shop ---
         if (interact_pressed && near_exit_door && !exit_door_locked && !show_settings && !in_shop_room && !show_room_summary) {
-            shop_enter(gs);
+            // Show stats screen first; shop_enter happens on dismiss
+            room_stats.finalize_no_damage_bonus();
+            if (room_stats.gold_no_damage > 0)
+                currency += room_stats.gold_no_damage;
+            show_room_summary = true;
             interact_pressed = false;
         }
         // --- Shop: stand interaction + exit to next room ---
@@ -1563,6 +1562,7 @@ int main(int argc, char* argv[]) {
         if (show_room_summary) {
             if (draw_room_summary(room_stats, rooms_cleared + 1)) {
                 show_room_summary = false;
+                shop_enter(gs);
             }
         }
 
