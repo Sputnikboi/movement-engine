@@ -1745,7 +1745,7 @@ int main(int argc, char* argv[]) {
         if (!player_dead) shop_draw_hud(gs, game_font, game_font_large);
 
         // --- Magazine card view ---
-        magazine_view_draw(gs);
+        magazine_view_draw(gs, game_font);
 
         // --- Room summary screen ---
         if (show_room_summary) {

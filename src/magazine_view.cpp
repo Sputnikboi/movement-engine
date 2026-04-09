@@ -41,7 +41,7 @@ static ImU32 enchantment_color(Enchantment e) {
 static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_h,
                       float angle, const RoundMod& mod, int round_num,
                       bool is_current_round, bool hovered, bool is_spent,
-                      bool is_selected) {
+                      bool is_selected, ImFont* font, float fs) {
     float hw = card_w * 0.5f, hh = card_h * 0.5f;
     float cos_a = cosf(angle), sin_a = sinf(angle);
 
@@ -80,8 +80,8 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
         if (mod.tipping != Tipping::None) {
             const char* name = tipping_name(mod.tipping);
             char label[4] = {name[0], name[1], 0};
-            ImVec2 lsz = ImGui::CalcTextSize(label);
-            draw->AddText(rot(-lsz.x * 0.5f, -hh * 0.5f - lsz.y * 0.5f), IM_COL32(0, 0, 0, 220), label);
+            ImVec2 lsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label);
+            draw->AddText(font, fs, rot(-lsz.x * 0.5f, -hh * 0.5f - lsz.y * 0.5f), IM_COL32(0, 0, 0, 220), label);
         }
     }
 
@@ -95,8 +95,8 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
         if (mod.enchantment != Enchantment::None) {
             const char* name = enchantment_name(mod.enchantment);
             char label[4] = {name[0], name[1], 0};
-            ImVec2 lsz = ImGui::CalcTextSize(label);
-            draw->AddText(rot(-lsz.x * 0.5f, hh * 0.5f - lsz.y * 0.5f), IM_COL32(0, 0, 0, 220), label);
+            ImVec2 lsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label);
+            draw->AddText(font, fs, rot(-lsz.x * 0.5f, hh * 0.5f - lsz.y * 0.5f), IM_COL32(0, 0, 0, 220), label);
         }
     }
 
@@ -104,8 +104,8 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
     {
         char num_buf[16];
         snprintf(num_buf, sizeof(num_buf), "%d", round_num + 1);
-        ImVec2 num_size = ImGui::CalcTextSize(num_buf);
-        draw->AddText(rot(-num_size.x * 0.5f, hh - num_size.y - 6), IM_COL32(180, 175, 190, 200), num_buf);
+        ImVec2 num_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, num_buf);
+        draw->AddText(font, fs, rot(-num_size.x * 0.5f, hh - num_size.y - 6), IM_COL32(180, 175, 190, 200), num_buf);
     }
 
     // Dim spent rounds
@@ -115,7 +115,7 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
 
     // Selection checkmark
     if (is_selected) {
-        draw->AddText(rot(hw - 20, -hh + 5), IM_COL32(80, 255, 80, 255), "OK");
+        draw->AddText(font, fs, rot(hw - 20, -hh + 5), IM_COL32(80, 255, 80, 255), "OK");
     }
 }
 
@@ -126,12 +126,15 @@ static bool drag_pending = false;  // clicked but haven't moved enough yet
 static ImVec2 drag_start = {};
 static constexpr float DRAG_DEAD_ZONE = 6.0f;
 
-void magazine_view_draw(GameState& gs) {
+void magazine_view_draw(GameState& gs, ImFont* custom_font) {
     if (!gs.show_magazine_view) return;
 
     Weapon& w = gs.weapons[gs.active_weapon];
     Magazine& mag = w.magazine;
     if (mag.capacity <= 0) return;
+
+    ImFont* font = custom_font ? custom_font : ImGui::GetFont();
+    float fs = 21.0f;
 
     ImGuiIO& io = ImGui::GetIO();
     float screen_w = io.DisplaySize.x;
@@ -145,16 +148,15 @@ void magazine_view_draw(GameState& gs) {
 
     // --- Dark overlay ---
     draw->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h),
-                        IM_COL32(0, 0, 0, 120));
+                        IM_COL32(25, 25, 30, 255));
 
     // --- Title ---
     {
         char title[128];
         snprintf(title, sizeof(title), "%s  -  Magazine  (%d/%d)",
                  w.config.name, w.ammo, mag.capacity);
-        ImVec2 title_size = ImGui::CalcTextSize(title);
-        draw->AddText(ImVec2(screen_w * 0.5f - title_size.x * 0.5f, screen_h * 0.15f),
-                      IM_COL32(220, 215, 200, 255), title);
+        ImVec2 title_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, title);
+        draw->AddText(font, fs, ImVec2(screen_w * 0.5f - title_size.x * 0.5f, screen_h * 0.15f), IM_COL32(220, 215, 200, 255), title);
     }
 
     // --- Mod info panel (when applying) ---
@@ -168,29 +170,26 @@ void magazine_view_draw(GameState& gs) {
 
         char info[128];
         snprintf(info, sizeof(info), "Applying: %s", mod_name);
-        ImVec2 info_size = ImGui::CalcTextSize(info);
+        ImVec2 info_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, info);
         draw->AddText(ImVec2(screen_w * 0.5f - info_size.x * 0.5f, screen_h * 0.20f),
                       mod_col, info);
 
-        ImVec2 desc_size = ImGui::CalcTextSize(mod_desc);
-        draw->AddText(ImVec2(screen_w * 0.5f - desc_size.x * 0.5f, screen_h * 0.20f + 20),
-                      IM_COL32(180, 180, 180, 255), mod_desc);
+        ImVec2 desc_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, mod_desc);
+        draw->AddText(font, fs, ImVec2(screen_w * 0.5f - desc_size.x * 0.5f, screen_h * 0.20f + 20), IM_COL32(180, 180, 180, 255), mod_desc);
 
         char slots[64];
         snprintf(slots, sizeof(slots), "Select up to %d round%s  (%d/%d selected)",
                  pm.max_applications, pm.max_applications > 1 ? "s" : "",
                  pm.selected_count, pm.max_applications);
-        ImVec2 slots_size = ImGui::CalcTextSize(slots);
-        draw->AddText(ImVec2(screen_w * 0.5f - slots_size.x * 0.5f, screen_h * 0.20f + 42),
-                      IM_COL32(160, 160, 170, 255), slots);
+        ImVec2 slots_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, slots);
+        draw->AddText(font, fs, ImVec2(screen_w * 0.5f - slots_size.x * 0.5f, screen_h * 0.20f + 42), IM_COL32(160, 160, 170, 255), slots);
     }
 
     // --- Reorder hint (only when not applying, since applying has its own info panel) ---
     if (can_reorder && !applying) {
         const char* reorder_hint = "Drag cards to reorder";
-        ImVec2 rh_size = ImGui::CalcTextSize(reorder_hint);
-        draw->AddText(ImVec2(screen_w * 0.5f - rh_size.x * 0.5f, screen_h * 0.20f),
-                      IM_COL32(150, 200, 150, 200), reorder_hint);
+        ImVec2 rh_size = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, reorder_hint);
+        draw->AddText(font, fs, ImVec2(screen_w * 0.5f - rh_size.x * 0.5f, screen_h * 0.20f), IM_COL32(150, 200, 150, 200), reorder_hint);
     }
 
     // --- Fan layout ---
@@ -289,7 +288,7 @@ void magazine_view_draw(GameState& gs) {
 
         RoundMod mod = mag.get(i);
         draw_card(draw, ImVec2(cx, cy), card_w, card_h, angle, mod, i,
-                  is_current, hovered, is_spent, is_selected);
+                  is_current, hovered, is_spent, is_selected, font, fs);
 
         // Hover glow when applying
         if (applying && hovered) {
@@ -328,7 +327,7 @@ void magazine_view_draw(GameState& gs) {
         bool is_selected = applying && pm.selected[i];
         RoundMod mod = mag.get(i);
         draw_card(draw, ImVec2(mouse.x, mouse.y), card_w, card_h, 0.0f, mod, i,
-                  is_current, true, is_spent, is_selected);
+                  is_current, true, is_spent, is_selected, font, fs);
     }
 
     // --- Handle click to toggle selection (applying mode) ---
@@ -401,7 +400,7 @@ void magazine_view_draw(GameState& gs) {
         float line_h = ImGui::GetTextLineHeightWithSpacing();
         float tip_w = 0.0f;
         for (int l = 0; l < lc; l++) {
-            ImVec2 sz = ImGui::CalcTextSize(lines[l].text);
+            ImVec2 sz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, lines[l].text);
             if (sz.x > tip_w) tip_w = sz.x;
         }
         tip_w += pad * 2;
@@ -450,7 +449,7 @@ void magazine_view_draw(GameState& gs) {
             draw->AddRectFilled(atl, abr, abg, 4.0f);
             draw->AddRect(atl, abr, aborder, 4.0f);
             const char* apply_text = "Apply";
-            ImVec2 atsz = ImGui::CalcTextSize(apply_text);
+            ImVec2 atsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, apply_text);
             ImU32 atcol = can_apply ? IM_COL32(220, 255, 220, 255) : IM_COL32(120, 120, 120, 200);
             draw->AddText(ImVec2(atl.x + (btn_w - atsz.x) * 0.5f, atl.y + (btn_h - atsz.y) * 0.5f),
                           atcol, apply_text);
@@ -493,7 +492,7 @@ void magazine_view_draw(GameState& gs) {
             draw->AddRectFilled(ctl, cbr, cbg, 4.0f);
             draw->AddRect(ctl, cbr, cborder, 4.0f);
             const char* cancel_text = "Cancel";
-            ImVec2 ctsz = ImGui::CalcTextSize(cancel_text);
+            ImVec2 ctsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, cancel_text);
             draw->AddText(ImVec2(ctl.x + (btn_w - ctsz.x) * 0.5f, ctl.y + (btn_h - ctsz.y) * 0.5f),
                           IM_COL32(255, 200, 200, 255), cancel_text);
 
