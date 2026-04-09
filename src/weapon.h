@@ -102,6 +102,7 @@ struct Weapon {
     float        fire_timer = 0.0f;   // counts down to 0
     Magazine     magazine;             // per-round mod slots
     RoundMod     last_fired_mod;       // mod on the most recently fired round
+    int          last_fired_round = 0; // magazine index of the most recently fired round
     int          current_round = 0;    // cycling index for infinite_ammo weapons
     int          split_pending = 0;    // remaining extra shots from Split tipping
     float        reload_timer = 0.0f;

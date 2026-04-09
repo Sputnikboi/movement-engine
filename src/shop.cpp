@@ -40,12 +40,9 @@ void shop_enter(GameState& gs) {
         } else if (s.type == ShopStandType::Healthpack) {
             s.cost = 5;
         } else if (s.type == ShopStandType::ModTipping) {
-            // Offer a random non-None, non-Blank tipping
-            Tipping t;
-            do {
-                t = static_cast<Tipping>(1 + rand() % ((int)Tipping::COUNT - 1));
-            } while (t == Tipping::Blank);
-            s.offered_tipping = t;
+            // Offer a random non-None tipping
+            int t = 1 + rand() % ((int)Tipping::COUNT - 1);
+            s.offered_tipping = static_cast<Tipping>(t);
             s.label = tipping_name(s.offered_tipping);
             s.cost = 8;
         } else if (s.type == ShopStandType::ModEnchantment) {

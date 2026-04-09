@@ -357,11 +357,12 @@ bool Weapon::try_fire() {
         round_index = config.mag_size - ammo;  // 0 = first shot
         ammo--;
     }
+    last_fired_round = round_index;
     last_fired_mod = magazine.get(round_index);
 
-    // Blank round: skip entirely, consume minimal cooldown, don't fire
+    // Blank round: skip entirely, zero cooldown so next round fires instantly
     if (last_fired_mod.tipping == Tipping::Blank) {
-        fire_timer = 0.05f; // tiny cooldown so next round fires almost immediately
+        fire_timer = 0.0f;
         // Auto-reload on empty
         if (ammo <= 0 && !config.infinite_ammo) {
             state = WeaponState::RELOADING;

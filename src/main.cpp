@@ -1021,6 +1021,12 @@ int main(int argc, char* argv[]) {
                     if (rm.tipping == Tipping::Serrated)
                         hit_ent.bleed_stacks++;
 
+                    // Crystal Tipped: 1/10 chance to shatter (clear from magazine)
+                    if (rm.tipping == Tipping::Crystal_Tipped) {
+                        if (rand() % 10 == 0)
+                            weapon.magazine.set_tipping(weapon.last_fired_round, Tipping::None);
+                    }
+
                     // Enchantment effects
                     if (rm.enchantment == Enchantment::Vampiric) {
                         player.health += actual_dmg_display * 0.1f;
@@ -1304,10 +1310,13 @@ int main(int argc, char* argv[]) {
                         if (rm.tipping == Tipping::Serrated)
                             e.bleed_stacks++;
 
-                        // Crystal Tipped: 1/10 chance to shatter (lose tipping)
+                        // Crystal Tipped: 1/10 chance to shatter (clear from magazine)
                         if (rm.tipping == Tipping::Crystal_Tipped) {
-                            if (rand() % 10 == 0)
+                            if (rand() % 10 == 0) {
                                 proj.round_mod.tipping = Tipping::None;
+                                weapons[active_weapon].magazine.set_tipping(
+                                    weapons[active_weapon].last_fired_round, Tipping::None);
+                            }
                         }
 
                         // Enchantment effects

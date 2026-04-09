@@ -103,7 +103,7 @@ inline int tipping_max_applications(Tipping t) {
         case Tipping::Crystal_Tipped: return 1;
         case Tipping::Aerodynamic:    return 1;
         case Tipping::Poison_Tipped:  return 2;
-        case Tipping::Blank:          return 1;
+        case Tipping::Blank:          return 2;
         case Tipping::Split:          return 2;
         case Tipping::Serrated:       return 2;
         default:                      return 1;
