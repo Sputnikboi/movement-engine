@@ -1598,6 +1598,12 @@ int main(int argc, char* argv[]) {
                 currency += room_stats.gold_gilded;
             show_room_summary = true;
             SDL_SetWindowRelativeMouseMode(window, false);
+            // Center cursor on screen
+            {
+                int ww, wh;
+                SDL_GetWindowSize(window, &ww, &wh);
+                SDL_WarpMouseInWindow(window, (float)(ww / 2), (float)(wh / 2));
+            }
             interact_pressed = false;
         }
         // --- Shop: stand interaction + exit to next room ---

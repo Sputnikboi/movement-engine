@@ -520,6 +520,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
                 gs.pending_stand_idx = -1;
                 w.recompute_bonuses();
                 gs.show_magazine_view = false;
+                SDL_SetWindowRelativeMouseMode(gs.window, true);
             }
         }
 
@@ -549,6 +550,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
                 pm = {};
                 gs.pending_stand_idx = -1;
                 gs.show_magazine_view = false;
+                SDL_SetWindowRelativeMouseMode(gs.window, true);
             }
         }
     }
