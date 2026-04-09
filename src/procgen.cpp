@@ -990,7 +990,7 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
         { -3.5f,  2.0f, ShopStandType::Weapon,     "Weapon",       ped_top_weapon },
         {  3.5f,  2.0f, ShopStandType::Healthpack,  "Healthpack",   ped_top_health },
         { -3.5f,  6.0f, ShopStandType::ModTipping,    "Tipping",      ped_top_tipping },
-        {  3.5f,  6.0f, ShopStandType::ModEnchantment, "Enchantment",  ped_top_enchant },
+        {  3.5f,  6.0f, ShopStandType::ModTipping,     "Tipping",      ped_top_tipping },
     };
 
     for (const auto& sp : placements) {
