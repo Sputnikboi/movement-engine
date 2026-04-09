@@ -831,6 +831,9 @@ int main(int argc, char* argv[]) {
                     player.health += (new_max - player.max_health);
                 }
                 player.max_health = new_max;
+                // Clamp health to never exceed max
+                if (player.health > player.max_health)
+                    player.health = player.max_health;
             }
 
             accumulator += dt;

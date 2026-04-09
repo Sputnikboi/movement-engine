@@ -183,6 +183,14 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         }
                         gs.weapons[w].magazine = saved_mag;
                         gs.apply_weapon_upgrades(w);
+                        gs.weapons[w].recompute_bonuses();
+                        // Recalc max HP from new bonuses
+                        float new_max = 100.0f + gs.weapons[w].bonuses.bonus_max_hp;
+                        if (new_max > gs.player.max_health)
+                            gs.player.health += (new_max - gs.player.max_health);
+                        gs.player.max_health = new_max;
+                        if (gs.player.health > gs.player.max_health)
+                            gs.player.health = gs.player.max_health;
                         s.purchased = true;
                         printf("Upgraded %s to Lv %d\n", s.label, gs.weapon_level[w]);
                     } else {
@@ -201,6 +209,12 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                         }
                         if (previously_owned) gs.weapons[w].magazine = saved_mag;
                         gs.apply_weapon_upgrades(w);
+                        gs.weapons[w].recompute_bonuses();
+                        // Recalc max HP from new weapon's bonuses
+                        float new_max = 100.0f + gs.weapons[w].bonuses.bonus_max_hp;
+                        gs.player.max_health = new_max;
+                        if (gs.player.health > gs.player.max_health)
+                            gs.player.health = gs.player.max_health;
                         gs.weapons[w].state = WeaponState::IDLE;
                         s.purchased = true;
                         printf("Swapped %s for %s (Lv %d)\n",
