@@ -1493,6 +1493,54 @@ int main(int argc, char* argv[]) {
         build_turret_effects(entity_mesh, transparent_mesh,
                              entities, MAX_ENTITIES, collision, frustum, total_time);
 
+        // Aerodynamic projectile wind trails
+        {
+            HMM_Vec3 cr = camera.right();
+            HMM_Vec3 cu = HMM_NormV3(HMM_Cross(camera.forward(), cr));
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                const Entity& e = entities[i];
+                if (!e.alive || e.type != EntityType::Projectile) continue;
+                if (e.owner != -3 && e.owner != -4) continue; // player knives only
+                if (e.round_mod.tipping != Tipping::Aerodynamic) continue;
+                if (e.ai_state == 1) continue; // stuck in wall
+
+                HMM_Vec3 vel = e.velocity;
+                float speed = HMM_LenV3(vel);
+                if (speed < 0.1f) continue;
+                HMM_Vec3 fwd_dir = HMM_MulV3F(vel, 1.0f / speed);
+
+                // 4 wispy trail lines behind the projectile
+                for (int s = 0; s < 4; s++) {
+                    float phase = total_time * 8.0f + (float)s * 1.57f;
+                    float wobble_r = sinf(phase) * 0.06f;
+                    float wobble_u = cosf(phase * 1.3f) * 0.06f;
+
+                    HMM_Vec3 offset = HMM_AddV3(
+                        HMM_MulV3F(cr, wobble_r),
+                        HMM_MulV3F(cu, wobble_u));
+
+                    float trail_len = 0.6f + sinf(phase * 0.7f) * 0.15f;
+                    HMM_Vec3 tip = HMM_AddV3(e.position, offset);
+                    HMM_Vec3 tail = HMM_SubV3(tip, HMM_MulV3F(fwd_dir, trail_len));
+
+                    float w = 0.015f;
+                    HMM_Vec3 side = HMM_MulV3F(cr, w);
+                    HMM_Vec3 up_off = HMM_MulV3F(cu, w);
+
+                    // Horizontal streak
+                    append_emissive_quad(transparent_mesh,
+                        HMM_AddV3(tip, side), HMM_SubV3(tip, side),
+                        HMM_SubV3(tail, side), HMM_AddV3(tail, side),
+                        0.5f, 0.9f, 1.0f, 0.35f);
+                    // Vertical streak
+                    append_emissive_quad(transparent_mesh,
+                        HMM_AddV3(tip, up_off), HMM_SubV3(tip, up_off),
+                        HMM_SubV3(tail, up_off), HMM_AddV3(tail, up_off),
+                        0.5f, 0.9f, 1.0f, 0.25f);
+                }
+            }
+        }
+
         // Debug: visualize ladder volumes as transparent green boxes
         if (show_ladder_debug) {
             for (const auto& vol : collision.ladder_volumes) {

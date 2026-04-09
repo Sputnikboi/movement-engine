@@ -74,6 +74,20 @@ void hud_draw(GameState& gs, const HudContext& ctx) {
     {
         Weapon& w = gs.weapons[gs.active_weapon];
         ImGui::Text("%s  %d / %d", w.config.name, w.ammo, w.config.mag_size);
+
+        // Effective fire rate (accounts for next round's Aerodynamic tipping)
+        {
+            float rate = w.config.fire_rate;
+            int next_round = w.config.infinite_ammo
+                ? w.current_round
+                : (w.magazine.capacity - w.ammo);
+            if (next_round >= 0 && next_round < w.magazine.capacity) {
+                RoundMod next_mod = w.magazine.get(next_round);
+                if (next_mod.tipping == Tipping::Aerodynamic) rate *= 1.2f;
+            }
+            ImGui::TextColored(ImVec4(0.7f, 0.8f, 0.9f, 1.0f), "%.1f rds/s", rate);
+        }
+
         if (w.state == WeaponState::RELOADING) {
             float pct = 1.0f - w.reload_timer / w.config.reload_time;
             ImGui::ProgressBar(pct, ImVec2(-1, 4), "");

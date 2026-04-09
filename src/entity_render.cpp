@@ -605,7 +605,7 @@ void build_shield_bubbles(Mesh& out,
 #include "turret.h"
 
 // Helper: append a quad (2 triangles) with emissive material
-static void append_emissive_quad(Mesh& out,
+void append_emissive_quad(Mesh& out,
                                  HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 d,
                                  float r, float g, float bl, float alpha) {
     uint32_t base = (uint32_t)out.vertices.size();

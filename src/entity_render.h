@@ -51,3 +51,8 @@ void build_turret_effects(Mesh& opaque_out, Mesh& transparent_out,
 void build_health_bars(Mesh& out, const Entity entities[], int max_entities,
                        const Frustum& frustum,
                        HMM_Vec3 cam_right, HMM_Vec3 cam_up);
+
+// Emissive quad for particle/trail effects (normal.x = alpha, double-sided)
+void append_emissive_quad(Mesh& out,
+                          HMM_Vec3 a, HMM_Vec3 b, HMM_Vec3 c, HMM_Vec3 d,
+                          float r, float g, float bl, float alpha);
