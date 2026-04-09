@@ -1267,17 +1267,18 @@ int main(int argc, char* argv[]) {
                     e.health -= poison_dmg;
                     room_stats.record_poison(poison_dmg);
 
-                    // Poison damage number (green, accumulates per entity)
+                    // Poison damage number (green, float-accumulated per entity)
                     {
                         HMM_Vec3 hit_pos = e.position;
                         hit_pos.Y += e.radius * 0.8f;
-                        dmg_numbers.spawn(hit_pos, (int)(poison_dmg + 0.5f), i, false, true);
+                        dmg_numbers.spawn_float(hit_pos, poison_dmg, i, false, true);
                     }
 
                     e.poison_timer -= dt;
                     if (e.poison_timer <= 0.0f) {
                         e.poison_stacks = 0;
                         e.poison_timer = 0.0f;
+                        dmg_numbers.dismiss_poison(i);
                     }
 
                     // Poison can kill
@@ -1293,6 +1294,7 @@ int main(int argc, char* argv[]) {
                         if (e.ai_state != dying_state) {
                             e.ai_state = dying_state;
                             e.death_timer = 0.0f;
+                            dmg_numbers.dismiss_poison(i);
                             { int kr = kill_reward(e.type); currency += kr; room_stats.record_kill(e.type, kr); }
                             if (weapons[active_weapon].bonuses.vampiric_heal > 0) {
                                 player.health += (float)weapons[active_weapon].bonuses.vampiric_heal;
@@ -1462,6 +1464,7 @@ int main(int argc, char* argv[]) {
                         if (e.health <= 0 && e.ai_state != dying_state) {
                             e.ai_state = dying_state;
                             e.death_timer = 0.0f;
+                            dmg_numbers.dismiss_poison(i);
                             { int kr = kill_reward(e.type); currency += kr; room_stats.record_kill(e.type, kr); }
                             // Vampiric enchantment: heal on kill
                             if (weapons[active_weapon].bonuses.vampiric_heal > 0) {

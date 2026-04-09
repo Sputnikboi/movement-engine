@@ -12,6 +12,7 @@ struct DamageNumber {
     float    lifetime;     // remaining seconds
     float    max_lifetime;
     int      value;        // accumulated damage (integer display)
+    float    value_accum;  // sub-integer accumulator (for small per-tick damage)
     int      entity_id;    // entity index this is tracking (-1 = none)
     bool     is_kill;      // show as kill (different color)
     bool     is_poison;    // show as green poison damage
@@ -26,6 +27,12 @@ struct DamageNumberSystem {
     // Spawn or stack a damage number at world position for a given entity.
     // If entity_id >= 0 and a recent number exists for that entity, stacks.
     void spawn(HMM_Vec3 pos, int damage, int entity_id = -1, bool is_kill = false, bool is_poison = false);
+
+    // Spawn/stack with float damage (accumulates sub-integer amounts for DoTs).
+    void spawn_float(HMM_Vec3 pos, float damage, int entity_id = -1, bool is_kill = false, bool is_poison = false);
+
+    // Dismiss poison numbers for an entity (call when poison expires or enemy dies).
+    void dismiss_poison(int entity_id);
 
     // Update positions + lifetimes. Call once per frame.
     void update(float dt);
