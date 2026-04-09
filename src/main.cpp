@@ -853,7 +853,8 @@ int main(int argc, char* argv[]) {
             bool reload_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::Reload, keys_frame);
             bool ads_input = !show_settings && !show_magazine_view && !noclip && !holstered && kb.held(Action::ADS, keys_frame);
 
-            weapon.update(dt, fire_pressed, reload_pressed, ads_input);
+            float weapon_dt = (show_settings || show_magazine_view) ? 0.0f : dt;
+            weapon.update(weapon_dt, fire_pressed, reload_pressed, ads_input);
 
             // Try to fire — if weapon fires, do hitscan
             if (fire_pressed && weapon.try_fire()) {
