@@ -44,6 +44,7 @@ struct Entity {
     float    damage = 0.0f;
     float    lifetime = 0.0f;
     RoundMod round_mod = {};  // tipping + enchantment carried by this projectile
+    int      fired_round_idx = 0; // magazine slot this projectile came from
 
     // Spawn / wander
     HMM_Vec3 spawn_pos    = {};     // original spawn position (wander home)

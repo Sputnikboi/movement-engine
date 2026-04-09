@@ -895,6 +895,7 @@ int main(int argc, char* argv[]) {
                         p.radius   = weapon.config.proj_radius;
                         p.damage   = weapon.config.damage;
                         p.round_mod = weapon.last_fired_mod;
+                        p.fired_round_idx = weapon.last_fired_round;
                         p.owner    = -3; // player knife projectile
                         p.lifetime = weapon.config.proj_lifetime;
                         p.ai_timer = GRACE; // render grace period
@@ -1324,7 +1325,7 @@ int main(int argc, char* argv[]) {
                             if (rand() % 10 == 0) {
                                 proj.round_mod.tipping = Tipping::None;
                                 weapons[active_weapon].magazine.set_tipping(
-                                    weapons[active_weapon].last_fired_round, Tipping::None);
+                                    proj.fired_round_idx, Tipping::None);
                             }
                         }
 
