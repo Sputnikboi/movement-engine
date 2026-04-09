@@ -975,11 +975,27 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
     float pedestal_radius = 0.45f;
     float pedestal_height = 0.9f;
     HMM_Vec3 ped_body = {0.25f, 0.22f, 0.28f};  // dark stone
-    HMM_Vec3 ped_top_weapon = {0.6f, 0.5f, 0.2f};    // gold top for weapon
     HMM_Vec3 ped_top_health = {0.2f, 0.6f, 0.3f};    // green top for health
-    HMM_Vec3 ped_top_empty  = {0.3f, 0.3f, 0.35f};   // grey for empty
-    HMM_Vec3 ped_top_tipping = {0.7f, 0.35f, 0.2f};  // copper/orange for tipping
-    HMM_Vec3 ped_top_enchant = {0.3f, 0.2f, 0.7f};   // purple for enchantment
+    HMM_Vec3 ped_top_item   = {0.5f, 0.4f, 0.25f};   // warm bronze for pool items
+
+    // --- Fancy weapon pedestal (center, moved forward, larger) ---
+    {
+        float wep_radius = 0.6f;
+        float wep_height = 1.1f;
+        HMM_Vec3 wep_body = {0.3f, 0.27f, 0.2f};     // warm dark stone
+        HMM_Vec3 wep_top  = {0.7f, 0.6f, 0.2f};      // gold top
+        HMM_Vec3 wep_pos  = HMM_V3(0.0f, 0.0f, 1.5f);
+
+        // Main pedestal
+        add_pedestal(m, wep_pos, wep_radius, wep_height, wep_body, wep_top);
+
+        // Base ring (wider, shorter)
+        add_pedestal(m, wep_pos, wep_radius + 0.2f, 0.15f, wep_top, wep_top);
+
+        // Rim ring at top
+        HMM_Vec3 rim_pos = HMM_V3(0.0f, wep_height - 0.1f, 1.5f);
+        add_pedestal(m, rim_pos, wep_radius + 0.1f, 0.1f, wep_top, wep_top);
+    }
 
     struct StandPlacement {
         float x, z;
@@ -988,23 +1004,29 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
         HMM_Vec3 top_color;
     };
 
-    // Positions: stands along the sides, leaving center aisle open
+    // Layout: weapon center-front, healthpack right-front, 4 item stands in back
     StandPlacement placements[] = {
-        { -3.5f,  2.0f, ShopStandType::Weapon,     "Weapon",       ped_top_weapon },
-        {  3.5f,  2.0f, ShopStandType::Healthpack,  "Healthpack",   ped_top_health },
-        { -3.5f,  6.0f, ShopStandType::ModTipping,    "Tipping",      ped_top_tipping },
-        {  3.5f,  6.0f, ShopStandType::ModTipping,     "Tipping",      ped_top_tipping },
+        {  0.0f,  1.5f, ShopStandType::Weapon,     "Weapon",     {0.7f, 0.6f, 0.2f} },
+        {  3.5f,  1.5f, ShopStandType::Healthpack,  "Healthpack", ped_top_health },
+        { -3.5f,  5.0f, ShopStandType::ShopItem,    "Item",       ped_top_item },
+        { -1.2f,  6.5f, ShopStandType::ShopItem,    "Item",       ped_top_item },
+        {  1.2f,  6.5f, ShopStandType::ShopItem,    "Item",       ped_top_item },
+        {  3.5f,  5.0f, ShopStandType::ShopItem,    "Item",       ped_top_item },
     };
 
     for (const auto& sp : placements) {
-        HMM_Vec3 pos = HMM_V3(sp.x, 0, sp.z);
-        add_pedestal(m, pos, pedestal_radius, pedestal_height, ped_body, sp.top_color);
+        // Weapon pedestal already added above (fancy version)
+        if (sp.type != ShopStandType::Weapon) {
+            HMM_Vec3 pos = HMM_V3(sp.x, 0, sp.z);
+            add_pedestal(m, pos, pedestal_radius, pedestal_height, ped_body, sp.top_color);
+        }
 
+        float top_y = (sp.type == ShopStandType::Weapon) ? 1.1f : pedestal_height;
         ShopStand stand;
-        stand.position = HMM_V3(sp.x, pedestal_height, sp.z);  // top of pedestal
+        stand.position = HMM_V3(sp.x, top_y, sp.z);
         stand.type = sp.type;
-        stand.weapon_index = -1;  // set by caller
-        stand.cost = 10;          // default, overridden by caller
+        stand.weapon_index = -1;
+        stand.cost = 10;
         stand.purchased = false;
         stand.label = sp.label;
         shop.stands.push_back(stand);
@@ -1014,25 +1036,20 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
     // Weapon stand: display model is added dynamically each frame (spinning)
     // Health stand: green cross
     {
-        HMM_Vec3 hp_pos = HMM_V3(3.5f, pedestal_height + 0.15f, 2.0f);
+        HMM_Vec3 hp_pos = HMM_V3(3.5f, pedestal_height + 0.15f, 1.5f);
         HMM_Vec3 hp_col = {0.3f, 0.8f, 0.4f};
-        // Horizontal bar
         add_box(m, hp_pos, 0.5f, 0.12f, 0.15f, hp_col, 0);
-        // Vertical bar
         add_box(m, hp_pos, 0.15f, 0.12f, 0.5f, hp_col, 0);
     }
 
-    // Tipping stand: small copper diamond
+    // Item stand markers: small bronze diamonds (dynamic content set at runtime)
     {
-        HMM_Vec3 tip_pos = HMM_V3(-3.5f, pedestal_height + 0.35f, 6.0f);
-        HMM_Vec3 tip_col = {0.7f, 0.35f, 0.2f};
-        add_box(m, tip_pos, 0.2f, 0.3f, 0.2f, tip_col, 0.15f);  // rotated box = diamond
-    }
-    // Enchantment stand: small purple crystal
-    {
-        HMM_Vec3 ench_pos = HMM_V3(3.5f, pedestal_height + 0.35f, 6.0f);
-        HMM_Vec3 ench_col = {0.3f, 0.2f, 0.7f};
-        add_box(m, ench_pos, 0.15f, 0.35f, 0.15f, ench_col, 0.1f);  // tall narrow crystal
+        HMM_Vec3 item_col = {0.7f, 0.45f, 0.2f};
+        float iy = pedestal_height + 0.35f;
+        add_box(m, HMM_V3(-3.5f, iy, 5.0f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
+        add_box(m, HMM_V3(-1.2f, iy, 6.5f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
+        add_box(m, HMM_V3( 1.2f, iy, 6.5f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
+        add_box(m, HMM_V3( 3.5f, iy, 5.0f), 0.18f, 0.25f, 0.18f, item_col, 0.12f);
     }
 
     // --- Spawn point (just inside entry door) ---

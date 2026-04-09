@@ -105,9 +105,17 @@ LevelData generate_level(const ProcGenConfig& config,
 enum class ShopStandType : uint8_t {
     Weapon,
     Healthpack,
-    ModTipping,
-    ModEnchantment,
+    ShopItem,       // generic pooled item (tipping, future categories)
     Empty,
+    ModTipping,     // legacy — treated same as ShopItem + Tipping
+    ModEnchantment, // legacy — treated same as ShopItem + Enchantment
+};
+
+// Category of items that can roll on ShopItem stands
+enum class ShopItemCategory : uint8_t {
+    Tipping,
+    // Future: Enchantment, Passive, Consumable, etc.
+    COUNT
 };
 
 struct ShopStand {
@@ -121,6 +129,9 @@ struct ShopStand {
     // Mod stand fields
     Tipping       offered_tipping     = Tipping::None;
     Enchantment   offered_enchantment = Enchantment::None;
+
+    // Generic pool fields
+    ShopItemCategory item_category = ShopItemCategory::Tipping;
 };
 
 struct ShopRoomData {

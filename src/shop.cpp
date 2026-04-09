@@ -39,14 +39,21 @@ void shop_enter(GameState& gs) {
             s.cost = 10;
         } else if (s.type == ShopStandType::Healthpack) {
             s.cost = 5;
+        } else if (s.type == ShopStandType::ShopItem) {
+            // Roll from the item pool (currently only tippings)
+            s.item_category = ShopItemCategory::Tipping;
+            // Treat as tipping internally
+            s.type = ShopStandType::ModTipping;
+            int t = 1 + rand() % ((int)Tipping::COUNT - 1);
+            s.offered_tipping = static_cast<Tipping>(t);
+            s.label = tipping_name(s.offered_tipping);
+            s.cost = 8;
         } else if (s.type == ShopStandType::ModTipping) {
-            // Offer a random non-None tipping
             int t = 1 + rand() % ((int)Tipping::COUNT - 1);
             s.offered_tipping = static_cast<Tipping>(t);
             s.label = tipping_name(s.offered_tipping);
             s.cost = 8;
         } else if (s.type == ShopStandType::ModEnchantment) {
-            // Offer a random non-None enchantment
             int e = 1 + rand() % ((int)Enchantment::COUNT - 1);
             s.offered_enchantment = static_cast<Enchantment>(e);
             s.label = enchantment_name(s.offered_enchantment);
