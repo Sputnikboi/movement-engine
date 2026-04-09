@@ -115,6 +115,9 @@ static void draw_card(ImDrawList* draw, ImVec2 center, float card_w, float card_
 // Persistent drag state for reordering
 static int drag_source = -1;
 static bool dragging = false;
+static bool drag_pending = false;  // clicked but haven't moved enough yet
+static ImVec2 drag_start = {};
+static constexpr float DRAG_DEAD_ZONE = 6.0f;
 
 void magazine_view_draw(GameState& gs) {
     if (!gs.show_magazine_view) return;
@@ -223,27 +226,41 @@ void magazine_view_draw(GameState& gs) {
         }
     }
 
-    // --- Drag reorder logic (shop only, not while applying) ---
+    // --- Drag reorder logic (shop only) ---
+    // Uses a dead zone so clicks don't immediately start drags.
     if (can_reorder) {
         if (mouse_clicked && hovered_card >= 0) {
             drag_source = hovered_card;
-            dragging = true;
+            drag_pending = true;
+            dragging = false;
+            drag_start = mouse;
         }
-        if (dragging && mouse_released) {
-            if (drag_source >= 0 && hovered_card >= 0 && drag_source != hovered_card) {
+        // Promote pending to actual drag once mouse moves past dead zone
+        if (drag_pending && mouse_down && !dragging) {
+            float dx = mouse.x - drag_start.x;
+            float dy = mouse.y - drag_start.y;
+            if (dx * dx + dy * dy > DRAG_DEAD_ZONE * DRAG_DEAD_ZONE) {
+                dragging = true;
+            }
+        }
+        if ((dragging || drag_pending) && mouse_released) {
+            if (dragging && drag_source >= 0 && hovered_card >= 0 && drag_source != hovered_card) {
                 mag.swap(drag_source, hovered_card);
                 printf("Swapped round %d <-> %d\n", drag_source + 1, hovered_card + 1);
             }
             drag_source = -1;
             dragging = false;
+            drag_pending = false;
         }
         if (!mouse_down) {
             drag_source = -1;
             dragging = false;
+            drag_pending = false;
         }
     } else {
         drag_source = -1;
         dragging = false;
+        drag_pending = false;
     }
 
     // --- Draw cards (skip drag source — drawn at cursor below) ---
