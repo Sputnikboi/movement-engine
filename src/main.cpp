@@ -781,7 +781,14 @@ int main(int argc, char* argv[]) {
             input.pitch       = camera.pitch;
 
             // Fortified enchantment: adjust max HP based on active weapon bonuses
-            player.max_health = 100.0f + weapons[active_weapon].bonuses.bonus_max_hp;
+            {
+                float new_max = 100.0f + weapons[active_weapon].bonuses.bonus_max_hp;
+                if (new_max > player.max_health) {
+                    // Heal the difference when max HP increases
+                    player.health += (new_max - player.max_health);
+                }
+                player.max_health = new_max;
+            }
 
             accumulator += dt;
             while (accumulator >= TICK_RATE) {

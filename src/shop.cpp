@@ -40,8 +40,10 @@ void shop_enter(GameState& gs) {
             s.weapon_index = gs.shop_weapon;
             s.label = wnames[gs.shop_weapon];
             s.cost = 10;
-        } else if (s.type == ShopStandType::Healthpack) {
-            s.cost = 5;
+        } else if (s.type == ShopStandType::Reroll) {
+            s.reroll_cost = 10;
+            s.cost = s.reroll_cost;
+            s.label = "Reroll";
         } else if (s.type == ShopStandType::ShopItem) {
             // Roll from item pool: 50/50 tipping or enchantment
             if (rand() % 2 == 0) {
@@ -206,16 +208,32 @@ bool shop_tick(GameState& gs, float dt, bool interact_pressed) {
                     }
                     gs.shop_interact_cooldown = 0.3f;
                 }
-            } else if (s.type == ShopStandType::Healthpack) {
-                bool full_hp = (gs.player.health >= gs.player.max_health - 0.1f);
-                if (!full_hp && gs.currency >= s.cost) {
-                    gs.currency -= s.cost;
-                    gs.player.health += gs.player.max_health * 0.25f;
-                    if (gs.player.health > gs.player.max_health)
-                        gs.player.health = gs.player.max_health;
-                    s.purchased = true;
+            } else if (s.type == ShopStandType::Reroll) {
+                if (gs.currency >= s.reroll_cost) {
+                    gs.currency -= s.reroll_cost;
+                    s.reroll_cost += 5;
+                    s.cost = s.reroll_cost;
                     gs.shop_interact_cooldown = 0.3f;
-                    printf("Bought healthpack\n");
+                    /* Reroll all item stands */
+                    for (auto& rs : gs.shop_data.stands) {
+                        if (rs.type == ShopStandType::ModTipping || rs.type == ShopStandType::ModEnchantment) {
+                            rs.purchased = false;
+                            if (rand() % 2 == 0) {
+                                rs.type = ShopStandType::ModTipping;
+                                int t = 1 + rand() % ((int)Tipping::COUNT - 1);
+                                rs.offered_tipping = static_cast<Tipping>(t);
+                                rs.label = tipping_name(rs.offered_tipping);
+                                rs.cost = 8;
+                            } else {
+                                rs.type = ShopStandType::ModEnchantment;
+                                int e = 1 + rand() % ((int)Enchantment::COUNT - 1);
+                                rs.offered_enchantment = static_cast<Enchantment>(e);
+                                rs.label = enchantment_name(rs.offered_enchantment);
+                                rs.cost = 8;
+                            }
+                        }
+                    }
+                    printf("Rerolled shop items (next cost: %d)\n", s.reroll_cost);
                 }
             } else if (s.type == ShopStandType::ModTipping) {
                 if (gs.currency >= s.cost) {
@@ -331,7 +349,7 @@ void shop_build_display_meshes(GameState& gs, Mesh& out, float time) {
                                         display_pos, rot, display_scale);
             }
         }
-        // Healthpack cross stays as static geometry (built into room mesh)
+        // Reroll arrows stay as static geometry (built into room mesh)
     }
 }
 
@@ -402,16 +420,14 @@ void shop_draw_hud(GameState& gs) {
                                        interact_key, action, s.cost);
                 else
                     ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
-            } else if (s.type == ShopStandType::Healthpack) {
-                bool full_hp = (gs.player.health >= gs.player.max_health - 0.1f);
-                ImGui::Text("Healthpack +25%%");
-                if (full_hp)
-                    ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1), "Full HP");
-                else if (gs.currency >= s.cost)
-                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Buy  (%d gold)",
-                                       interact_key, s.cost);
+            } else if (s.type == ShopStandType::Reroll) {
+                ImGui::Text("Reroll Shop Items");
+                ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1), "Randomize all item pedestals");
+                if (gs.currency >= s.reroll_cost)
+                    ImGui::TextColored(ImVec4(1,1,0.3f,1), "[%s] Reroll  (%d gold)",
+                                       interact_key, s.reroll_cost);
                 else
-                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.cost);
+                    ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "Not enough gold (%d)", s.reroll_cost);
             } else if (s.type == ShopStandType::ModTipping) {
                 ImGui::TextColored(ImVec4(0.9f,0.5f,0.2f,1), "Tipping: %s",
                                    tipping_name(s.offered_tipping));

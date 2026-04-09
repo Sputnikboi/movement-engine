@@ -104,11 +104,11 @@ LevelData generate_level(const ProcGenConfig& config,
 
 enum class ShopStandType : uint8_t {
     Weapon,
-    Healthpack,
+    Reroll,         // rerolls all ShopItem stands
     ShopItem,       // generic pooled item (tipping, future categories)
     Empty,
-    ModTipping,     // legacy — treated same as ShopItem + Tipping
-    ModEnchantment, // legacy — treated same as ShopItem + Enchantment
+    ModTipping,     // resolved from ShopItem pool
+    ModEnchantment, // resolved from ShopItem pool
 };
 
 // Category of items that can roll on ShopItem stands
@@ -132,6 +132,9 @@ struct ShopStand {
 
     // Generic pool fields
     ShopItemCategory item_category = ShopItemCategory::Tipping;
+
+    // Reroll stand
+    int reroll_cost = 10;  // current cost (increases by 5 each use)
 };
 
 struct ShopRoomData {

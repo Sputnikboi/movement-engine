@@ -1004,10 +1004,10 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
         HMM_Vec3 top_color;
     };
 
-    // Layout: weapon center-front, healthpack right-front, 4 item stands in back
+    // Layout: weapon center-front, reroll right-front, 4 item stands in back
     StandPlacement placements[] = {
         {  0.0f,  1.5f, ShopStandType::Weapon,     "Weapon",     {0.7f, 0.6f, 0.2f} },
-        {  3.5f,  1.5f, ShopStandType::Healthpack,  "Healthpack", ped_top_health },
+        {  3.5f,  1.5f, ShopStandType::Reroll,      "Reroll",     {0.3f, 0.5f, 0.7f} },
         { -3.5f,  5.0f, ShopStandType::ShopItem,    "Item",       ped_top_item },
         { -1.2f,  6.5f, ShopStandType::ShopItem,    "Item",       ped_top_item },
         {  1.2f,  6.5f, ShopStandType::ShopItem,    "Item",       ped_top_item },
@@ -1034,12 +1034,16 @@ ShopRoomData generate_shop_room(const Mesh* door_mesh,
 
     // --- Small floating item markers above stands ---
     // Weapon stand: display model is added dynamically each frame (spinning)
-    // Health stand: green cross
+    // Reroll stand: blue circular arrows symbol
     {
-        HMM_Vec3 hp_pos = HMM_V3(3.5f, pedestal_height + 0.15f, 1.5f);
-        HMM_Vec3 hp_col = {0.3f, 0.8f, 0.4f};
-        add_box(m, hp_pos, 0.5f, 0.12f, 0.15f, hp_col, 0);
-        add_box(m, hp_pos, 0.15f, 0.12f, 0.5f, hp_col, 0);
+        HMM_Vec3 rr_pos = HMM_V3(3.5f, pedestal_height + 0.15f, 1.5f);
+        HMM_Vec3 rr_col = {0.3f, 0.5f, 0.8f};
+        // Two crossing arrows
+        add_box(m, rr_pos, 0.45f, 0.1f, 0.1f, rr_col, 0);
+        add_box(m, rr_pos, 0.1f, 0.1f, 0.45f, rr_col, 0);
+        // Arrow heads (small boxes at tips)
+        add_box(m, HMM_V3(3.5f + 0.35f, pedestal_height + 0.25f, 1.5f), 0.12f, 0.12f, 0.12f, rr_col, 0);
+        add_box(m, HMM_V3(3.5f - 0.35f, pedestal_height + 0.05f, 1.5f), 0.12f, 0.12f, 0.12f, rr_col, 0);
     }
 
     // Item stand markers: small bronze diamonds (dynamic content set at runtime)
