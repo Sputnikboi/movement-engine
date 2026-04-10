@@ -138,9 +138,9 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
             // Spawn enemies with difficulty scaling
             {
                 float diff = gs.procgen_cfg.difficulty;
-                float hp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.hp_scale_per_room / 0.15f);
-                float dm_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.dmg_scale_per_room / 0.15f);
-                float sp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.spd_scale_per_room / 0.15f);
+                float hp_s = 1.0f + (diff - 1.0f) * gs.procgen_cfg.hp_scale;
+                float dm_s = 1.0f + (diff - 1.0f) * gs.procgen_cfg.dmg_scale;
+                float sp_s = 1.0f + (diff - 1.0f) * gs.procgen_cfg.spd_scale;
 
                 auto dr = gs.drone_cfg;   dr.drone_health *= hp_s; dr.projectile_damage *= dm_s; dr.chase_speed_min *= sp_s; dr.chase_speed_max *= sp_s; dr.circle_speed_min *= sp_s; dr.circle_speed_max *= sp_s;
                 auto ru = gs.rusher_cfg;   ru.health *= hp_s; ru.melee_damage *= dm_s; ru.chase_speed *= sp_s; ru.dash_force *= sp_s;
@@ -190,9 +190,9 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
         ImGui::SliderInt("Budget Base", &gs.procgen_cfg.enemy_budget_base, 3, 30);
         ImGui::SliderInt("Budget/Room", &gs.procgen_cfg.enemy_budget_per_room, 0, 5);
         ImGui::SliderInt("Budget Max", &gs.procgen_cfg.enemy_budget_max, 5, 60);
-        ImGui::SliderFloat("HP Scale/Room", &gs.procgen_cfg.hp_scale_per_room, 0.0f, 0.2f, "%.2f");
-        ImGui::SliderFloat("Dmg Scale/Room", &gs.procgen_cfg.dmg_scale_per_room, 0.0f, 0.2f, "%.2f");
-        ImGui::SliderFloat("Spd Scale/Room", &gs.procgen_cfg.spd_scale_per_room, 0.0f, 0.1f, "%.2f");
+        ImGui::SliderFloat("HP Scale", &gs.procgen_cfg.hp_scale, 0.0f, 1.5f, "%.2f");
+        ImGui::SliderFloat("Dmg Scale", &gs.procgen_cfg.dmg_scale, 0.0f, 0.5f, "%.2f");
+        ImGui::SliderFloat("Spd Scale", &gs.procgen_cfg.spd_scale, 0.0f, 0.5f, "%.2f");
 
         ImGui::Separator();
         ImGui::Text("Spawn Weights");

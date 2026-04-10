@@ -63,10 +63,14 @@ struct ProcGenConfig {
     float enemy_height     = 3.0f;
 
     // Difficulty scaling (applied per room)
-    float difficulty        = 1.0f;  // computed from room_number
-    float hp_scale_per_room = 0.06f; // +6% HP per room
-    float dmg_scale_per_room= 0.02f; // +2% damage per room
-    float spd_scale_per_room= 0.02f; // +2% speed per room
+    float difficulty = 1.0f;  // computed each room: 1 + rooms_cleared * rate
+
+    // Enemy stat multipliers driven by difficulty.
+    // Applied as: stat *= 1.0f + (difficulty - 1.0f) * scale
+    // So at difficulty 2.0 an enemy has (1 + scale)x the base stat.
+    float hp_scale  = 0.40f;  // 40% more HP per unit of difficulty above 1
+    float dmg_scale = 0.13f;  // 13% more damage per unit of difficulty above 1
+    float spd_scale = 0.13f;  // 13% more speed per unit of difficulty above 1
 
     // Manual overrides (if > 0, ignores budget and uses fixed counts)
     int   drone_count      = 0;

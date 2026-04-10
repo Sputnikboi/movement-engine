@@ -104,9 +104,9 @@ void shop_enter(GameState& gs) {
 // Spawn enemies from level data with difficulty scaling
 void spawn_enemies_from_level(GameState& gs, const LevelData& pld) {
     float diff = gs.procgen_cfg.difficulty;
-    float hp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.hp_scale_per_room / 0.15f);
-    float dm_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.dmg_scale_per_room / 0.15f);
-    float sp_s = 1.0f + (diff - 1.0f) * (gs.procgen_cfg.spd_scale_per_room / 0.15f);
+    float hp_s = 1.0f + (diff - 1.0f) * gs.procgen_cfg.hp_scale;
+    float dm_s = 1.0f + (diff - 1.0f) * gs.procgen_cfg.dmg_scale;
+    float sp_s = 1.0f + (diff - 1.0f) * gs.procgen_cfg.spd_scale;
 
     printf("Enemy scaling: HP=%.1fx DMG=%.1fx SPD=%.1fx (diff=%.2f)\n", hp_s, dm_s, sp_s, diff);
 
