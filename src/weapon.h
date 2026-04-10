@@ -37,6 +37,7 @@ enum class FireMode : uint8_t {
 
 struct WeaponConfig {
     const char* name      = "Unknown";
+    const char* sound_key = nullptr;   // if set, used instead of name for audio lookup
     FireMode fire_mode    = FireMode::HITSCAN;
     float damage          = 70.0f;
     float fire_rate       = 1.5f;     // shots per second

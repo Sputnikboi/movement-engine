@@ -500,7 +500,8 @@ int main(int argc, char* argv[]) {
         for (int w = 0; w < MAX_WEAPONS; w++) {
             if (!weapons[w].config.name) continue;
             std::string key = "shoot_";
-            for (const char* c = weapons[w].config.name; *c; c++)
+            const char* src = weapons[w].config.sound_key ? weapons[w].config.sound_key : weapons[w].config.name;
+            for (const char* c = src; *c; c++)
                 key += (char)tolower((unsigned char)*c);
             audio.load_variants(key, snd_dir);
         }
@@ -967,7 +968,8 @@ int main(int argc, char* argv[]) {
                 // Play shoot sound for this weapon
                 {
                     std::string snd_key = "shoot_";
-                    for (const char* c = weapon.config.name; *c; c++)
+                    const char* snd_src = weapon.config.sound_key ? weapon.config.sound_key : weapon.config.name;
+                    for (const char* c = snd_src; *c; c++)
                         snd_key += (char)tolower((unsigned char)*c);
                     float snd_vol = (snd_key == "shoot_knife") ? 2.7f : 0.9f;
                     audio.play(snd_key, snd_vol);

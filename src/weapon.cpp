@@ -107,6 +107,7 @@ void Weapon::init_glock() {
 
 void Weapon::init_knife() {
     config.name            = "Throwing Knife";
+    config.sound_key       = "knife";
     config.fire_mode       = FireMode::PROJECTILE;
     config.damage          = 60.0f;
     config.fire_rate       = 1.5f;
