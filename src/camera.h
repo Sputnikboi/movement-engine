@@ -12,7 +12,7 @@ struct Camera {
     float fov    = 90.0f;               // degrees
     float near_plane = 0.1f;
     float far_plane  = 500.0f;
-    float sensitivity = 0.00014f;
+    float sensitivity = 0.0005f;
     float invert_x = -1.0f;            // -1 or 1
     float invert_y =  1.0f;            // -1 or 1
 

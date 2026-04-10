@@ -8,7 +8,7 @@
 // Settings that get saved/loaded from settings.ini
 struct Config {
     // Mouse
-    float sensitivity = 0.00014f;
+    float sensitivity = 0.0005f;  // display value = sensitivity * 10000, so this = 5.0
     bool  invert_x    = false;
     bool  invert_y    = true;
 

@@ -1153,7 +1153,7 @@ int main(int argc, char* argv[]) {
         }
 
         // --- Update entities (only when not paused) ---
-        if (!show_settings && !show_shop && !show_magazine_view) {
+        if (!show_settings && !show_shop && !show_magazine_view && !show_room_summary) {
             // --- Player damage decay (freeze when dead for persistent vignette) ---
             if (!player_dead && player.damage_accum > 0.0f) {
                 player.damage_accum -= player.damage_accum * (2.0f / player.damage_decay) * dt;
