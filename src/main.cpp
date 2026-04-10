@@ -38,6 +38,7 @@
 #include "magazine_view.h"
 #include "damage_numbers.h"
 #include "bullet_mods.h"
+#include "audio.h"
 
 namespace fs = std::filesystem;
 
@@ -112,7 +113,7 @@ static bool load_level(const std::string& path, GameState& gs)
 
 int main(int argc, char* argv[]) {
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
@@ -394,6 +395,11 @@ int main(int argc, char* argv[]) {
     int   run_gold_earned = 0;
     float run_dmg_dealt   = 0.0f;
 
+    // Audio
+    AudioSystem audio;
+    float footstep_timer      = 0.0f;  // seconds until next footstep sound
+    float hurt_sound_cooldown = 0.0f;  // prevents per-frame spam from beam/melee
+
     auto kill_reward = [](EntityType t) -> int {
         switch (t) {
             case EntityType::Drone:    return 1;
@@ -475,6 +481,29 @@ int main(int argc, char* argv[]) {
                     break;
                 }
             }
+        }
+    }
+
+    // --- Audio ---
+    if (audio.init()) {
+        // Build path relative to exe (mirrors shader_dir_ in renderer)
+        std::string snd_dir = "assets/sounds/";
+        if (const char* base = SDL_GetBasePath())
+            snd_dir = std::string(base) + "assets/sounds/";
+
+        auto snd = [&](const char* name) { return snd_dir + name + ".wav"; };
+        audio.load("footstep",    snd("footstep"));
+        audio.load("player_hurt", snd("player_hurt"));
+        audio.load("player_die",  snd("player_die"));
+        audio.load("enemy_hit",   snd("enemy_hit"));
+        audio.load("enemy_die",   snd("enemy_die"));
+        // Per-weapon shoot sounds: shoot_glock.wav, shoot_wingman.wav, etc.
+        for (int w = 0; w < MAX_WEAPONS; w++) {
+            if (!weapons[w].config.name) continue;
+            std::string key = "shoot_";
+            for (const char* c = weapons[w].config.name; *c; c++)
+                key += (char)tolower((unsigned char)*c);
+            audio.load(key, snd_dir + key + ".wav");
         }
     }
 
@@ -820,9 +849,26 @@ int main(int argc, char* argv[]) {
                     player.health = player.max_health;
             }
 
+            hurt_sound_cooldown -= dt;
+            if (hurt_sound_cooldown < 0.0f) hurt_sound_cooldown = 0.0f;
+
             accumulator += dt;
             while (accumulator >= TICK_RATE) {
                 player.update(TICK_RATE, input, collision);
+
+                // Footstep sounds — tick inside fixed step so rate is speed-relative
+                footstep_timer -= TICK_RATE;
+                if (footstep_timer <= 0.0f && player.grounded && !player.sliding) {
+                    float hs = sqrtf(player.velocity.X * player.velocity.X +
+                                     player.velocity.Z * player.velocity.Z);
+                    if (hs > 1.5f) {
+                        audio.play("footstep", 0.35f);
+                        footstep_timer = fmaxf(0.22f, 0.55f - hs * 0.012f);
+                    } else {
+                        footstep_timer = 0.0f;
+                    }
+                }
+
                 accumulator -= TICK_RATE;
                 // Only clear scroll pulse after a tick actually ran and saw it
                 if (scroll_jump_pulse) {
@@ -913,6 +959,14 @@ int main(int argc, char* argv[]) {
 
             // Try to fire — if weapon fires, do hitscan
             if (fire_pressed && weapon.try_fire()) {
+                // Play shoot sound for this weapon
+                {
+                    std::string snd_key = "shoot_";
+                    for (const char* c = weapon.config.name; *c; c++)
+                        snd_key += (char)tolower((unsigned char)*c);
+                    audio.play(snd_key, 0.9f);
+                }
+
                 // Gunshot alert: wake idle enemies within weapon range
                 for (int i = 0; i < MAX_ENTITIES; i++) {
                     Entity& e = entities[i];
@@ -1063,6 +1117,8 @@ int main(int argc, char* argv[]) {
                     // Apply shield barrier absorption (Piercing bypasses)
                     float actual_dmg = piercing ? base_dmg : shielder_absorb_damage(hit_ent, base_dmg);
                     hit_ent.health -= actual_dmg;
+                    audio.play_3d("enemy_hit", hit_ent.position,
+                                  camera.position, camera.right(), 0.7f, 40.0f);
                     float actual_dmg_display = actual_dmg;
 
                     // Record stats
@@ -1134,6 +1190,8 @@ int main(int argc, char* argv[]) {
                         hit_ent.ai_state = dying_state;
                         hit_ent.death_timer = 0.0f;
                         { int kr = kill_reward(hit_ent.type); currency += kr; room_stats.record_kill(hit_ent.type, kr); }
+                        audio.play_3d("enemy_die", hit_ent.position,
+                                      camera.position, camera.right(), 1.0f, 50.0f);
                         // Vampiric enchantment: heal on kill
                         if (weapon.bonuses.vampiric_heal > 0) {
                             player.health += (float)weapon.bonuses.vampiric_heal;
@@ -1167,6 +1225,7 @@ int main(int argc, char* argv[]) {
             if (player.health <= 0.0f && !player_dead) {
                 player_dead = true;
                 death_timer = 0.0f;
+                audio.play("player_die", 1.0f);
                 show_death_screen = false;
                 death_cam_pitch_vel = 0.0f;
                 SDL_SetWindowRelativeMouseMode(window, false);
@@ -1212,6 +1271,10 @@ int main(int argc, char* argv[]) {
                             player.health -= rusher_cfg.melee_damage;
                             player.damage_accum += rusher_cfg.melee_damage;
                             room_stats.record_taken(rusher_cfg.melee_damage, EntityType::Rusher);
+                            if (hurt_sound_cooldown <= 0.0f) {
+                                audio.play("player_hurt", 0.8f);
+                                hurt_sound_cooldown = 0.4f;
+                            }
                         }
                     }
                 }
@@ -1228,6 +1291,10 @@ int main(int argc, char* argv[]) {
                             player.health -= dmg;
                             player.damage_accum += dmg;
                             room_stats.record_taken(dmg, EntityType::Turret);
+                            if (hurt_sound_cooldown <= 0.0f) {
+                                audio.play("player_hurt", 0.8f);
+                                hurt_sound_cooldown = 0.4f;
+                            }
                         }
                     }
                 }
@@ -1246,6 +1313,10 @@ int main(int argc, char* argv[]) {
                             player.health -= tdmg;
                             player.damage_accum += tdmg;
                             room_stats.record_taken(tdmg, EntityType::Tank);
+                            if (hurt_sound_cooldown <= 0.0f) {
+                                audio.play("player_hurt", 0.8f);
+                                hurt_sound_cooldown = 0.4f;
+                            }
                         }
                     }
                 }
@@ -1942,6 +2013,8 @@ int main(int argc, char* argv[]) {
         // --- Settings / debug menu ---
         debug_menu_draw(gs, load_level_fn);
 
+        audio.update();
+
         ImGui::Render();
 
         // --- Build scene data ---
@@ -1992,6 +2065,7 @@ int main(int argc, char* argv[]) {
     config.pull(camera, player);
     config.save();
 
+    audio.shutdown();
     renderer.wait_idle();
 
     ImGui_ImplVulkan_Shutdown();

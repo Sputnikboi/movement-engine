@@ -106,6 +106,7 @@ add_executable(${PROJECT_NAME}
     src/damage_numbers.cpp
     src/magazine_view.cpp
     src/room_stats.cpp
+    src/audio.cpp
     ${IMGUI_SOURCES}
 )
 
