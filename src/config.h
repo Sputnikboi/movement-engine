@@ -9,8 +9,8 @@
 struct Config {
     // Mouse
     float sensitivity = 0.00014f;
-    bool  invert_x    = true;
-    bool  invert_y    = false;
+    bool  invert_x    = false;
+    bool  invert_y    = true;
 
     // Video
     float fov = 90.0f;

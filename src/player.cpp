@@ -28,8 +28,8 @@ void Player::accelerate(HMM_Vec3 wish_dir, float wish_speed, float accel, float 
 HMM_Vec3 Player::build_wish_dir(const InputState& input) const {
     float forward_x =  cosf(input.yaw);
     float forward_z =  sinf(input.yaw);
-    float right_x   =  forward_z;
-    float right_z   = -forward_x;
+    float right_x   = -forward_z;
+    float right_z   =  forward_x;
 
     return HMM_V3(
         forward_x * input.forward + right_x * input.right,
@@ -371,8 +371,8 @@ void Player::ladder_move(float dt, const InputState& input, const CollisionWorld
     }
 
     // Strafe along the ladder surface (horizontal, perpendicular to ladder normal)
-    float right_x =  forward_z;
-    float right_z = -forward_x;
+    float right_x = -forward_z;
+    float right_z =  forward_x;
     float horiz_strafe = input.right * max_speed * ladder_speed_mult * 0.5f;
 
     velocity.Y = vert;

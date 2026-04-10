@@ -35,8 +35,8 @@ inline const char* action_name(Action a) {
     switch (a) {
         case Action::MoveForward: return "Move Forward";
         case Action::MoveBack:    return "Move Back";
-        case Action::MoveLeft:    return "Move Right";
-        case Action::MoveRight:   return "Move Left";
+        case Action::MoveLeft:    return "Move Left";
+        case Action::MoveRight:   return "Move Right";
         case Action::Jump:        return "Jump";
         case Action::Crouch:      return "Crouch";
         case Action::Shoot:       return "Shoot";
