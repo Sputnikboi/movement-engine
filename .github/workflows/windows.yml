@@ -5,6 +5,9 @@ on:
     branches: [master]
   workflow_dispatch:  # lets you trigger a build manually from the Actions tab
 
+env:
+  VULKAN_VERSION: "1.3.296.0"
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -12,12 +15,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Vulkan SDK
-        uses: humbletim/setup-vulkan-sdk@v1.2.0
+      - name: Cache Vulkan SDK
+        id: cache-vulkan
+        uses: actions/cache@v4
         with:
-          vulkan-query-version: 1.3.283.0
-          vulkan-components: Vulkan-Headers, Vulkan-Loader
-          vulkan-use-cache: true
+          path: C:\VulkanSDK
+          key: vulkan-sdk-${{ env.VULKAN_VERSION }}
+
+      - name: Install Vulkan SDK
+        if: steps.cache-vulkan.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $installer = "VulkanSDK-$env:VULKAN_VERSION-Installer.exe"
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/$installer" -OutFile $installer
+          Start-Process -FilePath $installer -Args "--accept-licenses --default-answer --confirm-command install" -Wait
+
+      - name: Set Vulkan environment
+        shell: pwsh
+        run: |
+          echo "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "C:\VulkanSDK\$env:VULKAN_VERSION\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
