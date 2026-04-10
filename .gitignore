@@ -6,3 +6,5 @@ settings.ini
 imgui.ini
 levels/*.glb
 levels/*.gltf
+assets/sounds/*.mov
+assets/sounds/*.zip
