@@ -759,7 +759,7 @@ int main(int argc, char* argv[]) {
 
             case SDL_EVENT_WINDOW_FOCUS_GAINED:
                 // Re-lock cursor on tab-in, but only when no UI is open
-                if (!show_settings && !show_magazine_view && !show_shop && !player_dead)
+                if (!show_settings && !show_magazine_view && !show_shop && !show_room_summary && !player_dead)
                     SDL_SetWindowRelativeMouseMode(window, true);
                 break;
 
@@ -955,11 +955,11 @@ int main(int argc, char* argv[]) {
             Weapon& weapon = weapons[active_weapon];
             player.weapon_lightweight = weapon.config.lightweight;
             bool holstered = player.weapon_holstered;
-            bool fire_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && !player_dead && kb.held(Action::Shoot, keys_frame);
-            bool reload_pressed = !show_settings && !show_magazine_view && !noclip && !holstered && !player_dead && kb.held(Action::Reload, keys_frame);
-            bool ads_input = !show_settings && !show_magazine_view && !noclip && !holstered && !player_dead && kb.held(Action::ADS, keys_frame);
+            bool fire_pressed = !show_settings && !show_magazine_view && !show_room_summary && !noclip && !holstered && !player_dead && kb.held(Action::Shoot, keys_frame);
+            bool reload_pressed = !show_settings && !show_magazine_view && !show_room_summary && !noclip && !holstered && !player_dead && kb.held(Action::Reload, keys_frame);
+            bool ads_input = !show_settings && !show_magazine_view && !show_room_summary && !noclip && !holstered && !player_dead && kb.held(Action::ADS, keys_frame);
 
-            float weapon_dt = (show_settings || show_magazine_view || player_dead) ? 0.0f : dt;
+            float weapon_dt = (show_settings || show_magazine_view || show_room_summary || player_dead) ? 0.0f : dt;
             weapon.update(weapon_dt, fire_pressed, reload_pressed, ads_input);
 
             // Try to fire — if weapon fires, do hitscan
