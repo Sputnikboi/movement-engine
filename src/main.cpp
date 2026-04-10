@@ -34,6 +34,7 @@
 #include "shop.h"
 #include "hud.h"
 #include "debug_menu.h"
+#include "version.h"
 #include "magazine_view.h"
 #include "damage_numbers.h"
 #include "bullet_mods.h"
@@ -117,7 +118,7 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        "Movement Engine",
+        GAME_TITLE,
         1280, 720,
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
     );

@@ -11,6 +11,7 @@
 #include "shielder.h"
 
 #include "vendor/imgui/imgui.h"
+#include "version.h"
 
 #include <cstdio>
 #include <cstring>
@@ -590,6 +591,9 @@ void debug_menu_draw(GameState& gs, const LoadLevelFn& load_level_fn) {
 
     ImGui::Spacing();
     ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextDisabled(GAME_TITLE);
     ImGui::Spacing();
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
