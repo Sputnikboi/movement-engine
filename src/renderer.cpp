@@ -88,6 +88,10 @@ bool Renderer::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
 bool Renderer::init(SDL_Window* window, const Mesh& level_mesh) {
     window_ = window;
 
+    // Resolve shader directory relative to the executable
+    const char* base = SDL_GetBasePath();
+    shader_dir_ = base ? std::string(base) + "shaders/" : "shaders/";
+
     if (!create_instance())              return false;
     if (!setup_debug_messenger())        return false;
     if (!create_surface())               return false;
@@ -650,8 +654,8 @@ VkShaderModule Renderer::load_shader(const char* path) {
 }
 
 bool Renderer::create_pipeline() {
-    VkShaderModule vert = load_shader(SHADER_DIR "mesh.vert.spv");
-    VkShaderModule frag = load_shader(SHADER_DIR "mesh.frag.spv");
+    VkShaderModule vert = load_shader((shader_dir_ + "mesh.vert.spv").c_str());
+    VkShaderModule frag = load_shader((shader_dir_ + "mesh.frag.spv").c_str());
     if (!vert || !frag) return false;
 
     VkPipelineShaderStageCreateInfo stages[2]{};
@@ -787,8 +791,8 @@ bool Renderer::create_pipeline() {
 // ============================================================
 
 bool Renderer::create_transparent_pipeline() {
-    VkShaderModule vert = load_shader(SHADER_DIR "mesh.vert.spv");
-    VkShaderModule frag = load_shader(SHADER_DIR "mesh.frag.spv");
+    VkShaderModule vert = load_shader((shader_dir_ + "mesh.vert.spv").c_str());
+    VkShaderModule frag = load_shader((shader_dir_ + "mesh.frag.spv").c_str());
     if (!vert || !frag) return false;
 
     VkPipelineShaderStageCreateInfo stages[2]{};
@@ -902,8 +906,8 @@ bool Renderer::create_transparent_pipeline() {
 // ============================================================
 
 bool Renderer::create_particle_pipeline() {
-    VkShaderModule vert = load_shader(SHADER_DIR "particle.vert.spv");
-    VkShaderModule frag = load_shader(SHADER_DIR "particle.frag.spv");
+    VkShaderModule vert = load_shader((shader_dir_ + "particle.vert.spv").c_str());
+    VkShaderModule frag = load_shader((shader_dir_ + "particle.frag.spv").c_str());
     if (!vert || !frag) return false;
 
     VkPipelineShaderStageCreateInfo stages[2]{};

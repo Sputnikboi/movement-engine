@@ -116,6 +116,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # Validation layers only in debug
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    SHADER_DIR="${SHADER_BINARY_DIR}/"
     $<$<CONFIG:Debug>:ENABLE_VALIDATION_LAYERS>
 )

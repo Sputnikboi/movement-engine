@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 #include <SDL3/SDL.h>
 #include <vector>
+#include <string>
 #include <cstdint>
 
 #include "vendor/HandmadeMath.h"
@@ -170,6 +171,8 @@ private:
     uint32_t current_frame_ = 0;
 
     bool resize_requested_ = false;
+
+    std::string shader_dir_;  // resolved at init from SDL_GetBasePath()
 
     // --- Init steps ---
     bool create_instance();
