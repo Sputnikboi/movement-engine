@@ -65,7 +65,7 @@ struct ProcGenConfig {
     // Difficulty scaling (applied per room)
     float difficulty        = 1.0f;  // computed from room_number
     float hp_scale_per_room = 0.06f; // +6% HP per room
-    float dmg_scale_per_room= 0.04f; // +4% damage per room
+    float dmg_scale_per_room= 0.02f; // +2% damage per room
     float spd_scale_per_room= 0.02f; // +2% speed per room
 
     // Manual overrides (if > 0, ignores budget and uses fixed counts)
