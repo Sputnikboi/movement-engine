@@ -1,6 +1,7 @@
 #include "audio.h"
 #include <cstdio>
 #include <cmath>
+#include <cstdlib>
 #include <algorithm>
 
 // ============================================================
@@ -14,7 +15,6 @@ bool AudioSystem::init() {
         return false;
     }
 
-    // Get the device's native frequency; work in float32 stereo on our side.
     SDL_AudioSpec native{};
     SDL_GetAudioDeviceFormat(device, &native, nullptr);
 
@@ -52,7 +52,6 @@ bool AudioSystem::load(const std::string& name, const std::string& path) {
         return false;
     }
 
-    // Convert WAV to float32 stereo at device frequency
     SDL_AudioStream* conv = SDL_CreateAudioStream(&wav_spec, &spec);
     if (!conv) {
         SDL_free(wav_data);
@@ -71,17 +70,49 @@ bool AudioSystem::load(const std::string& name, const std::string& path) {
     }
     SDL_DestroyAudioStream(conv);
 
-    // Duration: stereo = 2 samples per frame
     int frames    = (int)buf.samples.size() / 2;
     buf.duration_ms = spec.freq > 0 ? (frames / (float)spec.freq) * 1000.0f : 0.0f;
 
-    buffers[name] = std::move(buf);
-    printf("Audio: loaded '%s' (%.0f ms)\n", name.c_str(), buffers[name].duration_ms);
+    buffers[name].push_back(std::move(buf));
+    printf("Audio: loaded '%s' variant %d (%.0f ms)\n",
+           name.c_str(), (int)buffers[name].size(), buffers[name].back().duration_ms);
     return true;
 }
 
+void AudioSystem::load_variants(const std::string& name, const std::string& dir) {
+    // Try name_1.wav, name_2.wav, ... stop at first gap
+    bool any = false;
+    for (int i = 1; i <= 16; i++) {
+        std::string path = dir + name + "_" + std::to_string(i) + ".wav";
+        if (!load(name, path)) break;
+        any = true;
+    }
+    // Fall back to plain name.wav if no numbered variants found
+    if (!any)
+        load(name, dir + name + ".wav");
+}
+
 // ============================================================
-//  Internal emit — apply L/R gain and spawn a stream
+//  Variant picker — random, never repeats last pick
+// ============================================================
+
+const SoundBuffer* AudioSystem::pick_variant(const std::string& name) {
+    auto it = buffers.find(name);
+    if (it == buffers.end() || it->second.empty()) return nullptr;
+
+    auto& variants = it->second;
+    int n = (int)variants.size();
+    if (n == 1) return &variants[0];
+
+    int prev = last_variant.count(name) ? last_variant[name] : -1;
+    int idx  = rand() % n;
+    if (idx == prev) idx = (idx + 1) % n;
+    last_variant[name] = idx;
+    return &variants[idx];
+}
+
+// ============================================================
+//  Internal emit — apply L/R gain and spawn a voice
 // ============================================================
 
 void AudioSystem::emit(const SoundBuffer& buf, float gain_l, float gain_r) {
@@ -100,7 +131,6 @@ void AudioSystem::emit(const SoundBuffer& buf, float gain_l, float gain_r) {
         out[i + 1] = buf.samples[i + 1] * gain_r;
     }
 
-    // Passthrough stream: our float32 stereo -> device (SDL handles HW conversion)
     SDL_AudioStream* s = SDL_CreateAudioStream(&spec, &spec);
     if (!s) return;
     SDL_PutAudioStreamData(s, out.data(), (int)(n * sizeof(float)));
@@ -118,39 +148,36 @@ void AudioSystem::emit(const SoundBuffer& buf, float gain_l, float gain_r) {
 // ============================================================
 
 void AudioSystem::play(const std::string& name, float volume) {
-    auto it = buffers.find(name);
-    if (it == buffers.end()) return;
-    emit(it->second, volume, volume);
+    const SoundBuffer* buf = pick_variant(name);
+    if (!buf) return;
+    emit(*buf, volume, volume);
 }
 
 void AudioSystem::play_3d(const std::string& name,
                           HMM_Vec3 source, HMM_Vec3 listener_pos,
                           HMM_Vec3 listener_right,
                           float base_volume, float max_dist) {
-    auto it = buffers.find(name);
-    if (it == buffers.end()) return;
+    const SoundBuffer* buf = pick_variant(name);
+    if (!buf) return;
 
     HMM_Vec3 delta = HMM_SubV3(source, listener_pos);
     float dist = HMM_LenV3(delta);
     if (dist >= max_dist) return;
 
-    // Quadratic falloff: full volume within 1 unit, fades to 0 at max_dist
     float t   = 1.0f - (dist / max_dist);
     float vol = base_volume * t * t;
     if (vol < 0.002f) return;
 
-    // Stereo pan from right-vector projection
     float pan = 0.0f;
     if (dist > 0.1f) {
         HMM_Vec3 dir = HMM_MulV3F(delta, 1.0f / dist);
         pan = std::clamp(HMM_DotV3(dir, listener_right), -1.0f, 1.0f);
     }
 
-    // Equal-power panning (pan=-1 → full left, pan=+1 → full right)
     float angle  = (pan + 1.0f) * 0.5f * (HMM_PI32 * 0.5f);
     float gain_l = vol * cosf(angle);
     float gain_r = vol * sinf(angle);
-    emit(it->second, gain_l, gain_r);
+    emit(*buf, gain_l, gain_r);
 }
 
 // ============================================================

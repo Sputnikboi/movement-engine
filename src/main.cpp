@@ -491,19 +491,18 @@ int main(int argc, char* argv[]) {
         if (const char* base = SDL_GetBasePath())
             snd_dir = std::string(base) + "assets/sounds/";
 
-        auto snd = [&](const char* name) { return snd_dir + name + ".wav"; };
-        audio.load("footstep",    snd("footstep"));
-        audio.load("player_hurt", snd("player_hurt"));
-        audio.load("player_die",  snd("player_die"));
-        audio.load("enemy_hit",   snd("enemy_hit"));
-        audio.load("enemy_die",   snd("enemy_die"));
-        // Per-weapon shoot sounds: shoot_glock.wav, shoot_wingman.wav, etc.
+        audio.load_variants("footstep",    snd_dir);
+        audio.load_variants("player_hurt", snd_dir);
+        audio.load_variants("player_die",  snd_dir);
+        audio.load_variants("enemy_hit",   snd_dir);
+        audio.load_variants("enemy_die",   snd_dir);
+        // Per-weapon shoot sounds: shoot_glock_1.wav, shoot_glock_2.wav, etc.
         for (int w = 0; w < MAX_WEAPONS; w++) {
             if (!weapons[w].config.name) continue;
             std::string key = "shoot_";
             for (const char* c = weapons[w].config.name; *c; c++)
                 key += (char)tolower((unsigned char)*c);
-            audio.load(key, snd_dir + key + ".wav");
+            audio.load_variants(key, snd_dir);
         }
     }
 
