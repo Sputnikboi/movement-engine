@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Static MSVC runtime — must be set before FetchContent so SDL3 matches.
+# Avoids mixing /MD (SDL3 default) with /MT (our target), which causes
+# unresolved __imp_* link errors. No VC++ Redistributable required.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
+endif()
+
 # --- Dependencies ---
 
 # Vulkan (must have Vulkan SDK installed)
@@ -119,8 +126,3 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:ENABLE_VALIDATION_LAYERS>
 )
 
-# Static MSVC runtime — no Visual C++ Redistributable required on Windows
-if(MSVC)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
