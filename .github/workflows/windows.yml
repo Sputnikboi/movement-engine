@@ -7,17 +7,18 @@ on:
 
 env:
   VULKAN_VERSION: "1.3.296.0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   windows:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
       - name: Cache Vulkan SDK
         id: cache-vulkan
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.3
         with:
           path: C:\VulkanSDK
           key: vulkan-sdk-${{ env.VULKAN_VERSION }}
@@ -52,7 +53,7 @@ jobs:
           Copy-Item levels -Destination dist\levels -Recurse
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: movement-engine-windows
           path: dist\
