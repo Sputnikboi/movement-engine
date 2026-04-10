@@ -41,17 +41,7 @@
 namespace fs = std::filesystem;
 
 // Load a level and update all engine state
-static bool load_level(const std::string& path,
-                       Renderer& renderer, CollisionWorld& collision,
-                       Player& player, Camera& camera,
-                       bool& noclip, std::string& current_level_name,
-                       Entity entities[] = nullptr, int max_entities = 0,
-                       const DroneConfig* drone_cfg = nullptr,
-                       const RusherConfig* rusher_cfg = nullptr,
-                       const TurretConfig* turret_cfg = nullptr,
-                       const TankConfig* tank_cfg = nullptr,
-                       const BomberConfig* bomber_cfg = nullptr,
-                       const ShielderConfig* shielder_cfg = nullptr)
+static bool load_level(const std::string& path, GameState& gs)
 {
     LevelData ld = load_level_gltf(path);
     if (ld.mesh.vertices.empty()) {
@@ -60,9 +50,9 @@ static bool load_level(const std::string& path,
     }
 
     // Build collision BEFORE merging visual-only geometry
-    collision.triangles.clear();
-    collision.ladder_volumes.clear();
-    collision.build_from_mesh(ld.mesh);
+    gs.collision.triangles.clear();
+    gs.collision.ladder_volumes.clear();
+    gs.collision.build_from_mesh(ld.mesh);
 
     // Merge visual-only geometry (VLadder etc) into render mesh — no collision
     if (!ld.visual_only_mesh.vertices.empty()) {
@@ -74,52 +64,48 @@ static bool load_level(const std::string& path,
     }
 
     // Upload to renderer (now includes visual-only geometry)
-    renderer.reload_mesh(ld.mesh);
+    gs.renderer.reload_mesh(ld.mesh);
 
     // Extract ladder volumes from ladder-specific geometry (no collision surface)
-    for (const auto& sub : ld.ladder_submeshes) {
-        collision.add_ladder_volume(ld.ladder_mesh, sub.index_start, sub.index_count);
-    }
+    for (const auto& sub : ld.ladder_submeshes)
+        gs.collision.add_ladder_volume(ld.ladder_mesh, sub.index_start, sub.index_count);
 
     // Update player
-    player.position = ld.spawn_pos;
-    player.velocity = HMM_V3(0, 0, 0);
-    player.grounded = false;
+    gs.player.position = ld.spawn_pos;
+    gs.player.velocity = HMM_V3(0, 0, 0);
+    gs.player.grounded = false;
 
     if (ld.has_spawn) {
-        noclip = false;
-        camera.position = player.eye_position();
+        gs.noclip = false;
+        gs.camera.position = gs.player.eye_position();
     } else {
-        noclip = true;
-        camera.position = HMM_AddV3(ld.spawn_pos, HMM_V3(0, 5, 0));
+        gs.noclip = true;
+        gs.camera.position = HMM_AddV3(ld.spawn_pos, HMM_V3(0, 5, 0));
         printf("No spawn point — starting in noclip.\n");
     }
 
-    // Spawn preplaced enemies
-    if (entities && max_entities > 0) {
-        // Clear existing entities
-        for (int i = 0; i < max_entities; i++)
-            entities[i].alive = false;
-        for (const auto& es : ld.enemy_spawns) {
-            if (es.type == EntityType::Drone && drone_cfg)
-                drone_spawn(entities, max_entities, es.position, *drone_cfg);
-            else if (es.type == EntityType::Rusher && rusher_cfg)
-                rusher_spawn(entities, max_entities, es.position, *rusher_cfg);
-            else if (es.type == EntityType::Turret && turret_cfg)
-                turret_spawn(entities, max_entities, es.position, *turret_cfg);
-            else if (es.type == EntityType::Tank && tank_cfg)
-                tank_spawn(entities, max_entities, es.position, *tank_cfg);
-            else if (es.type == EntityType::Bomber && bomber_cfg)
-                bomber_spawn(entities, max_entities, es.position, *bomber_cfg);
-            else if (es.type == EntityType::Shielder && shielder_cfg)
-                shielder_spawn(entities, max_entities, es.position, *shielder_cfg);
-        }
-        if (!ld.enemy_spawns.empty())
-            printf("Spawned %zu preplaced enemies\n", ld.enemy_spawns.size());
+    // Clear existing entities and spawn preplaced ones from level data
+    for (int i = 0; i < gs.max_entities; i++)
+        gs.entities[i].alive = false;
+    for (const auto& es : ld.enemy_spawns) {
+        if (es.type == EntityType::Drone)
+            drone_spawn(gs.entities, gs.max_entities, es.position, gs.drone_cfg);
+        else if (es.type == EntityType::Rusher)
+            rusher_spawn(gs.entities, gs.max_entities, es.position, gs.rusher_cfg);
+        else if (es.type == EntityType::Turret)
+            turret_spawn(gs.entities, gs.max_entities, es.position, gs.turret_cfg);
+        else if (es.type == EntityType::Tank)
+            tank_spawn(gs.entities, gs.max_entities, es.position, gs.tank_cfg);
+        else if (es.type == EntityType::Bomber)
+            bomber_spawn(gs.entities, gs.max_entities, es.position, gs.bomber_cfg);
+        else if (es.type == EntityType::Shielder)
+            shielder_spawn(gs.entities, gs.max_entities, es.position, gs.shielder_cfg);
     }
+    if (!ld.enemy_spawns.empty())
+        printf("Spawned %zu preplaced enemies\n", ld.enemy_spawns.size());
 
     // Extract filename for display
-    current_level_name = fs::path(path).filename().string();
+    gs.current_level_name = fs::path(path).filename().string();
     return true;
 }
 
@@ -580,10 +566,7 @@ int main(int argc, char* argv[]) {
 
     // Load-level callback for debug menu
     auto load_level_fn = [&](const std::string& path) -> bool {
-        return load_level(path, renderer, collision, player, camera, noclip,
-                          current_level_name, entities, MAX_ENTITIES,
-                          &drone_cfg, &rusher_cfg, &turret_cfg,
-                          &tank_cfg, &bomber_cfg, &shielder_cfg);
+        return load_level(path, gs);
     };
 
     while (running) {
