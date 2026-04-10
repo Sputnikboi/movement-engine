@@ -963,7 +963,8 @@ int main(int argc, char* argv[]) {
                     std::string snd_key = "shoot_";
                     for (const char* c = weapon.config.name; *c; c++)
                         snd_key += (char)tolower((unsigned char)*c);
-                    audio.play(snd_key, 0.9f);
+                    float snd_vol = (snd_key == "shoot_knife") ? 2.7f : 0.9f;
+                    audio.play(snd_key, snd_vol);
                 }
 
                 // Gunshot alert: wake idle enemies within weapon range
