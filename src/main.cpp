@@ -757,6 +757,12 @@ int main(int argc, char* argv[]) {
                 renderer.on_resize();
                 break;
 
+            case SDL_EVENT_WINDOW_FOCUS_GAINED:
+                // Re-lock cursor on tab-in, but only when no UI is open
+                if (!show_settings && !show_magazine_view && !show_shop && !player_dead)
+                    SDL_SetWindowRelativeMouseMode(window, true);
+                break;
+
             case SDL_EVENT_MOUSE_MOTION:
                 if (!show_settings) {
                     mouse_dx += event.motion.xrel;
