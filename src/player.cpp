@@ -97,10 +97,13 @@ void Player::check_ground(const CollisionWorld& world) {
         grounded = true;
         ground_normal = best_normal;
 
-        // Snap to ground if close enough and not rising
+        // Snap to ground if close enough.
+        // No velocity.Y gate here — tiny upward drift from wall-edge contacts
+        // (velocity.Y = 0.001) would bypass the snap and accumulate.
+        // Real jumps are protected by the velocity.Y > 0.1f early-return above.
         if (position.Y < best_ground_y)
             position.Y = best_ground_y;
-        else if (position.Y - best_ground_y < ground_check_dist && velocity.Y <= 0.0f)
+        else if (position.Y - best_ground_y < ground_check_dist)
             position.Y = best_ground_y;
     } else {
         grounded = false;
@@ -196,13 +199,6 @@ void Player::do_collide_and_move(float dt, const CollisionWorld& world) {
     }
 
     position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
-
-    // When grounded, wall edges can produce a push_dir with a slight upward Y,
-    // causing clip_velocity to leave velocity.Y > 0.  That accumulates into
-    // visible slow rising.  Safe to zero: ground movement never needs upward
-    // velocity from the solver (jumps set grounded=false before this runs).
-    if (grounded && velocity.Y > 0.0f)
-        velocity.Y = 0.0f;
 }
 
 // ============================================================

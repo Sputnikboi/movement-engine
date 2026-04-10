@@ -316,7 +316,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
         float cy = card_cy(i);
 
         bool hovered = (i == hovered_card);
-        bool is_spent = (i < current_round);
+        bool is_spent = !applying && (i < current_round);
         bool is_current = (i == current_round);
         bool is_selected = applying && pm.selected[i];
 
@@ -364,7 +364,7 @@ void magazine_view_draw(GameState& gs, ImFont* custom_font) {
     // --- Draw dragged card floating at mouse cursor ---
     if (dragging && drag_source >= 0 && drag_source < n) {
         int i = drag_source;
-        bool is_spent = (i < current_round);
+        bool is_spent = !applying && (i < current_round);
         bool is_current = (i == current_round);
         bool is_selected = applying && pm.selected[i];
         RoundMod mod = mag.get(i);
