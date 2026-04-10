@@ -196,6 +196,13 @@ void Player::do_collide_and_move(float dt, const CollisionWorld& world) {
     }
 
     position = HMM_SubV3(sphere_center, HMM_V3(0.0f, radius, 0.0f));
+
+    // When grounded, wall edges can produce a push_dir with a slight upward Y,
+    // causing clip_velocity to leave velocity.Y > 0.  That accumulates into
+    // visible slow rising.  Safe to zero: ground movement never needs upward
+    // velocity from the solver (jumps set grounded=false before this runs).
+    if (grounded && velocity.Y > 0.0f)
+        velocity.Y = 0.0f;
 }
 
 // ============================================================
