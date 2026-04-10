@@ -1,0 +1,42 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:  # lets you trigger a build manually from the Actions tab
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.0
+        with:
+          vulkan-query-version: 1.3.283.0
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist
+          Copy-Item build\Release\movement_engine.exe dist\
+          Copy-Item build\shaders -Destination dist\shaders -Recurse
+          Copy-Item assets -Destination dist\assets -Recurse
+          Copy-Item levels -Destination dist\levels -Recurse
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: movement-engine-windows
+          path: dist\
+          retention-days: 14
